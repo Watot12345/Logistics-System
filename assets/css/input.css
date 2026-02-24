@@ -1,0 +1,274 @@
+@import "tailwindcss";
+@tailwind utilities;
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+@layer components {
+    /* Form Transitions */
+    .form-transition {
+        @apply transition-all duration-300 ease-in-out;
+    }
+    
+    /* Custom Button Styles */
+    .btn-primary {
+        @apply w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-2 px-4 rounded-lg 
+               hover:from-blue-700 hover:to-purple-700 transition duration-300 transform hover:scale-105;
+    }
+    
+    /* Form Input Styles */
+    .form-input {
+        @apply w-full border border-gray-300 rounded-lg px-4 py-2 
+               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition;
+    }
+    
+    /* Form Label Styles */
+    .form-label {
+        @apply block text-gray-700 font-medium mb-1;
+    }
+    
+    /* Toggle Button Styles */
+    .toggle-btn {
+        @apply flex-1 py-2 text-center rounded-md transition-all duration-300;
+    }
+    
+    .toggle-btn-active {
+        @apply bg-white shadow-md text-blue-600;
+    }
+    
+    .toggle-btn-inactive {
+        @apply text-gray-600 hover:text-blue-600;
+    }
+    
+    /* Message Styles */
+    .message-success {
+        @apply mb-4 p-3 rounded-lg bg-green-100 text-green-700 border-l-4 border-green-500;
+    }
+    
+    .message-error {
+        @apply mb-4 p-3 rounded-lg bg-red-100 text-red-700 border-l-4 border-red-500;
+        animation: shake 0.5s ease-in-out;
+    }
+    
+    /* Feature List Items */
+    .feature-item {
+        @apply flex items-center;
+    }
+    
+    .feature-icon {
+        @apply w-6 h-6 mr-3;
+    }
+    
+    /* Password Strength Indicator */
+    .password-strength-weak {
+        @apply text-red-500;
+    }
+    
+    .password-strength-medium {
+        @apply text-yellow-500;
+    }
+    
+    .password-strength-strong {
+        @apply text-green-500;
+    }
+    
+    /* Error Message Styles */
+    .error-message {
+        @apply text-red-500 text-xs mt-1;
+    }
+    
+    /* Validation Border Colors */
+    .input-valid {
+        @apply border-green-500;
+    }
+    
+    .input-invalid {
+        @apply border-red-500;
+    }
+    
+    .input-warning {
+        @apply border-yellow-500;
+    }
+    
+    /* Custom Container Styles */
+    .auth-container {
+        @apply bg-white shadow-2xl rounded-2xl overflow-hidden w-full max-w-4xl flex flex-col md:flex-row;
+    }
+    
+    .branding-section {
+        @apply md:w-1/2 bg-gradient-to-br from-blue-600 to-purple-700 p-8 text-white flex flex-col justify-between;
+    }
+    
+    .forms-section {
+        @apply md:w-1/2 p-8;
+    }
+    
+    /* Notification Styles */
+    .custom-notification {
+        @apply fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 transition-all duration-500 text-white;
+    }
+    
+    .notification-success {
+        @apply bg-green-500;
+    }
+    
+    .notification-error {
+        @apply bg-red-500;
+    }
+    
+    .notification-info {
+        @apply bg-blue-500;
+    }
+}
+
+@layer utilities {
+    /* Custom Animations */
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+    
+    /* Border Colors */
+    .border-yellow-500 {
+        border-color: #eab308;
+    }
+    
+    /* Custom Spacing */
+    .section-spacing {
+        @apply space-y-4 mb-8;
+    }
+    
+    /* Text Styles */
+    .branding-title {
+        @apply text-3xl font-bold mb-4;
+    }
+    
+    .branding-text {
+        @apply text-blue-100 mb-6;
+    }
+    
+    .form-title {
+        @apply text-2xl font-bold text-gray-800 mb-6;
+    }
+    
+    /* Hover Effects */
+    .hover-lift {
+        @apply transition duration-300 transform hover:scale-105;
+    }
+    
+    /* Focus States */
+    .focus-ring-blue {
+        @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    }
+}
+
+/* Custom styles that don't fit into Tailwind classes */
+/* These will be preserved in the final CSS */
+
+/* Smooth transitions for form switching */
+.form-transition {
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+}
+
+.form-transition.hidden {
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+}
+
+/* Custom checkbox styles */
+input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
+input[type="checkbox"]:checked {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+}
+
+/* Password strength indicator animation */
+#passwordStrength {
+    transition: color 0.3s ease;
+}
+
+/* Error message fade in */
+.error-message {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Input focus effects */
+input:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Button loading state (can be used with JavaScript) */
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 1rem;
+    height: 1rem;
+    top: 50%;
+    left: 50%;
+    margin-left: -0.5rem;
+    margin-top: -0.5rem;
+    border: 2px solid transparent;
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .auth-container {
+        margin: 1rem;
+    }
+    
+    .branding-section {
+        padding: 2rem;
+    }
+    
+    .forms-section {
+        padding: 2rem;
+    }
+}
+
+/* Print styles */
+@media print {
+    .bg-gradient-to-br {
+        background: white !important;
+        color: black !important;
+    }
+    
+    .auth-container {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+}
+
