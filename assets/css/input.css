@@ -164,6 +164,148 @@
     .focus-ring-blue {
         @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
     }
+    
+    /* Modal Transitions */
+    .modal-transition {
+        @apply transition-all duration-300 ease-in-out;
+    }
+    
+    .modal-hidden {
+        @apply opacity-0 scale-95 pointer-events-none;
+    }
+    
+    /* Modal Styles */
+    .modal-overlay {
+        @apply fixed inset-0 bg-gray-600 overflow-y-auto h-full w-full z-50;
+        background-color: rgba(75, 85, 99, 0.5);
+    }
+    
+    .modal-container {
+        @apply relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-lg bg-white;
+    }
+    
+    .modal-header {
+        @apply flex justify-between items-center mb-4;
+    }
+    
+    .modal-title {
+        @apply text-xl font-semibold text-gray-900;
+    }
+    
+    .modal-close {
+        @apply text-gray-400 hover:text-gray-600;
+    }
+    
+    .modal-footer {
+        @apply flex justify-end gap-3 mt-6;
+    }
+    
+    /* Delete Modal Specific */
+    .delete-modal-container {
+        @apply relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-lg bg-white;
+    }
+    
+    .delete-icon {
+        @apply mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4;
+    }
+    
+    /* View Modal Specific */
+    .view-label {
+        @apply block text-sm font-medium text-gray-500;
+    }
+    
+    .view-value {
+        @apply text-gray-900;
+    }
+    
+    .view-value-medium {
+        @apply text-gray-900 font-medium;
+    }
+    
+    /* Form Grid */
+    .form-grid {
+        @apply grid grid-cols-1 md:grid-cols-2 gap-4;
+    }
+    
+    /* Status Badges */
+    .status-badge {
+        @apply px-2 py-1 text-xs font-medium rounded-full;
+    }
+    
+    .status-in-stock {
+        @apply bg-green-100 text-green-800;
+    }
+    
+    .status-low-stock {
+        @apply bg-yellow-100 text-yellow-800;
+    }
+    
+    .status-out-of-stock {
+        @apply bg-red-100 text-red-800;
+    }
+    
+    .status-ordered {
+        @apply bg-blue-100 text-blue-800;
+    }
+    
+    /* Inventory Cards */
+    .stat-card {
+        @apply bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow duration-300;
+    }
+    
+    .stat-icon {
+        @apply p-3 rounded-full;
+    }
+    
+    .stat-icon-blue {
+        @apply bg-blue-100 text-blue-600;
+    }
+    
+    .stat-icon-green {
+        @apply bg-green-100 text-green-600;
+    }
+    
+    .stat-icon-yellow {
+        @apply bg-yellow-100 text-yellow-600;
+    }
+    
+    .stat-icon-purple {
+        @apply bg-purple-100 text-purple-600;
+    }
+    
+    /* Table Styles */
+    .inventory-table {
+        @apply min-w-full divide-y divide-gray-200;
+    }
+    
+    .table-header {
+        @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+    }
+    
+    .table-cell {
+        @apply px-6 py-4 whitespace-nowrap;
+    }
+    
+    .table-row {
+        @apply hover:bg-gray-50 transition;
+    }
+    
+    /* Custom Scrollbar for Tables */
+    .table-scrollbar {
+        @apply overflow-x-auto;
+    }
+    
+    .table-scrollbar::-webkit-scrollbar {
+        @apply h-2 w-2;
+    }
+    
+    .table-scrollbar::-webkit-scrollbar-track {
+        @apply bg-gray-100 rounded-full;
+    }
+    
+    .table-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-gray-400 rounded-full hover:bg-gray-500;
+    }
 }
 
 /* Custom styles that don't fit into Tailwind classes */
@@ -271,4 +413,3 @@ input:focus {
         border: 1px solid #ddd;
     }
 }
-

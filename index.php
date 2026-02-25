@@ -221,5 +221,5 @@ require_once 'includes/auth.php';
     }
     ?>
 </body>
-<script src="assets/js/modals/function.js"></script>
+<script src="assets/js/modals/authvalidation.js"></script>
 </html>

@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['logged_in'] = true;
                         
                         // Redirect to dashboard
-                        header('Location: dashboard.php');
+                        header('Location: dashboard2.php');
                         exit();
                     } else {
                         $message = 'Invalid username/email or password';
