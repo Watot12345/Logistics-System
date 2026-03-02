@@ -11,6 +11,116 @@ $page_css = 'assets/css/style.css';
 include 'includes/header.php';
 include '../dashboard/maintenance.php';
 
+// Handle document upload
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    
+    // Upload Document
+    if ($_POST['action'] === 'upload_document' && isset($_FILES['document_file'])) {
+        $title = $_POST['document_title'];
+        $document_type = $_POST['document_type'];
+        $asset_id = !empty($_POST['asset_id']) ? $_POST['asset_id'] : null;
+        $expiry_date = !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null;
+        $description = $_POST['description'] ?? '';
+        $uploaded_by = $_SESSION['user_id'];
+        
+        // File upload handling
+        $target_dir = "uploads/documents/";
+        
+        // Create directory if it doesn't exist
+        if (!file_exists($target_dir)) {
+            mkdir($target_dir, 0777, true);
+        }
+        
+        $file_name = basename($_FILES["document_file"]["name"]);
+        $file_size = $_FILES["document_file"]["size"];
+        $file_tmp = $_FILES["document_file"]["tmp_name"];
+        
+        // Generate unique filename to prevent overwrites
+        $file_extension = pathinfo($file_name, PATHINFO_EXTENSION);
+        $new_file_name = time() . '_' . uniqid() . '.' . $file_extension;
+        $target_file = $target_dir . $new_file_name;
+        
+        // Check file size (10MB max)
+        if ($file_size > 10000000) {
+            $message = "File is too large. Maximum size is 10MB.";
+            $message_type = "error";
+        } else {
+            // Allow certain file formats
+            $allowed_types = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'];
+            if (in_array(strtolower($file_extension), $allowed_types)) {
+                if (move_uploaded_file($file_tmp, $target_file)) {
+                    // Save to database
+                    $stmt = $pdo->prepare("
+                        INSERT INTO documents (title, document_type, file_name, file_path, file_size, description, asset_id, uploaded_by, expiry_date) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    if ($stmt->execute([$title, $document_type, $file_name, $target_file, $file_size, $description, $asset_id, $uploaded_by, $expiry_date])) {
+                        $message = "Document uploaded successfully!";
+                        $message_type = "success";
+                        
+                        // Log the activity
+                        $log_stmt = $pdo->prepare("
+                            INSERT INTO user_activity_logs (user_id, action_type, document_id, timestamp) 
+                            VALUES (?, 'upload', ?, NOW())
+                        ");
+                        $log_stmt->execute([$uploaded_by, $pdo->lastInsertId()]);
+                    } else {
+                        $message = "Database error: Could not save document information.";
+                        $message_type = "error";
+                    }
+                } else {
+                    $message = "Error uploading file. Please check directory permissions.";
+                    $message_type = "error";
+                }
+            } else {
+                $message = "File type not allowed. Allowed types: " . implode(', ', $allowed_types);
+                $message_type = "error";
+            }
+        }
+    }
+    
+    // Delete Document
+    if ($_POST['action'] === 'delete_document' && isset($_POST['document_id'])) {
+        $document_id = $_POST['document_id'];
+        
+        // Get file path first
+        $stmt = $pdo->prepare("SELECT file_path FROM documents WHERE id = ?");
+        $stmt->execute([$document_id]);
+        $doc = $stmt->fetch();
+        
+        if ($doc) {
+            // Delete physical file
+            if (file_exists($doc['file_path'])) {
+                unlink($doc['file_path']);
+            }
+            
+            // Delete from database
+            $stmt = $pdo->prepare("DELETE FROM documents WHERE id = ?");
+            if ($stmt->execute([$document_id])) {
+                $message = "Document deleted successfully!";
+                $message_type = "success";
+            } else {
+                $message = "Error deleting document.";
+                $message_type = "error";
+            }
+        }
+    }
+}
+
+// Fetch documents for display
+$stmt = $pdo->query("
+    SELECT d.*, a.asset_name,
+           u.full_name as uploaded_by_name
+    FROM documents d
+    LEFT JOIN assets a ON d.asset_id = a.id
+    LEFT JOIN users u ON d.uploaded_by = u.id
+    ORDER BY d.uploaded_at DESC
+");
+$documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$document_count = count($documents);
+
+
 $user_role = $_SESSION['role'] ?? 'employee';
 
 // Handle CRUD operations for admin only
@@ -305,7 +415,7 @@ if ($user_role === 'admin') {
             <!-- Asset Management (ADMIN CRUD) -->
             <div class="card card-full">
                 <div class="card-header">
-                    <h2><i class="fas fa-boxes"></i> Asset Management (Admin)</h2>
+                    <h2><i class="fas fa-boxes"></i> Asset Management </h2>
                     <button class="btn btn-primary" onclick="toggleAssetForm()" style="padding: 8px 16px; font-size: 14px;">
                         <i class="fas fa-plus"></i> Add Asset
                     </button>
@@ -566,46 +676,9 @@ if ($user_role === 'admin') {
             </div>
         </div>
         <?php endif; ?>
-                <!-- Asset List & Condition (for employees) -->
-            <div class="card">
-                <div class="card-header">
-                    <h2><i class="fas fa-boxes"></i> Asset List & Condition</h2>
-                    <span class="card-badge"><?php echo count($assets); ?> assets</span>
-                </div>
-                <div class="card-body">
-                    <div class="asset-list">
-                        <?php if (!empty($assets)): ?>
-                            <?php foreach ($assets as $asset): ?>
-                                <div class="asset-item">
-                                    <div class="asset-info">
-                                        <div class="asset-icon">
-                                            <i class="fas fa-cog"></i>
-                                        </div>
-                                        <div class="asset-details">
-                                            <h3><?php echo htmlspecialchars($asset['asset_name']); ?></h3>
-                                            <p><?php echo htmlspecialchars($asset['asset_type']); ?></p>
-                                        </div>
-                                    </div>
-                                    <div class="asset-condition">
-                                        <span class="percentage <?php 
-                                        $condition = intval($asset['asset_condition']);
-                                        if ($condition >= 70) echo 'status-good';
-                                        elseif ($condition >= 40) echo 'status-warning';
-                                        else echo 'status-critical';
-                                        ?>">
-                                            <?php echo htmlspecialchars($asset['asset_condition']); ?>%
-                                        </span>
-                                        <div class="label">Condition</div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <p>No assets available</p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
+
             <!-- Maintenance Alerts -->
+
             <div class="card">
                 <div class="card-header">
                     <h2><i class="fas fa-exclamation-triangle"></i> Maintenance Alerts</h2>
@@ -742,21 +815,162 @@ if ($user_role === 'admin') {
         
         <!-- Digital Document Repository -->
         <div class="card card-full">
-            <div class="card-header">
-                <h2><i class="fas fa-folder"></i> Digital Document Repository</h2>
-                <span class="card-badge">69 documents</span>
-            </div>
-            <div class="card-body">
-                <div class="document-grid">
-                    <!-- Dynamic content loaded via JavaScript -->
+    <div class="card-header">
+        <h2><i class="fas fa-folder"></i> Document Tracking</h2>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span class="card-badge"><?php echo $document_count ?? 0; ?> documents</span>
+            <?php if ($user_role === 'admin'): ?>
+            <button class="btn btn-primary" onclick="toggleDocumentForm()" style="padding: 8px 16px; font-size: 14px;">
+                <i class="fas fa-upload"></i> Upload Document
+            </button>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Upload Document Form (Admin only) -->
+    <?php if ($user_role === 'admin'): ?>
+    <div id="documentFormContainer" class="form-container" style="display: none; padding: 20px; background: #f9f9f9; border-bottom: 1px solid #ddd;">
+        <h3>Upload New Document</h3>
+        <form method="POST" action="" enctype="multipart/form-data" class="document-form">
+            <input type="hidden" name="action" value="upload_document">
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+                <div>
+                    <label>Document Title *</label>
+                    <input type="text" name="document_title" required placeholder="e.g., Vehicle Registration" class="form-input">
+                </div>
+                <div>
+                    <label>Document Type *</label>
+                    <select name="document_type" required class="form-input">
+                        <option value="">Select Type</option>
+                        <option value="registration">Registration</option>
+                        <option value="insurance">Insurance</option>
+                        <option value="maintenance">Maintenance Record</option>
+                        <option value="inspection">Inspection Report</option>
+                        <option value="permit">Permit/License</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Related Asset (Optional)</label>
+                    <select name="asset_id" class="form-input">
+                        <option value="">Select Asset</option>
+                        <?php foreach ($assets as $asset): ?>
+                        <option value="<?php echo $asset['id']; ?>"><?php echo htmlspecialchars($asset['asset_name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label>Expiry Date (Optional)</label>
+                    <input type="date" name="expiry_date" class="form-input">
+                </div>
+                <div style="grid-column: span 2;">
+                    <label>Description</label>
+                    <textarea name="description" rows="3" class="form-input" placeholder="Brief description of the document..."></textarea>
+                </div>
+                <div style="grid-column: span 2;">
+                    <label>Choose File *</label>
+                    <input type="file" name="document_file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <small style="color: #666;">Allowed: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG (Max: 10MB)</small>
+                </div>
+                <div style="grid-column: span 2; display: flex; gap: 10px; margin-top: 10px;">
+                    <button type="submit" class="btn btn-success" style="flex: 1; padding: 8px;">
+                        <i class="fas fa-upload"></i> Upload Document
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleDocumentForm()" style="flex: 1; padding: 8px;">Cancel</button>
                 </div>
             </div>
+        </form>
+    </div>
+    <?php endif; ?>
+
+    <!-- Documents List -->
+    <div class="card-body">
+        <?php
+        // Fetch documents from database
+        $stmt = $pdo->query("
+            SELECT d.*, a.asset_name,
+                   u.full_name as uploaded_by_name
+            FROM documents d
+            LEFT JOIN assets a ON d.asset_id = a.id
+            LEFT JOIN users u ON d.uploaded_by = u.id
+            ORDER BY d.uploaded_at DESC
+        ");
+        $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        ?>
+        
+        <?php if (!empty($documents)): ?>
+        <div class="document-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+            <?php foreach ($documents as $doc): ?>
+            <div class="document-card" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; background: white;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="width: 40px; height: 40px; border-radius: 8px; background: #f1f5f9; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-file-<?php 
+                            $ext = pathinfo($doc['file_name'], PATHINFO_EXTENSION);
+                            if (in_array($ext, ['pdf'])) echo 'pdf';
+                            elseif (in_array($ext, ['doc', 'docx'])) echo 'word';
+                            elseif (in_array($ext, ['xls', 'xlsx'])) echo 'excel';
+                            elseif (in_array($ext, ['jpg', 'jpeg', 'png'])) echo 'image';
+                            else echo 'alt';
+                        ?>" style="font-size: 20px; color: #2563eb;"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <h4 style="margin: 0; font-size: 14px; font-weight: 600;"><?php echo htmlspecialchars($doc['title']); ?></h4>
+                        <p style="margin: 4px 0 0; font-size: 12px; color: #64748b;">
+                            <?php echo htmlspecialchars($doc['document_type']); ?>
+                            <?php if ($doc['asset_name']): ?> • <?php echo htmlspecialchars($doc['asset_name']); ?><?php endif; ?>
+                        </p>
+                    </div>
+                </div>
+                
+                <?php if ($doc['description']): ?>
+                <p style="margin: 0 0 12px; font-size: 13px; color: #475569;"><?php echo htmlspecialchars($doc['description']); ?></p>
+                <?php endif; ?>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #64748b; margin-bottom: 12px;">
+                    <span><i class="far fa-calendar"></i> <?php echo date('M d, Y', strtotime($doc['uploaded_at'])); ?></span>
+                    <?php if ($doc['expiry_date']): ?>
+                    <span class="<?php echo strtotime($doc['expiry_date']) < time() ? 'status-critical' : 'status-good'; ?>" style="padding: 2px 6px; border-radius: 4px;">
+                        <i class="far fa-clock"></i> Expires: <?php echo date('M d, Y', strtotime($doc['expiry_date'])); ?>
+                    </span>
+                    <?php endif; ?>
+                </div>
+                
+                <div style="display: flex; gap: 8px;">
+                    <!-- Download button for everyone -->
+                    <a href="download.php?file=<?php echo $doc['id']; ?>" class="btn btn-primary" style="flex: 1; padding: 8px; text-align: center; text-decoration: none;">
+                        <i class="fas fa-download"></i> Download
+                    </a>
+                    
+                    <!-- Admin actions -->
+                    <?php if ($user_role === 'admin'): ?>
+                    <button class="btn btn-danger" onclick="deleteDocument(<?php echo $doc['id']; ?>)" style="padding: 8px 12px;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <?php endif; ?>
+                </div>
+                
+                <div style="margin-top: 8px; font-size: 11px; color: #94a3b8;">
+                    Uploaded by: <?php echo htmlspecialchars($doc['uploaded_by_name']); ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
         </div>
+        <?php else: ?>
+        <div style="text-align: center; padding: 40px 20px; color: #999;">
+            <i class="fas fa-folder-open" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+            <p>No documents available</p>
+            <?php if ($user_role === 'admin'): ?>
+            <p style="font-size: 14px;">Click the "Upload Document" button to add your first document.</p>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
         
         <!-- Logistics Document Tracking -->
         <div class="card card-full">
             <div class="card-header">
-                <h2><i class="fas fa-truck"></i> Logistics Document Tracking</h2>
+                <h2><i class="fas fa-truck"></i> Logistics Records</h2>
                 <span class="card-badge">Active shipments</span>
             </div>
             <div class="card-body">
@@ -866,4 +1080,33 @@ function editAlert(id, asset_name, issue, priority, due_date) {
 function closeEditAlertModal() {
     document.getElementById('editAlertModal').style.display = 'none';
 }
+function toggleDocumentForm() {
+    const form = document.getElementById('documentFormContainer');
+    if (form.style.display === 'none' || form.style.display === '') {
+        form.style.display = 'block';
+    } else {
+        form.style.display = 'none';
+    }
+}
+
+function deleteDocument(documentId) {
+    if (confirm('Are you sure you want to delete this document?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="action" value="delete_document">
+            <input type="hidden" name="document_id" value="${documentId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Auto-hide document form after successful upload
+<?php if (isset($message) && $message_type === 'success' && strpos($message, 'Document') !== false): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('documentFormContainer').style.display = 'none';
+});
+<?php endif; ?>
+</script>
 </script>
