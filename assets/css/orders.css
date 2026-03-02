@@ -7,15 +7,13 @@
     display: flex;
     gap: 12px;
 }
-.page-content {
-    max-width: 1000px;        /* limit the width so it doesn't stretch too wide */
-    width: calc(100% - 80px); /* take full width minus left/right offsets */
-    margin: 0 auto;           /* center horizontally */
-    padding: 24px 80px;       /* inner spacing */
-    box-sizing: border-box;    
-    position: relative;       
-    left: 20px;               /* slight right shift */
-    overflow-x: hidden;       /* prevent horizontal scroll */
+.page-content {    
+    flex: 1;
+    margin-left: 288px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 100vh;
+    width: auto;  /* widens dynamically */
 } 
 .btn {
     padding: 8px 16px;

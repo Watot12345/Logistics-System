@@ -1,6 +1,7 @@
 <?php
 // Start session for user management
-session_start();
+
+
 
 // Database configuration
 $host = 'localhost';

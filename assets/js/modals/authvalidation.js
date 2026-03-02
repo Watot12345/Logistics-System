@@ -47,38 +47,64 @@
         
         // Validate signup form
         function validateSignup() {
-            const password = document.getElementById('signupPassword').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
-            const email = document.querySelector('input[name="email"]').value;
-            const username = document.querySelector('input[name="username"]').value;
-            
-            // Email validation
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                alert('Please enter a valid email address');
-                return false;
-            }
-            
-            // Username validation
-            if (username.length < 3) {
-                alert('Username must be at least 3 characters long');
-                return false;
-            }
-            
-            // Password validation
-            if (password.length < 6) {
-                alert('Password must be at least 6 characters long');
-                return false;
-            }
-            
-            // Password match validation
-            if (password !== confirmPassword) {
-                alert('Passwords do not match');
-                return false;
-            }
-            
-            return true;
+    try {
+        // Get the signup form specifically
+        const signupForm = document.getElementById('signupFormElement');
+        
+        const fullName = signupForm.querySelector('input[name="full_name"]').value;
+        const username = signupForm.querySelector('input[name="username"]').value;
+        const email = signupForm.querySelector('input[name="email"]').value;
+        const password = signupForm.querySelector('input[name="password"]').value;
+        const confirmPassword = signupForm.querySelector('input[name="confirm_password"]').value;
+        const termsCheckbox = signupForm.querySelector('input[type="checkbox"]');
+        
+        console.log('Validating signup:', {fullName, username, email, password, confirmPassword, termsChecked: termsCheckbox.checked});
+        
+        // Full name validation
+        if (!fullName.trim()) {
+            alert('Please enter your full name');
+            return false;
         }
+        
+        // Username validation
+        if (username.length < 3) {
+            alert('Username must be at least 3 characters long');
+            return false;
+        }
+        
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            alert('Please enter a valid email address');
+            return false;
+        }
+        
+        // Password validation
+        if (password.length < 6) {
+            alert('Password must be at least 6 characters long');
+            return false;
+        }
+        
+        // Password match validation
+        if (password !== confirmPassword) {
+            alert('Passwords do not match');
+            return false;
+        }
+        
+        // Terms checkbox validation
+        if (!termsCheckbox.checked) {
+            alert('You must agree to the Terms of Service and Privacy Policy');
+            return false;
+        }
+        
+        console.log('All validations passed - submitting form');
+        return true;
+    } catch (e) {
+        console.error('Validation error:', e);
+        alert('An error occurred during validation: ' + e.message);
+        return false;
+    }
+}
         
         // Check password strength
         document.getElementById('signupPassword')?.addEventListener('input', function() {

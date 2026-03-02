@@ -1,3 +1,9 @@
+<?php
+// Start session if not already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,7 +21,8 @@
             echo '<link rel="stylesheet" href="' . $page_css . '">';
         }
     } else {
-        echo '<link rel="stylesheet" href="assets/css/style.css">';
+        // Make sure this path is correct - should point to your optimized CSS
+        echo '<link rel="stylesheet" href="assets/css/dashboard.css">';
     }
     ?>
     <title><?php echo $page_title ?? 'Logistics System'; ?></title>
@@ -41,13 +48,13 @@
                     <p class="nav-section-title">Main Menu</p>
                     <ul class="nav-list">
                         <li class="nav-item">
-                            <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? '../dashboard2.php' : 'dashboard2.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'dashboard2.php') ? 'active' : ''; ?>">
+                            <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? '../dashboard.php' : 'dashboard.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'dashboard.php') ? 'active' : ''; ?>">
                                 <i class="fas fa-th-large"></i>
                                 <span>Dashboard</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? '../dashboard.php' : 'dashboard.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'dashboard.php') ? 'active' : ''; ?>">
+                            <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'inventory.php' : 'modules/inventory.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'inventory.php') ? 'active' : ''; ?>">
                                 <i class="fas fa-boxes"></i>
                                 <span>Inventory</span>
                             </a>
@@ -59,15 +66,15 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="#" class="nav-link">
+                            <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'fleet.php' : 'modules/fleet.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'fleet.php') ? 'active' : ''; ?>">
                                 <i class="fas fa-truck"></i>
-                                <span>Suppliers</span>
+                                <span>Fleet management</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="#" class="nav-link">
+                            <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'employee.php' : 'modules/employee.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'employee.php') ? 'active' : ''; ?>">
                                 <i class="fas fa-users"></i>
-                                <span>Customers</span>
+                                <span>Employee management</span>
                             </a>
                         </li>
                     </ul>
@@ -77,21 +84,9 @@
                     <p class="nav-section-title">Reports</p>
                     <ul class="nav-list">
                         <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="fas fa-chart-line"></i>
-                                <span>Analytics</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
+                            <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'reports.php' : 'modules/reports.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'reports.php') ? 'active' : ''; ?>">
                                 <i class="fas fa-file-alt"></i>
                                 <span>Reports</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="fas fa-chart-pie"></i>
-                                <span>Insights</span>
                             </a>
                         </li>
                     </ul>
@@ -118,15 +113,23 @@
             
             <div class="user-profile">
                 <div class="profile-container">
-                    <div class="avatar">JD</div>
-                    <div class="user-info">
-                        <p class="user-name">John Doe</p>
-                        <p class="user-role">Admin</p>
+                    <div class="avatar">
+                        <?php echo isset($_SESSION['full_name']) ? strtoupper(substr($_SESSION['full_name'], 0, 2)) : 'GU'; ?>
                     </div>
-                    <button class="logout-btn">
+
+                    <div class="user-info">
+                        <p class="user-name">
+                            <?php echo isset($_SESSION['full_name']) ? htmlspecialchars($_SESSION['full_name']) : 'Guest User'; ?>
+                        </p>
+                        <p class="user-role">
+                            <?php echo isset($_SESSION['role']) ? htmlspecialchars($_SESSION['role']) : 'Guest'; ?>
+                        </p>
+                    </div>
+
+                    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? '../includes/logout.php' : 'includes/logout.php'; ?>" class="logout-btn">
                         <i class="fas fa-sign-out-alt"></i>
-                    </button>
+                    </a>
                 </div>
             </div>
         </aside>
-    
+        <!-- Rest of your content will be added here -->
