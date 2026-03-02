@@ -213,12 +213,7 @@ require_once 'includes/auth.php';
         <?php
     }
     
-    // Handle logout
-    if (isset($_GET['logout'])) {
-        session_destroy();
-        header('Location: index.php');
-        exit();
-    }
+   
     ?>
 </body>
 <script src="assets/js/modals/authvalidation.js"></script>

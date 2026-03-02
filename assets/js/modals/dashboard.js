@@ -279,33 +279,50 @@ function updateTrackingDashboard() {
 }
 
 // Update Access Logs
-function updateAccessLogs() {
+async function updateAccessLogs() {
     const logsTable = document.querySelector('.logs-table tbody');
     if (!logsTable) return;
-    
-    // Mock data
-    const logs = [
-        { user: 'John Doe', document: 'Maintenance Manual', action: 'Viewed', time: '2 minutes ago' },
-        { user: 'Jane Smith', document: 'Equipment Certificate', action: 'Downloaded', time: '15 minutes ago' },
-        { user: 'Mike Johnson', document: 'Safety Guidelines', action: 'Viewed', time: '1 hour ago' },
-        { user: 'Sarah Williams', document: 'Warranty Document', action: 'Printed', time: '3 hours ago' },
-        { user: 'Tom Brown', document: 'Maintenance Record', action: 'Downloaded', time: '5 hours ago' }
-    ];
-    
-    let html = '';
-    logs.forEach(log => {
-        html += `
-            <tr>
-                <td>${log.user}</td>
-                <td>${log.document}</td>
-                <td>${log.action}</td>
-                <td>${log.time}</td>
-            </tr>
-        `;
-    });
-    
-    logsTable.innerHTML = html;
+
+    try {
+        const res = await fetch('backend/dashboard.php'); // adjust path if needed
+        const logs = await res.json();
+
+        if (!Array.isArray(logs)) {
+            logsTable.innerHTML = '<tr><td colspan="4">No logs found</td></tr>';
+            return;
+        }
+
+        let html = '';
+        logs.forEach(log => {
+            html += `
+                <tr>
+                    <td>${log.user}</td>
+                    <td>${log.document}</td>
+                    <td>${log.action_type}</td>
+                    <td>${log.time}</td>
+                </tr>
+            `;
+        });
+
+        logsTable.innerHTML = html;
+    } catch (err) {
+        console.error('Error fetching logs:', err);
+        logsTable.innerHTML = '<tr><td colspan="4">Error loading logs</td></tr>';
+    }
 }
+
+// Load on page load
+updateAccessLogs();
+
+// Optional: refresh every 30 seconds
+setInterval(updateAccessLogs, 30000);
+
+
+// Call once on page load
+updateAccessLogs();
+
+// Optional: refresh every 30 seconds
+setInterval(updateAccessLogs, 30000);
 
 // Update Downloadable Records
 function updateDownloadableRecords() {

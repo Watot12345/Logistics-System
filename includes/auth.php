@@ -4,7 +4,7 @@ require_once 'config/db.php';
 // Handle form submissions
 $message = '';
 $messageType = '';
-
+$employee_id = 'EMP' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         // Handle Login
@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['logged_in'] = true;
                         
                         // Redirect to dashboard
-                        header('Location: dashboard2.php');
+                        header('Location: dashboard.php');
                         exit();
                     } else {
                         $message = 'Invalid username/email or password';
@@ -91,9 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         // Hash password and insert user
                         $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                        $stmt = $pdo->prepare("INSERT INTO users (full_name, username, email, password) VALUES (?, ?, ?, ?)");
+                        $stmt = $pdo->prepare("INSERT INTO users (employee_id, full_name, username, email, password) VALUES (?, ?, ?, ?, ?)");
                         
-                        if ($stmt->execute([$full_name, $username, $email, $hashed_password])) {
+                        if ($stmt->execute([$employee_id, $full_name, $username, $email, $hashed_password])) {
                             $message = 'Registration successful! You can now login.';
                             $messageType = 'success';
                             

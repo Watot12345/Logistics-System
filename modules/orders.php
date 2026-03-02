@@ -1,4 +1,12 @@
 <?php
+session_start();
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../index.php");
+    exit();
+}
+?>
+<?php
 // orders.php
 $page_title = 'Orders & Procurement | Logistics System';
 $page_css = ['../assets/css/style.css', '../assets/css/orders.css'];
@@ -7,6 +15,61 @@ include '../includes/header.php';
 
         <!-- Page Content -->
         <div class="page-content">
+                <header class="header">
+    <div class="header-container">
+        
+        <div class="header-left">
+            <button class="menu-toggle" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <div class="search-container">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" class="search-input" placeholder="Search...">
+            </div>
+        </div>
+        
+        <div class="header-right">
+
+            <button class="header-btn">
+                <i class="fas fa-bell"></i>
+                <span class="notification-badge"></span>
+            </button>
+
+            <button class="header-btn">
+                <i class="fas fa-envelope"></i>
+            </button>
+
+            <div class="divider"></div>
+
+            <div class="user-info-header">
+
+                <!-- FULL NAME -->
+                <span class="user-name-header">
+                    <?php echo htmlspecialchars($_SESSION['full_name']); ?>
+                </span>
+
+                <!-- AVATAR INITIALS -->
+                <div class="avatar-small">
+                    <?php
+                        $name = $_SESSION['full_name'];
+                        $words = explode(" ", $name);
+                        $initials = "";
+
+                        foreach ($words as $word) {
+                            $initials .= strtoupper(substr($word, 0, 1));
+                        }
+
+                        echo $initials;
+                    ?>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</header>       
                 <!-- Page Header -->
                 <div class="page-header">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
