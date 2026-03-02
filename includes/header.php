@@ -56,7 +56,7 @@ if (session_status() === PHP_SESSION_NONE) {
                         <li class="nav-item">
                             <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'inventory.php' : 'modules/inventory.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'inventory.php') ? 'active' : ''; ?>">
                                 <i class="fas fa-boxes"></i>
-                                <span>Inventory</span>
+                                <span>Smart warehousing</span>
                             </a>
                         </li>
                         <li class="nav-item">
