@@ -1,11 +1,134 @@
 <?php
 session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../index.php");
     exit();
 }
+
+// Check user role
+$isAdmin = isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+$isEmployee = isset($_SESSION['role']) && $_SESSION['role'] === 'employee';
+
+// Include database connection first
+require_once '../backend/inventory-function.php';
+
+$inventory = new InventoryManager();
+
+// Handle POST requests (Add, Edit, Delete, Add Category)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    
+    $action = $_POST['action'] ?? '';
+    
+    // ADD ITEM HANDLER
+    if ($action === 'add' && $isAdmin) {
+        $data = [
+            'item_name' => $_POST['item_name'] ?? '',
+            'sku' => $_POST['sku'] ?? '',
+            'category' => $_POST['category'] ?? '',
+            'quantity' => $_POST['quantity'] ?? 0,
+            'price' => $_POST['price'] ?? 0,
+            'reorder_level' => $_POST['reorder_level'] ?? 10,
+            'description' => $_POST['description'] ?? '',
+            'supplier' => $_POST['supplier'] ?? ''
+        ];
+        $result = $inventory->addItem($data);
+        echo json_encode($result);
+        exit();
+    }
+    
+    // ADD CATEGORY HANDLER - Using the OOP method
+    if ($action === 'add_category' && $isAdmin) {
+        $result = $inventory->addCategory(
+            $_POST['category_name'] ?? '', 
+            $_POST['color'] ?? 'blue'
+        );
+        echo json_encode($result);
+        exit();
+    }
+    
+    // EDIT ITEM HANDLER
+    if ($action === 'edit' && $isAdmin) {
+        $id = $_POST['id'] ?? 0;
+        $data = [
+            'item_name' => $_POST['item_name'] ?? '',
+            'sku' => $_POST['sku'] ?? '',
+            'category' => $_POST['category'] ?? '',
+            'quantity' => $_POST['quantity'] ?? 0,
+            'price' => $_POST['price'] ?? 0,
+            'reorder_level' => $_POST['reorder_level'] ?? 10,
+            'description' => $_POST['description'] ?? '',
+            'supplier' => $_POST['supplier'] ?? ''
+        ];
+        $result = $inventory->updateItem($id, $data);
+        echo json_encode($result);
+        exit();
+    }
+    
+    // DELETE ITEM HANDLER
+    if ($action === 'delete' && $isAdmin) {
+        $id = $_POST['id'] ?? 0;
+        $result = $inventory->deleteItem($id);
+        echo json_encode($result);
+        exit();
+    }
+    
+    // GET ITEM HANDLER
+    if ($action === 'get_item') {
+        $id = $_POST['id'] ?? 0;
+        $item = $inventory->getItemById($id);
+        echo json_encode($item);
+        exit();
+    }
+}
+
+$categories = $inventory->getCategories();
+$suppliers = $inventory->getSuppliers();
+// Get total count for pagination
+$total_items = $inventory->getTotalCount($_GET['filter'] ?? 'all', $_GET['category'] ?? null);
+
+// Calculate pagination
+$items_per_page = 10;
+$current_page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$total_pages = ceil($total_items / $items_per_page);
+$start_from = ($current_page - 1) * $items_per_page + 1;
+$end_to = min($current_page * $items_per_page, $total_items);
+
+// Get items for current page with filters
+$items = $inventory->getInventoryItems(
+    $current_page, 
+    $items_per_page, 
+    $_GET['filter'] ?? 'all', 
+    $_GET['category'] ?? null
+);
+
+// Get data from database for display
+$stats = $inventory->getDashboardStats();
+$recent_additions = $inventory->getRecentAdditions(7);
+$low_stock_count = $inventory->getLowStockCount();
+
+$items_growth = $stats['items_growth'] ?? 0;
+$items_growth_color = $items_growth >= 0 ? 'green' : 'red';
+$items_growth_sign = $items_growth >= 0 ? '+' : '';
+$items_growth_text = $items_growth_sign . $items_growth . '%';
+
+$categories_growth_abs = $stats['categories_growth_abs'] ?? 0;
+$categories_growth_color = $categories_growth_abs > 0 ? 'green' : 'gray';
+$categories_text = $categories_growth_abs > 0 ? '+' . $categories_growth_abs . ' new' : 'No change';
+
+$low_stock_color = $low_stock_count > 0 ? 'amber' : 'green';
+$low_stock_text = $low_stock_count > 0 ? 'Need reorder' : 'Stock OK';
+
+$value_growth = $stats['value_growth'] ?? 0;
+$value_growth_color = $value_growth >= 0 ? 'green' : 'red';
+$value_growth_sign = $value_growth >= 0 ? '+' : '';
+$value_growth_text = $value_growth_sign . $value_growth . '%';
+
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,365 +137,389 @@ if (!isset($_SESSION['user_id'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
+    <style>
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .stat-badge.red {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+}
+    </style>
     <title>Inventory Management | Logistics System</title>
 </head>
 <body>
- <?php include '../includes/header.php'; ?>    
-        <!-- Main Content -->
-        <main class="main-content">
-                   <header class="header">
-    <div class="header-container">
+    <?php include '../includes/header.php'; ?>
+    
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="header">
+            <div class="header-container">
+                <div class="header-left">
+                    <button class="menu-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div class="search-container">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" class="search-input" placeholder="Search..." id="searchInput" onkeyup="searchItems()">
+                    </div>
+                </div>
+                
+                <div class="header-right">
+                    <button class="header-btn">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge"></span>
+                    </button>
+                    <button class="header-btn">
+                        <i class="fas fa-envelope"></i>
+                    </button>
+                    <div class="divider"></div>
+                    <div class="user-info-header">
+                        <span class="user-name-header">
+                            <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'User'); ?>
+                            <?php if ($isAdmin): ?>
+                            <?php elseif ($isEmployee): ?>
+                            <?php endif; ?>
+                        </span>
+                        <div class="avatar-small">
+                            <?php
+                                $name = $_SESSION['full_name'] ?? 'User';
+                                $words = explode(" ", $name);
+                                $initials = "";
+                                foreach ($words as $word) {
+                                    $initials .= strtoupper(substr($word, 0, 1));
+                                }
+                                echo $initials;
+                            ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
         
-        <div class="header-left">
-            <button class="menu-toggle" onclick="toggleSidebar()">
-                <i class="fas fa-bars"></i>
-            </button>
-
-            <div class="search-container">
-                <i class="fas fa-search search-icon"></i>
-                <input type="text" class="search-input" placeholder="Search...">
+        <!-- Page Content -->
+        <div class="page-content">
+            <!-- Page Header -->
+            <div class="page-header">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1 class="header-title">Smart Warehousing</h1>
+                        <p class="header-subtitle">Manage your products, stock levels, and inventory items</p>
+                    </div>
+                    <div class="header-right-content">
+                        <span class="last-updated">Last updated: <?php echo date('M d, Y H:i'); ?></span>
+                        <?php if ($isEmployee): ?>
+                            
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
+            
+            <!-- Statistics Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon blue">
+                <i class="fas fa-boxes"></i>
+            </div>
+            <span class="stat-badge <?php echo $items_growth_color; ?>">
+                <?php echo $items_growth_text; ?>
+            </span>
         </div>
-        
-        <div class="header-right">
-
-            <button class="header-btn">
-                <i class="fas fa-bell"></i>
-                <span class="notification-badge"></span>
-            </button>
-
-            <button class="header-btn">
-                <i class="fas fa-envelope"></i>
-            </button>
-
-            <div class="divider"></div>
-
-            <div class="user-info-header">
-
-                <!-- FULL NAME -->
-                <span class="user-name-header">
-                    <?php echo htmlspecialchars($_SESSION['full_name']); ?>
-                </span>
-
-                <!-- AVATAR INITIALS -->
-                <div class="avatar-small">
-                    <?php
-                        $name = $_SESSION['full_name'];
-                        $words = explode(" ", $name);
-                        $initials = "";
-
-                        foreach ($words as $word) {
-                            $initials .= strtoupper(substr($word, 0, 1));
-                        }
-
-                        echo $initials;
-                    ?>
-                </div>
-
-            </div>
-
+        <p class="stat-label">Total Items</p>
+        <p class="stat-value"><?php echo number_format($stats['total_items'] ?? 0); ?></p>
+        <div class="stat-progress">
+            <div class="progress-bar blue" style="width: 75%"></div>
         </div>
-
-    </div>
-</header>           
-            <!-- Page Content -->
-            <div class="page-content">
-                <!-- Page Header -->
-                <div class="page-header">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <h1 class="header-title">Inventory Management</h1>
-                            <p class="header-subtitle">Manage your products, stock levels, and inventory items</p>
-                        </div>
-                        <div class="header-right-content">
-                            <span class="last-updated">Last updated: 5 mins ago</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Statistics Cards -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon blue">
-                                <i class="fas fa-boxes"></i>
-                            </div>
-                            <span class="stat-badge green">+12.5%</span>
-                        </div>
-                        <p class="stat-label">Total Items</p>
-                        <p class="stat-value">1,234</p>
-                        <div class="stat-progress">
-                            <div class="progress-bar blue" style="width: 75%"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon emerald">
-                                <i class="fas fa-tags"></i>
-                            </div>
-                            <span class="stat-badge green">+3 new</span>
-                        </div>
-                        <p class="stat-label">Categories</p>
-                        <p class="stat-value">45</p>
-                        <div class="stat-progress">
-                            <div class="progress-bar emerald" style="width: 100%"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon amber">
-                                <i class="fas fa-exclamation-triangle"></i>
-                            </div>
-                            <span class="stat-badge amber">Need reorder</span>
-                        </div>
-                        <p class="stat-label">Low Stock Items</p>
-                        <p class="stat-value" style="color: #d97706;">23</p>
-                        <div class="stat-progress">
-                            <div class="progress-bar amber" style="width: 25%"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon purple">
-                                <i class="fas fa-dollar-sign"></i>
-                            </div>
-                            <span class="stat-badge green">+5.2%</span>
-                        </div>
-                        <p class="stat-label">Total Value</p>
-                        <p class="stat-value">$45.2K</p>
-                        <div class="stat-progress">
-                            <div class="progress-bar purple" style="width: 66%"></div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Filters and Actions -->
-                <div class="filters-section">
-                    <div class="filter-group">
-                        <div class="filter-buttons">
-                            <button class="filter-btn active">All</button>
-                            <button class="filter-btn">In Stock</button>
-                            <button class="filter-btn">Low Stock</button>
-                            <button class="filter-btn">Out of Stock</button>
-                        </div>
-                        
-                        <select class="category-select">
-                            <option>All Categories</option>
-                            <option>Electronics</option>
-                            <option>Furniture</option>
-                            <option>Clothing</option>
-                        </select>
-                    </div>
-                    
-                    <div class="action-buttons">
-                        <button class="btn btn-outline">
-                            <i class="fas fa-download"></i>
-                            Export
-                        </button>
-                        <button class="btn btn-primary" onclick="openAddModal()">
-                            <i class="fas fa-plus"></i>
-                            Add Item
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Inventory Table -->
-                <div class="table-container">
-                    <div style="overflow-x: auto;">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>
-                                        <input type="checkbox" class="checkbox">
-                                    </th>
-                                    <th>Item Details</th>
-                                    <th>Category</th>
-                                    <th>Stock Level</th>
-                                    <th>Price</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Row 1 -->
-                                <tr>
-                                    <td>
-                                        <input type="checkbox" class="checkbox">
-                                    </td>
-                                    <td>
-                                        <div class="item-details">
-                                            <div class="item-icon">
-                                                <i class="fas fa-laptop"></i>
-                                            </div>
-                                            <div class="item-info">
-                                                <span class="item-name">HP Laptop ProBook</span>
-                                                <span class="item-sku">SKU: LPT-HP-001</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="category-badge blue">Electronics</span>
-                                    </td>
-                                    <td>
-                                        <div class="stock-level">
-                                            <div class="progress-small">
-                                                <div class="progress-fill emerald" style="width: 75%"></div>
-                                            </div>
-                                            <span class="stock-text">45 units</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="price">$899.99</span>
-                                    </td>
-                                    <td>
-                                        <span class="status-badge in-stock">
-                                            <i class="fas fa-check-circle"></i>
-                                            In Stock
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="action-group">
-                                            <button class="action-btn view" onclick="openViewModal(1)">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn edit" onclick="openEditModal(1)">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button class="action-btn delete" onclick="deleteItem(1)">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Row 2 - Low Stock -->
-                                <tr>
-                                    <td>
-                                        <input type="checkbox" class="checkbox">
-                                    </td>
-                                    <td>
-                                        <div class="item-details">
-                                            <div class="item-icon">
-                                                <i class="fas fa-chair"></i>
-                                            </div>
-                                            <div class="item-info">
-                                                <span class="item-name">Office Desk Chair</span>
-                                                <span class="item-sku">SKU: FUR-001</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="category-badge emerald">Furniture</span>
-                                    </td>
-                                    <td>
-                                        <div class="stock-level">
-                                            <div class="progress-small">
-                                                <div class="progress-fill amber" style="width: 15%"></div>
-                                            </div>
-                                            <span class="stock-text">5 units</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="price">$149.99</span>
-                                    </td>
-                                    <td>
-                                        <span class="status-badge low-stock">
-                                            <i class="fas fa-exclamation-circle"></i>
-                                            Low Stock
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="action-group">
-                                            <button class="action-btn view" onclick="openViewModal(2)">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn edit" onclick="openEditModal(2)">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button class="action-btn delete" onclick="deleteItem(2)">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                
-                                <!-- Row 3 - Out of Stock -->
-                                <tr>
-                                    <td>
-                                        <input type="checkbox" class="checkbox">
-                                    </td>
-                                    <td>
-                                        <div class="item-details">
-                                            <div class="item-icon">
-                                                <i class="fas fa-tshirt"></i>
-                                            </div>
-                                            <div class="item-info">
-                                                <span class="item-name">Cotton T-Shirt (L)</span>
-                                                <span class="item-sku">SKU: CLTH-001</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="category-badge purple">Clothing</span>
-                                    </td>
-                                    <td>
-                                        <div class="stock-level">
-                                            <div class="progress-small">
-                                                <div class="progress-fill rose" style="width: 0%"></div>
-                                            </div>
-                                            <span class="stock-text">0 units</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="price">$24.99</span>
-                                    </td>
-                                    <td>
-                                        <span class="status-badge out-of-stock">
-                                            <i class="fas fa-times-circle"></i>
-                                            Out of Stock
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="action-group">
-                                            <button class="action-btn view" onclick="openViewModal(3)">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            <button class="action-btn edit" onclick="openEditModal(3)">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button class="action-btn delete" onclick="deleteItem(3)">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <!-- Pagination -->
-                    <div class="pagination">
-                        <p class="pagination-info">Showing 1 to 3 of 97 results</p>
-                        <div class="pagination-controls">
-                            <button class="page-btn">
-                                <i class="fas fa-chevron-left"></i>
-                            </button>
-                            <button class="page-btn active">1</button>
-                            <button class="page-btn">2</button>
-                            <button class="page-btn">3</button>
-                            <button class="page-btn">
-                                <i class="fas fa-chevron-right"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
     </div>
     
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon emerald">
+                <i class="fas fa-tags"></i>
+            </div>
+            <span class="stat-badge <?php echo $categories_growth_color; ?>">
+                <?php echo $categories_text; ?>
+            </span>
+        </div>
+        <p class="stat-label">Categories</p>
+        <p class="stat-value"><?php echo number_format($stats['total_categories'] ?? 0); ?></p>
+        <div class="stat-progress">
+            <div class="progress-bar emerald" style="width: 100%"></div>
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon amber">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <span class="stat-badge <?php echo $low_stock_color; ?>">
+                <?php echo $low_stock_text; ?>
+            </span>
+        </div>
+        <p class="stat-label">Low Stock Items</p>
+        <p class="stat-value" style="color: #d97706;"><?php echo number_format($low_stock_count); ?></p>
+        <div class="stat-progress">
+            <div class="progress-bar amber" style="width: <?php echo $low_stock_count > 0 ? 25 : 0; ?>%"></div>
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon purple">
+                <i class="fas fa-dollar-sign"></i>
+            </div>
+            <span class="stat-badge <?php echo $value_growth_color; ?>">
+                <?php echo $value_growth_text; ?>
+            </span>
+        </div>
+        <p class="stat-label">Total Value</p>
+        <p class="stat-value">$<?php echo number_format($stats['total_inventory_value'] ?? 0, 2); ?></p>
+        <div class="stat-progress">
+            <div class="progress-bar purple" style="width: 66%"></div>
+        </div>
+    </div>
+</div>
+            
+            
+            
+           <!-- Filters and Actions -->
+<div class="filters-section">
+    <div class="filter-group">
+        <div class="filter-buttons">
+            <a href="?filter=all" class="filter-btn <?php echo (!isset($_GET['filter']) || $_GET['filter'] == 'all') ? 'active' : ''; ?>">All</a>
+            <a href="?filter=in_stock" class="filter-btn <?php echo ($_GET['filter'] ?? '') == 'in_stock' ? 'active' : ''; ?>">In Stock</a>
+            <a href="?filter=low_stock" class="filter-btn <?php echo ($_GET['filter'] ?? '') == 'low_stock' ? 'active' : ''; ?>">Low Stock</a>
+            <a href="?filter=out_of_stock" class="filter-btn <?php echo ($_GET['filter'] ?? '') == 'out_of_stock' ? 'active' : ''; ?>">Out of Stock</a>
+        </div>
+        
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <select class="category-select" onchange="window.location.href='?category='+this.value">
+                <option value="All Categories">All Categories</option>
+                <?php foreach ($categories as $category): ?>
+                    <option value="<?php echo htmlspecialchars($category['category_name']); ?>" 
+                        <?php echo ($_GET['category'] ?? '') == $category['category_name'] ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($category['category_name']); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            
+            <?php if ($isAdmin): ?>
+                <button class="btn btn-icon" onclick="openAddCategoryModal()" title="Add New Category">
+                    <i class="fas fa-plus-circle" style="color: #2563eb; font-size: 24px;"></i>
+                </button>
+            <?php endif; ?>
+        </div>
+    </div>
+    
+    <div class="action-buttons">
+    <button class="btn btn-outline" onclick="exportData()">
+        <i class="fas fa-download"></i>
+        Export
+    </button>
+    
+    <?php if ($isAdmin): ?>
+        <button class="btn btn-primary" onclick="openAddModal()">
+            <i class="fas fa-plus"></i>
+            Add Item
+        </button>
+    <?php endif; ?>
+</div>
+</div>
+
+               <!-- Add Category Modal -->
+<div id="addCategoryModal" class="modal modal-hidden">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Add New Category</h3>
+            <button class="modal-close" onclick="closeModal('addCategoryModal')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <form id="addCategoryForm" onsubmit="return submitAddCategory(event)">
+            <div class="form-group">
+                <label class="form-label">Category Name</label>
+                <input type="text" id="category_name" class="form-input" placeholder="Enter category name" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Color</label>
+                <select id="category_color" class="form-select" required>
+                    <option value="blue">Blue</option>
+                    <option value="emerald">Green</option>
+                    <option value="purple">Purple</option>
+                    <option value="amber">Orange</option>
+                    <option value="rose">Red</option>
+                </select>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal('addCategoryModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Category</button>
+            </div>
+        </form>
+    </div>
+</div>
+                
+                    
+            
+            
+            <!-- Inventory Table -->
+            <div class="table-container">
+                <div style="overflow-x: auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input type="checkbox" class="checkbox" id="selectAll" <?php echo $isEmployee ? 'disabled' : ''; ?>>
+                                </th>
+                                <th>Item Details</th>
+                                <th>Category</th>
+                                <th>Stock Level</th>
+                                <th>Price</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <?php if (empty($items)): ?>
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 40px;">
+                                        <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
+                                        <p style="color: #666;">No inventory items found</p>
+                                    </td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($items as $item): ?>
+                                <tr id="row-<?php echo $item['id']; ?>">
+                                    <td>
+                                        <input type="checkbox" class="checkbox" value="<?php echo $item['id']; ?>" <?php echo $isEmployee ? 'disabled' : ''; ?>>
+                                    </td>
+                                    <td>
+                                        <div class="item-details">
+                                            <div class="item-icon">
+                                                <?php
+                                                $icon = match($item['category_name'] ?? '') {
+                                                    'Electronics' => 'laptop',
+                                                    'Furniture' => 'chair',
+                                                    'Clothing' => 'tshirt',
+                                                    default => 'box'
+                                                };
+                                                ?>
+                                                <i class="fas fa-<?php echo $icon; ?>"></i>
+                                            </div>
+                                            <div class="item-info">
+                                                <span class="item-name"><?php echo htmlspecialchars($item['item_name']); ?></span>
+                                                <span class="item-sku">SKU: <?php echo htmlspecialchars($item['sku']); ?></span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="category-badge <?php echo $item['category_color'] ?? 'blue'; ?>">
+                                            <?php echo htmlspecialchars($item['category_name'] ?? 'Uncategorized'); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="stock-level">
+                                            <div class="progress-small">
+                                                <?php 
+                                                $max_stock = max($item['reorder_level'] * 2, 1);
+                                                $percentage = min(100, ($item['quantity'] / $max_stock) * 100);
+                                                $colorClass = match($item['status'] ?? '') {
+                                                    'low_stock' => 'amber',
+                                                    'out_of_stock' => 'rose',
+                                                    default => 'emerald'
+                                                };
+                                                ?>
+                                                <div class="progress-fill <?php echo $colorClass; ?>" style="width: <?php echo $percentage; ?>%"></div>
+                                            </div>
+                                            <span class="stock-text"><?php echo $item['quantity']; ?> units</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="price">$<?php echo number_format($item['price'], 2); ?></span>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $status_class = match($item['status'] ?? '') {
+                                            'low_stock' => 'low-stock',
+                                            'out_of_stock' => 'out-of-stock',
+                                            default => 'in-stock'
+                                        };
+                                        $status_icon = match($item['status'] ?? '') {
+                                            'low_stock' => 'exclamation-circle',
+                                            'out_of_stock' => 'times-circle',
+                                            default => 'check-circle'
+                                        };
+                                        $status_text = match($item['status'] ?? '') {
+                                            'low_stock' => 'Low Stock',
+                                            'out_of_stock' => 'Out of Stock',
+                                            default => 'In Stock'
+                                        };
+                                        ?>
+                                        <span class="status-badge <?php echo $status_class; ?>">
+                                            <i class="fas fa-<?php echo $status_icon; ?>"></i>
+                                            <?php echo $status_text; ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="action-group">
+                                            <button class="action-btn view" onclick="openViewModal(<?php echo $item['id']; ?>)">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            
+                                            <?php if ($isAdmin): ?>
+                                                <button class="action-btn edit" onclick="openEditModal(<?php echo $item['id']; ?>)">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="action-btn delete" onclick="deleteItem(<?php echo $item['id']; ?>)">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            <?php else: ?>
+                                                
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                <?php if ($total_pages > 1): ?>
+                <div class="pagination">
+                    <p class="pagination-info">
+                        Showing <?php echo $start_from; ?> to <?php echo $end_to; ?> of <?php echo $total_items; ?> results
+                    </p>
+                    <div class="pagination-controls">
+                        <a href="?page=<?php echo max(1, $current_page - 1); ?>&filter=<?php echo $_GET['filter'] ?? 'all'; ?>&category=<?php echo urlencode($_GET['category'] ?? ''); ?>" 
+                           class="page-btn <?php echo $current_page <= 1 ? 'disabled' : ''; ?>">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                        
+                        <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                            <a href="?page=<?php echo $i; ?>&filter=<?php echo $_GET['filter'] ?? 'all'; ?>&category=<?php echo urlencode($_GET['category'] ?? ''); ?>" 
+                               class="page-btn <?php echo $current_page == $i ? 'active' : ''; ?>">
+                                <?php echo $i; ?>
+                            </a>
+                        <?php endfor; ?>
+                        
+                        <a href="?page=<?php echo min($total_pages, $current_page + 1); ?>&filter=<?php echo $_GET['filter'] ?? 'all'; ?>&category=<?php echo urlencode($_GET['category'] ?? ''); ?>" 
+                           class="page-btn <?php echo $current_page >= $total_pages ? 'disabled' : ''; ?>">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </main>
+
     <!-- Add Item Modal -->
     <div id="addModal" class="modal modal-hidden">
         <div class="modal-content">
@@ -383,46 +530,52 @@ if (!isset($_SESSION['user_id'])) {
                 </button>
             </div>
             
-            <form>
+            <form id="addItemForm" onsubmit="return submitAddItem(event)">
                 <div class="form-grid">
                     <div class="form-group">
                         <label class="form-label">Item Name</label>
-                        <input type="text" class="form-input" placeholder="Enter item name">
+                        <input type="text" id="add_item_name" class="form-input" placeholder="Enter item name" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">SKU</label>
-                        <input type="text" class="form-input" placeholder="Enter SKU">
+                        <input type="text" id="add_sku" class="form-input" placeholder="Enter SKU" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Category</label>
-                        <select class="form-select">
-                            <option>Electronics</option>
-                            <option>Furniture</option>
-                            <option>Clothing</option>
+                        <select id="add_category" class="form-select" required>
+                            <option value="">Select Category</option>
+                            <?php foreach ($categories as $category): ?>
+                                <option value="<?php echo htmlspecialchars($category['category_name']); ?>">
+                                    <?php echo htmlspecialchars($category['category_name']); ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Quantity</label>
-                        <input type="number" class="form-input" placeholder="Enter quantity">
+                        <input type="number" id="add_quantity" class="form-input" placeholder="Enter quantity" required min="0">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Price</label>
-                        <input type="number" step="0.01" class="form-input" placeholder="Enter price">
+                        <input type="number" id="add_price" step="0.01" class="form-input" placeholder="Enter price" required min="0">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Reorder Level</label>
-                        <input type="number" class="form-input" placeholder="Enter reorder level">
+                        <input type="number" id="add_reorder_level" class="form-input" placeholder="Enter reorder level" required min="0">
                     </div>
                     <div class="form-group full-width">
                         <label class="form-label">Description</label>
-                        <textarea rows="3" class="form-textarea" placeholder="Enter item description"></textarea>
+                        <textarea id="add_description" rows="3" class="form-textarea" placeholder="Enter item description"></textarea>
                     </div>
                     <div class="form-group full-width">
                         <label class="form-label">Supplier</label>
-                        <select class="form-select">
-                            <option>ABC Supplies Inc.</option>
-                            <option>Global Traders Ltd.</option>
-                            <option>Direct Source Co.</option>
+                        <select id="add_supplier" class="form-select" required>
+                            <option value="">Select Supplier</option>
+                            <?php foreach ($suppliers as $supplier): ?>
+                                <option value="<?php echo htmlspecialchars($supplier['supplier_name']); ?>">
+                                    <?php echo htmlspecialchars($supplier['supplier_name']); ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                 </div>
@@ -435,59 +588,89 @@ if (!isset($_SESSION['user_id'])) {
         </div>
     </div>
     
-    <!-- Edit Item Modal -->
-    <div id="editModal" class="modal modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Edit Inventory Item</h3>
-                <button class="modal-close" onclick="closeModal('editModal')">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <form>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label">Item Name</label>
-                        <input type="text" class="form-input" value="HP Laptop ProBook">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">SKU</label>
-                        <input type="text" class="form-input" value="LPT-HP-001">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Category</label>
-                        <select class="form-select">
-                            <option selected>Electronics</option>
-                            <option>Furniture</option>
-                            <option>Clothing</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Quantity</label>
-                        <input type="number" class="form-input" value="45">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Price</label>
-                        <input type="number" step="0.01" class="form-input" value="899.99">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Reorder Level</label>
-                        <input type="number" class="form-input" value="10">
-                    </div>
-                    <div class="form-group full-width">
-                        <label class="form-label">Description</label>
-                        <textarea rows="3" class="form-textarea">High-performance laptop for business use</textarea>
-                    </div>
+  <!-- Edit Item Modal -->
+<div id="editModal" class="modal modal-hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">Edit Inventory Item</h3>
+            <button class="modal-close" onclick="closeModal('editModal')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <form id="editItemForm" onsubmit="return submitEditItem(event)">
+            <input type="hidden" id="edit_item_id">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Item Name</label>
+                    <input type="text" id="edit_item_name" class="form-input" required>
                 </div>
                 
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeModal('editModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                <div class="form-group">
+                    <label class="form-label">SKU</label>
+                    <input type="text" id="edit_sku" class="form-input" required>
                 </div>
-            </form>
-        </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <select id="edit_category" class="form-select" required>
+                        <option value="">Select Category</option>
+                        <?php if (!empty($categories)): ?>
+                            <?php foreach ($categories as $category): ?>
+                                <option value="<?php echo htmlspecialchars($category['category_name']); ?>">
+                                    <?php echo htmlspecialchars($category['category_name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="">No categories available</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Quantity</label>
+                    <input type="number" id="edit_quantity" class="form-input" required min="0">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Price</label>
+                    <input type="number" id="edit_price" step="0.01" class="form-input" required min="0">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Reorder Level</label>
+                    <input type="number" id="edit_reorder_level" class="form-input" required min="0">
+                </div>
+                
+                <div class="form-group full-width">
+                    <label class="form-label">Description</label>
+                    <textarea id="edit_description" rows="3" class="form-textarea"></textarea>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label class="form-label">Supplier</label>
+                    <select id="edit_supplier" class="form-select" required>
+                        <option value="">Select Supplier</option>
+                        <?php if (!empty($suppliers)): ?>
+                            <?php foreach ($suppliers as $supplier): ?>
+                                <option value="<?php echo htmlspecialchars($supplier['supplier_name']); ?>">
+                                    <?php echo htmlspecialchars($supplier['supplier_name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="">No suppliers available</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal('editModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
     </div>
+</div>
     
     <!-- View Item Modal -->
     <div id="viewModal" class="modal modal-hidden">
@@ -503,60 +686,62 @@ if (!isset($_SESSION['user_id'])) {
                 <div class="detail-row">
                     <div>
                         <p class="detail-label">Item Name</p>
-                        <p class="detail-value">HP Laptop ProBook</p>
+                        <p class="detail-value" id="view_item_name"></p>
                     </div>
                     <div>
                         <p class="detail-label">SKU</p>
-                        <p class="detail-value">LPT-HP-001</p>
+                        <p class="detail-value" id="view_sku"></p>
                     </div>
                 </div>
                 
                 <div class="detail-row">
                     <div>
                         <p class="detail-label">Category</p>
-                        <p class="detail-value">Electronics</p>
+                        <p class="detail-value" id="view_category"></p>
                     </div>
                     <div>
                         <p class="detail-label">Quantity</p>
-                        <p class="detail-value">45 units</p>
+                        <p class="detail-value" id="view_quantity"></p>
                     </div>
                 </div>
                 
                 <div class="detail-row">
                     <div>
                         <p class="detail-label">Price</p>
-                        <p class="detail-value highlight">$899.99</p>
+                        <p class="detail-value highlight" id="view_price"></p>
                     </div>
                     <div>
                         <p class="detail-label">Reorder Level</p>
-                        <p class="detail-value">10 units</p>
+                        <p class="detail-value" id="view_reorder_level"></p>
                     </div>
                 </div>
                 
                 <div class="detail-row">
                     <div>
                         <p class="detail-label">Status</p>
-                        <p><span class="status-badge in-stock"><i class="fas fa-check-circle"></i> In Stock</span></p>
+                        <p id="view_status"></p>
                     </div>
                     <div>
                         <p class="detail-label">Supplier</p>
-                        <p class="detail-value">ABC Supplies Inc.</p>
+                        <p class="detail-value" id="view_supplier"></p>
                     </div>
                 </div>
                 
                 <div style="margin-bottom: 16px;">
                     <p class="detail-label">Description</p>
-                    <p class="description-box">High-performance laptop for business use with Intel Core i7, 16GB RAM, 512GB SSD</p>
+                    <p class="description-box" id="view_description"></p>
                 </div>
                 
                 <div>
                     <p class="detail-label">Last Updated</p>
-                    <p class="detail-value">February 20, 2024</p>
+                    <p class="detail-value" id="view_last_updated"></p>
                 </div>
                 
                 <div class="modal-footer">
                     <button class="btn btn-outline" onclick="closeModal('viewModal')">Close</button>
-                    <button class="btn btn-primary" onclick="openEditModal(1)">Edit Item</button>
+                    <?php if ($isAdmin): ?>
+                        <button class="btn btn-primary" onclick="openEditModalFromView()">Edit Item</button>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -577,36 +762,308 @@ if (!isset($_SESSION['user_id'])) {
         </div>
     </div>
     
-    <!-- JavaScript -->
     <script>
+        let currentViewItemId = null;
+        let itemToDelete = null;
+        
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('active');
         }
         
         function openAddModal() {
-            document.getElementById('addModal').classList.remove('modal-hidden');
+            <?php if ($isAdmin): ?>
+                document.getElementById('addModal').classList.remove('modal-hidden');
+                document.getElementById('addItemForm').reset();
+            <?php else: ?>
+                alert('Only administrators can add items.');
+            <?php endif; ?>
+        }
+        
+        function submitAddItem(event) {
+            event.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('action', 'add');
+            formData.append('item_name', document.getElementById('add_item_name').value);
+            formData.append('sku', document.getElementById('add_sku').value);
+            formData.append('category', document.getElementById('add_category').value);
+            formData.append('quantity', document.getElementById('add_quantity').value);
+            formData.append('price', document.getElementById('add_price').value);
+            formData.append('reorder_level', document.getElementById('add_reorder_level').value);
+            formData.append('description', document.getElementById('add_description').value);
+            formData.append('supplier', document.getElementById('add_supplier').value);
+            
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            submitBtn.disabled = true;
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Item added successfully!');
+                    closeModal('addModal');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while adding the item.');
+            })
+            .finally(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+            
+            return false;
         }
         
         function openEditModal(id) {
-            document.getElementById('editModal').classList.remove('modal-hidden');
+            <?php if ($isAdmin): ?>
+                const formData = new FormData();
+                formData.append('action', 'get_item');
+                formData.append('id', id);
+                
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data) {
+                        document.getElementById('edit_item_id').value = data.id;
+                        document.getElementById('edit_item_name').value = data.item_name;
+                        document.getElementById('edit_sku').value = data.sku;
+                        document.getElementById('edit_category').value = data.category_name;
+                        document.getElementById('edit_quantity').value = data.quantity;
+                        document.getElementById('edit_price').value = data.price;
+                        document.getElementById('edit_reorder_level').value = data.reorder_level;
+                        document.getElementById('edit_description').value = data.description;
+                        document.getElementById('edit_supplier').value = data.supplier_name;
+                        
+                        document.getElementById('editModal').classList.remove('modal-hidden');
+                    }
+                });
+            <?php else: ?>
+                alert('Only administrators can edit items.');
+            <?php endif; ?>
+        }
+        
+        function submitEditItem(event) {
+            event.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('action', 'edit');
+            formData.append('id', document.getElementById('edit_item_id').value);
+            formData.append('item_name', document.getElementById('edit_item_name').value);
+            formData.append('sku', document.getElementById('edit_sku').value);
+            formData.append('category', document.getElementById('edit_category').value);
+            formData.append('quantity', document.getElementById('edit_quantity').value);
+            formData.append('price', document.getElementById('edit_price').value);
+            formData.append('reorder_level', document.getElementById('edit_reorder_level').value);
+            formData.append('description', document.getElementById('edit_description').value);
+            formData.append('supplier', document.getElementById('edit_supplier').value);
+            
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            submitBtn.disabled = true;
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Item updated successfully!');
+                    closeModal('editModal');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the item.');
+            })
+            .finally(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+            
+            return false;
         }
         
         function openViewModal(id) {
-            document.getElementById('viewModal').classList.remove('modal-hidden');
+            currentViewItemId = id;
+            
+            const formData = new FormData();
+            formData.append('action', 'get_item');
+            formData.append('id', id);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data) {
+                    document.getElementById('view_item_name').textContent = data.item_name;
+                    document.getElementById('view_sku').textContent = data.sku;
+                    document.getElementById('view_category').textContent = data.category_name;
+                    document.getElementById('view_quantity').textContent = data.quantity + ' units';
+                    document.getElementById('view_price').textContent = '$' + parseFloat(data.price).toFixed(2);
+                    document.getElementById('view_reorder_level').textContent = data.reorder_level + ' units';
+                    document.getElementById('view_supplier').textContent = data.supplier_name;
+                    document.getElementById('view_description').textContent = data.description || 'No description';
+                    
+                    const statusBadge = getStatusBadge(data.status);
+                    document.getElementById('view_status').innerHTML = statusBadge;
+                    
+                    const date = new Date(data.last_updated);
+                    document.getElementById('view_last_updated').textContent = date.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    });
+                    
+                    document.getElementById('viewModal').classList.remove('modal-hidden');
+                }
+            });
+        }
+        
+        function openEditModalFromView() {
+            closeModal('viewModal');
+            openEditModal(currentViewItemId);
+        }
+        
+        function getStatusBadge(status) {
+            const badges = {
+                'in_stock': '<span class="status-badge in-stock"><i class="fas fa-check-circle"></i> In Stock</span>',
+                'low_stock': '<span class="status-badge low-stock"><i class="fas fa-exclamation-circle"></i> Low Stock</span>',
+                'out_of_stock': '<span class="status-badge out-of-stock"><i class="fas fa-times-circle"></i> Out of Stock</span>'
+            };
+            return badges[status] || badges['in_stock'];
         }
         
         function deleteItem(id) {
-            document.getElementById('deleteModal').classList.remove('modal-hidden');
+            <?php if ($isAdmin): ?>
+                itemToDelete = id;
+                document.getElementById('deleteModal').classList.remove('modal-hidden');
+            <?php else: ?>
+                alert('Only administrators can delete items.');
+            <?php endif; ?>
+        }
+        
+        function confirmDelete() {
+            <?php if ($isAdmin): ?>
+                const formData = new FormData();
+                formData.append('action', 'delete');
+                formData.append('id', itemToDelete);
+                
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Item deleted successfully!');
+                        closeModal('deleteModal');
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                });
+            <?php endif; ?>
         }
         
         function closeModal(modalId) {
             document.getElementById(modalId).classList.add('modal-hidden');
         }
         
-        function confirmDelete() {
-            closeModal('deleteModal');
-            alert('Item deleted successfully!');
+        function exportData() {
+            window.location.href = '../backend/export.php?format=csv';
         }
+        
+        function searchItems() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const rows = document.querySelectorAll('#inventoryTableBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        }
+        function openAddCategoryModal() {
+    document.getElementById('addCategoryModal').classList.remove('modal-hidden');
+    document.getElementById('addCategoryForm').reset();
+}
+
+function submitAddCategory(event) {
+    event.preventDefault();
+    
+    const formData = new FormData();
+    formData.append('action', 'add_category');
+    formData.append('category_name', document.getElementById('category_name').value);
+    formData.append('color', document.getElementById('category_color').value);
+    
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+    submitBtn.disabled = true;
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.text()) // Get as text first, not JSON
+    .then(text => {
+        console.log('Raw response:', text); // Log the raw response
+        console.log('Response length:', text.length);
+        console.log('First 100 chars:', text.substring(0, 100));
+        
+        try {
+            const data = JSON.parse(text);
+            if (data.success) {
+                alert('Category added successfully!');
+                closeModal('addCategoryModal');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.message || 'Unknown error'));
+            }
+        } catch (e) {
+            console.error('JSON parse error:', e);
+            // Show what was returned
+            alert('Server returned non-JSON data. Check console for details.');
+        }
+    })
+    .catch(error => {
+        console.error('Fetch error:', error);
+        alert('Network error: ' + error.message);
+    })
+    .finally(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+    
+    return false;
+}
+        
+        // Select all checkbox
+        document.getElementById('selectAll')?.addEventListener('change', function(e) {
+            <?php if ($isAdmin): ?>
+                const checkboxes = document.querySelectorAll('.checkbox:not(#selectAll)');
+                checkboxes.forEach(cb => cb.checked = e.target.checked);
+            <?php endif; ?>
+        });
         
         // Close modal when clicking outside
         window.onclick = function(event) {
