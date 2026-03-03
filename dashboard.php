@@ -11,6 +11,43 @@ $page_css = 'assets/css/style.css';
 include 'includes/header.php';
 include '../dashboard/maintenance.php';
 
+/*function getActiveShipments($conn, $limit = 5) {
+    $query = "SELECT s.*, 
+                     o.order_number, 
+                     o.customer_name,
+                     o.delivery_address,
+                     v.vehicle_plate,
+                     v.vehicle_type,
+                     e.full_name as driver_name,
+                     e.phone as driver_phone
+              FROM shipments s
+              JOIN orders o ON s.order_id = o.order_id
+              JOIN fleet v ON s.vehicle_id = v.vehicle_id
+              JOIN employees e ON s.driver_id = e.employee_id
+              WHERE s.shipment_status IN ('pending', 'in_transit')
+              ORDER BY 
+                  CASE 
+                      WHEN s.shipment_status = 'in_transit' THEN 1
+                      WHEN s.shipment_status = 'pending' THEN 2
+                  END,
+                  s.departure_time ASC
+              LIMIT ?";
+    
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("i", $limit);
+    $stmt->execute();
+    return $stmt->get_result();
+}
+
+function getShipmentProgress($shipment) {
+    if ($shipment['shipment_status'] == 'delivered') return 100;
+    if ($shipment['shipment_status'] == 'in_transit') return 60;
+    if ($shipment['shipment_status'] == 'pending') return 20;
+    return 0;
+}
+*/
+
+
 // Handle document upload
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
@@ -324,22 +361,39 @@ if ($user_role === 'admin') {
 
     
     // Fetch activity logs for admin
-    try {
-        $logs_result = $pdo->query("
-            SELECT 
-                u.username as user,
-                'Asset' as document,
-                'Viewed' as action_type,
-                u.last_login as time
-            FROM users u
-            WHERE u.last_login IS NOT NULL
-            ORDER BY u.last_login DESC
-            LIMIT 10
-        ");
-        $activity_logs = $logs_result->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $activity_logs = [];
-    }
+     try {
+    // Get downloads from activity logs table
+    $logs_result = $pdo->query("
+        (SELECT 
+            u.full_name as user,
+            d.file_name as document,
+            l.action_type as action_type,
+            l.timestamp as time
+        FROM user_activity_logs l
+        JOIN users u ON l.user_id = u.id
+        JOIN documents d ON l.document_id = d.id
+        WHERE l.action_type = 'download')
+        
+        UNION ALL
+        
+        (SELECT 
+            username as user,
+            'Login' as document,
+            'Logged In' as action_type,
+            last_login as time
+        FROM users
+        WHERE last_login IS NOT NULL)
+        
+        ORDER BY time DESC
+        LIMIT 10
+    ");
+    
+    $activity_logs = $logs_result->fetchAll(PDO::FETCH_ASSOC);
+    
+} catch (PDOException $e) {
+    $activity_logs = [];
+    error_log("Activity logs query failed: " . $e->getMessage());
+}
 }
 ?>
 
@@ -528,44 +582,7 @@ if ($user_role === 'admin') {
             
             <?php else: ?>
             <!-- Asset List & Condition (for employees) -->
-            <div class="card">
-                <div class="card-header">
-                    <h2><i class="fas fa-boxes"></i> Asset List & Condition</h2>
-                    <span class="card-badge"><?php echo count($assets); ?> assets</span>
-                </div>
-                <div class="card-body">
-                    <div class="asset-list">
-                        <?php if (!empty($assets)): ?>
-                            <?php foreach ($assets as $asset): ?>
-                                <div class="asset-item">
-                                    <div class="asset-info">
-                                        <div class="asset-icon">
-                                            <i class="fas fa-cog"></i>
-                                        </div>
-                                        <div class="asset-details">
-                                            <h3><?php echo htmlspecialchars($asset['asset_name']); ?></h3>
-                                            <p><?php echo htmlspecialchars($asset['asset_type']); ?></p>
-                                        </div>
-                                    </div>
-                                    <div class="asset-condition">
-                                        <span class="percentage <?php 
-                                        $condition = intval($asset['asset_condition']);
-                                        if ($condition >= 70) echo 'status-good';
-                                        elseif ($condition >= 40) echo 'status-warning';
-                                        else echo 'status-critical';
-                                        ?>">
-                                            <?php echo htmlspecialchars($asset['asset_condition']); ?>%
-                                        </span>
-                                        <div class="label">Condition</div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <p>No assets available</p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
+            
             <?php endif; ?>
             
             
@@ -678,7 +695,45 @@ if ($user_role === 'admin') {
         <?php endif; ?>
 
             <!-- Maintenance Alerts -->
-
+             <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-boxes"></i> Asset List & Condition</h2>
+                    <span class="card-badge"><?php echo count($assets); ?> assets</span>
+                </div>
+                <div class="card-body">
+                    <div class="asset-list">
+                        <?php if (!empty($assets)): ?>
+                            <?php foreach ($assets as $asset): ?>
+                                <div class="asset-item">
+                                    <div class="asset-info">
+                                        <div class="asset-icon">
+                                            <i class="fas fa-cog"></i>
+                                        </div>
+                                        <div class="asset-details">
+                                            <h3><?php echo htmlspecialchars($asset['asset_name']); ?></h3>
+                                            <p><?php echo htmlspecialchars($asset['asset_type']); ?></p>
+                                        </div>
+                                    </div>
+                                    <div class="asset-condition">
+                                        <span class="percentage <?php 
+                                        $condition = intval($asset['asset_condition']);
+                                        if ($condition >= 70) echo 'status-good';
+                                        elseif ($condition >= 40) echo 'status-warning';
+                                        else echo 'status-critical';
+                                        ?>">
+                                            <?php echo htmlspecialchars($asset['asset_condition']); ?>%
+                                        </span>
+                                        <div class="label">Condition</div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <p>No assets available</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        
             <div class="card">
                 <div class="card-header">
                     <h2><i class="fas fa-exclamation-triangle"></i> Maintenance Alerts</h2>
@@ -968,17 +1023,14 @@ if ($user_role === 'admin') {
 </div>
         
         <!-- Logistics Document Tracking -->
-        <div class="card card-full">
-            <div class="card-header">
-                <h2><i class="fas fa-truck"></i> Logistics Records</h2>
-                <span class="card-badge">Active shipments</span>
-            </div>
-            <div class="card-body">
-                <div class="tracking-list">
-                    <!-- Dynamic content loaded via JavaScript -->
-                </div>
-            </div>
-        </div>
+         <div class="card card-full">
+    <div class="card-header">
+        <h2><i class="fas fa-truck"></i> Logistics Records</h2>
+        <span class="card-badge">Active shipments</span>
+    </div>
+    <div class="card-body">
+    </div>
+</div>
         
         <!-- Employee Activity Logs (admin only) -->
         <?php if ($user_role === 'admin'): ?>
@@ -1018,18 +1070,8 @@ if ($user_role === 'admin') {
         </div>
         <?php endif; ?>
         
-        <!-- Downloadable Logistics Records -->
-        <div class="card card-full">
-            <div class="card-header">
-                <h2><i class="fas fa-download"></i> Downloadable Records</h2>
-                <span class="card-badge">5 files</span>
-            </div>
-            <div class="card-body">
-                <div class="download-section">
-                    <!-- Dynamic content loaded via JavaScript -->
-                </div>
-            </div>
-        </div>
+       
+        
     </div>
 </main>
 
