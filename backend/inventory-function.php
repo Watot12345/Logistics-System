@@ -15,9 +15,54 @@ class InventoryManager {
         global $pdo;
         $this->conn = $pdo;
     }
+
     
+    // Add this method to your InventoryManager class
+public function addSupplier($data) {
+    try {
+        $supplier_name = trim($data['supplier_name'] ?? '');
+        $contact_person = $data['contact_person'] ?? '';
+        $email = $data['email'] ?? '';
+        $phone = $data['phone'] ?? '';
+        $address = $data['address'] ?? '';
+        
+        if (empty($supplier_name)) {
+            return ['success' => false, 'message' => 'Supplier name is required'];
+        }
+        
+        // Check if supplier already exists
+        $checkQuery = "SELECT id FROM suppliers WHERE LOWER(supplier_name) = LOWER(:name)";
+        $checkStmt = $this->conn->prepare($checkQuery);
+        $checkStmt->bindParam(':name', $supplier_name);
+        $checkStmt->execute();
+        
+        if ($checkStmt->rowCount() > 0) {
+            return ['success' => false, 'message' => 'Supplier already exists'];
+        }
+        
+        // Insert new supplier
+        $query = "INSERT INTO suppliers (supplier_name, contact_person, email, phone, address, created_at) 
+                  VALUES (:name, :contact, :email, :phone, :address, NOW())";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':name', $supplier_name);
+        $stmt->bindParam(':contact', $contact_person);
+        $stmt->bindParam(':email', $email);
+        $stmt->bindParam(':phone', $phone);
+        $stmt->bindParam(':address', $address);
+        $stmt->execute();
+        
+        return [
+            'success' => true, 
+            'message' => 'Supplier added successfully',
+            'id' => $this->conn->lastInsertId()
+        ];
+        
+    } catch (Exception $e) {
+        error_log("Error in addSupplier: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Error adding supplier: ' . $e->getMessage()];
+    }
+}
     // Get dashboard statistics
-    // Get dashboard statistics with previous period comparison
 public function getDashboardStats() {
     // Current period (now)
     $current = $this->conn->query("
@@ -92,58 +137,66 @@ public function getLowStockCount() {
     return $stmt->fetch(PDO::FETCH_ASSOC)['count'];
 }
     // Get all inventory items with category and supplier info
-    public function getInventoryItems($page = 1, $limit = 10, $filter = 'all', $category = null) {
-        $offset = ($page - 1) * $limit;
-        
-        $query = "SELECT 
-                    i.*,
-                    c.category_name,
-                    c.color_class as category_color,
-                    s.supplier_name,
-                    CASE 
-                        WHEN i.quantity <= 0 THEN 'out_of_stock'
-                        WHEN i.quantity <= i.reorder_level THEN 'low_stock'
-                        ELSE 'in_stock'
-                    END as status
-                  FROM inventory_items i
-                  LEFT JOIN categories c ON i.category_id = c.id
-                  LEFT JOIN suppliers s ON i.supplier_id = s.id";
-        
-        // Apply filters
-        $whereConditions = [];
-        if ($filter !== 'all') {
-            if ($filter === 'in_stock') {
-                $whereConditions[] = "i.quantity > i.reorder_level";
-            } elseif ($filter === 'low_stock') {
-                $whereConditions[] = "i.quantity <= i.reorder_level AND i.quantity > 0";
-            } elseif ($filter === 'out_of_stock') {
-                $whereConditions[] = "i.quantity <= 0";
-            }
+   public function getInventoryItems($page = 1, $limit = 10, $filter = 'all', $category = null, $supplier = null) {
+    $offset = ($page - 1) * $limit;
+    
+    $query = "SELECT 
+                i.*,
+                c.category_name,
+                c.color_class as category_color,
+                s.supplier_name,
+                CASE 
+                    WHEN i.quantity <= 0 THEN 'out_of_stock'
+                    WHEN i.quantity <= i.reorder_level THEN 'low_stock'
+                    ELSE 'in_stock'
+                END as status
+              FROM inventory_items i
+              LEFT JOIN categories c ON i.category_id = c.id
+              LEFT JOIN suppliers s ON i.supplier_id = s.id";
+    
+    // Apply filters
+    $whereConditions = [];
+    $params = [];
+    
+    if ($filter !== 'all') {
+        if ($filter === 'in_stock') {
+            $whereConditions[] = "i.quantity > i.reorder_level";
+        } elseif ($filter === 'low_stock') {
+            $whereConditions[] = "i.quantity <= i.reorder_level AND i.quantity > 0";
+        } elseif ($filter === 'out_of_stock') {
+            $whereConditions[] = "i.quantity <= 0";
         }
-        
-        if ($category && $category !== 'All Categories') {
-            $whereConditions[] = "c.category_name = :category";
-        }
-        
-        if (!empty($whereConditions)) {
-            $query .= " WHERE " . implode(' AND ', $whereConditions);
-        }
-        
-        $query .= " ORDER BY i.created_at DESC LIMIT :limit OFFSET :offset";
-        
-        $stmt = $this->conn->prepare($query);
-        
-        if ($category && $category !== 'All Categories') {
-            $stmt->bindParam(':category', $category);
-        }
-        
-        // Fix for bindParam with LIMIT and OFFSET
-        $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
-        $stmt->execute();
-        
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+    
+    if ($category && $category !== 'All Categories') {
+        $whereConditions[] = "c.category_name = :category";
+        $params[':category'] = $category;
+    }
+    
+    if ($supplier && $supplier !== 'All Suppliers') {
+        $whereConditions[] = "s.supplier_name = :supplier";
+        $params[':supplier'] = $supplier;
+    }
+    
+    if (!empty($whereConditions)) {
+        $query .= " WHERE " . implode(' AND ', $whereConditions);
+    }
+    
+    $query .= " ORDER BY i.created_at DESC LIMIT :limit OFFSET :offset";
+    
+    $stmt = $this->conn->prepare($query);
+    
+    // Bind parameters
+    foreach ($params as $key => $value) {
+        $stmt->bindValue($key, $value);
+    }
+    
+    $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
+    $stmt->execute();
+    
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
     
     // Get total count for pagination
     public function getTotalCount($filter = 'all', $category = null) {
@@ -350,6 +403,113 @@ public function getLowStockCount() {
         }
     }
     
+    // Add these methods to your InventoryManager class in inventory-function.php
+
+// Delete category
+public function deleteCategory($category_id) {
+    try {
+        $this->conn->beginTransaction();
+        
+        // Check if category has items
+        $checkQuery = "SELECT COUNT(*) as item_count FROM inventory_items WHERE category_id = :id";
+        $checkStmt = $this->conn->prepare($checkQuery);
+        $checkStmt->bindParam(':id', $category_id);
+        $checkStmt->execute();
+        $result = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($result['item_count'] > 0) {
+            throw new Exception("Cannot delete category that has {$result['item_count']} items. Please reassign or delete the items first.");
+        }
+        
+        // Delete category
+        $query = "DELETE FROM categories WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $category_id);
+        $stmt->execute();
+        
+        $this->conn->commit();
+        return ['success' => true, 'message' => 'Category deleted successfully'];
+        
+    } catch (Exception $e) {
+        if ($this->conn->inTransaction()) {
+            $this->conn->rollBack();
+        }
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+// Delete supplier
+public function deleteSupplier($supplier_id) {
+    try {
+        $this->conn->beginTransaction();
+        
+        // Check if supplier has items
+        $checkQuery = "SELECT COUNT(*) as item_count FROM inventory_items WHERE supplier_id = :id";
+        $checkStmt = $this->conn->prepare($checkQuery);
+        $checkStmt->bindParam(':id', $supplier_id);
+        $checkStmt->execute();
+        $result = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($result['item_count'] > 0) {
+            throw new Exception("Cannot delete supplier that has {$result['item_count']} items. Please reassign or delete the items first.");
+        }
+        
+        // Delete supplier
+        $query = "DELETE FROM suppliers WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $supplier_id);
+        $stmt->execute();
+        
+        $this->conn->commit();
+        return ['success' => true, 'message' => 'Supplier deleted successfully'];
+        
+    } catch (Exception $e) {
+        if ($this->conn->inTransaction()) {
+            $this->conn->rollBack();
+        }
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+// Get single category by ID
+public function getCategoryById($id) {
+    $query = "SELECT * FROM categories WHERE id = :id";
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindParam(':id', $id);
+    $stmt->execute();
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+// Add this method to get suppliers with product count
+public function getSuppliersWithProductCount() {
+    $query = "SELECT s.*, 
+              (SELECT COUNT(*) FROM inventory_items WHERE supplier_id = s.id) as product_count
+              FROM suppliers s
+              ORDER BY s.supplier_name ASC";
+    $stmt = $this->conn->prepare($query);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Add this method to get product count for a specific supplier
+public function getSupplierProductCount($supplier_id) {
+    $query = "SELECT COUNT(*) as count FROM inventory_items WHERE supplier_id = :id";
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindParam(':id', $supplier_id);
+    $stmt->execute();
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['count'];
+}
+// Get single supplier by ID
+public function getSupplierById($id) {
+    $query = "SELECT s.*, 
+              (SELECT COUNT(*) FROM inventory_items WHERE supplier_id = s.id) as product_count
+              FROM suppliers s 
+              WHERE s.id = :id";
+    $stmt = $this->conn->prepare($query);
+    $stmt->bindParam(':id', $id);
+    $stmt->execute();
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
     // Delete inventory item
     public function deleteItem($id) {
         try {

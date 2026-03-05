@@ -17,7 +17,8 @@ require_once '../backend/inventory-function.php';
 
 $inventory = new InventoryManager();
 
-// Handle POST requests (Add, Edit, Delete, Add Category)
+
+// Handle POST requests (Add, Edit, Delete, Add Category, Add Supplier)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
     
@@ -40,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
     
-    // ADD CATEGORY HANDLER - Using the OOP method
+    // ADD CATEGORY HANDLER
     if ($action === 'add_category' && $isAdmin) {
         $result = $inventory->addCategory(
             $_POST['category_name'] ?? '', 
@@ -50,6 +51,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
     
+    // ADD SUPPLIER HANDLER - Using the OOP method
+    if ($action === 'add_supplier' && $isAdmin) {
+        $result = $inventory->addSupplier($_POST);
+        echo json_encode($result);
+        exit();
+    }
+    
+    // Add these handlers after your existing POST handlers in the main file
+
+// DELETE CATEGORY HANDLER
+if ($action === 'delete_category' && $isAdmin) {
+    $id = $_POST['id'] ?? 0;
+    $result = $inventory->deleteCategory($id);
+    echo json_encode($result);
+    exit();
+}
+
+// DELETE SUPPLIER HANDLER
+if ($action === 'delete_supplier' && $isAdmin) {
+    $id = $_POST['id'] ?? 0;
+    $result = $inventory->deleteSupplier($id);
+    echo json_encode($result);
+    exit();
+}
+
+// GET CATEGORY HANDLER
+if ($action === 'get_category') {
+    $id = $_POST['id'] ?? 0;
+    $category = $inventory->getCategoryById($id);
+    echo json_encode($category);
+    exit();
+}
+
+// GET SUPPLIER HANDLER
+if ($action === 'get_supplier') {
+    $id = $_POST['id'] ?? 0;
+    $supplier = $inventory->getSupplierById($id);
+    echo json_encode($supplier);
+    exit();
+}
     // EDIT ITEM HANDLER
     if ($action === 'edit' && $isAdmin) {
         $id = $_POST['id'] ?? 0;
@@ -88,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $categories = $inventory->getCategories();
 $suppliers = $inventory->getSuppliers();
 // Get total count for pagination
-$total_items = $inventory->getTotalCount($_GET['filter'] ?? 'all', $_GET['category'] ?? null);
+$total_items = $inventory->getTotalCount($_GET['filter'] ?? 'all', $_GET['category'] ?? null, $_GET['supplier'] ?? null);
 
 // Calculate pagination
 $items_per_page = 10;
@@ -102,7 +143,8 @@ $items = $inventory->getInventoryItems(
     $current_page, 
     $items_per_page, 
     $_GET['filter'] ?? 'all', 
-    $_GET['category'] ?? null
+    $_GET['category'] ?? null,
+    $_GET['supplier'] ?? null
 );
 
 // Get data from database for display
@@ -138,6 +180,21 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
     <style>
+        .btn-icon {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.btn-icon:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
         .loading {
             opacity: 0.5;
             pointer-events: none;
@@ -276,7 +333,7 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
             </span>
         </div>
         <p class="stat-label">Total Value</p>
-        <p class="stat-value">$<?php echo number_format($stats['total_inventory_value'] ?? 0, 2); ?></p>
+        <p class="stat-value">₱<?php echo number_format($stats['total_inventory_value'] ?? 0, 2); ?></p>
         <div class="stat-progress">
             <div class="progress-bar purple" style="width: 66%"></div>
         </div>
@@ -284,8 +341,7 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
 </div>
             
             
-            
-           <!-- Filters and Actions -->
+<!-- Filter Section -->
 <div class="filters-section">
     <div class="filter-group">
         <div class="filter-buttons">
@@ -293,42 +349,178 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
             <a href="?filter=in_stock" class="filter-btn <?php echo ($_GET['filter'] ?? '') == 'in_stock' ? 'active' : ''; ?>">In Stock</a>
             <a href="?filter=low_stock" class="filter-btn <?php echo ($_GET['filter'] ?? '') == 'low_stock' ? 'active' : ''; ?>">Low Stock</a>
             <a href="?filter=out_of_stock" class="filter-btn <?php echo ($_GET['filter'] ?? '') == 'out_of_stock' ? 'active' : ''; ?>">Out of Stock</a>
+            <a href="?view=suppliers" class="filter-btn <?php echo ($_GET['view'] ?? '') == 'suppliers' ? 'active' : ''; ?>">Suppliers Page</a>
         </div>
         
-        <div style="display: flex; gap: 8px; align-items: center;">
-            <select class="category-select" onchange="window.location.href='?category='+this.value">
-                <option value="All Categories">All Categories</option>
-                <?php foreach ($categories as $category): ?>
-                    <option value="<?php echo htmlspecialchars($category['category_name']); ?>" 
-                        <?php echo ($_GET['category'] ?? '') == $category['category_name'] ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($category['category_name']); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <!-- Category Filter with Delete -->
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <select class="category-select" onchange="window.location.href='?category='+this.value<?php echo isset($_GET['supplier']) ? '+\'&supplier='.$_GET['supplier'].'\'' : ''; ?>">
+                    <option value="All Categories">All Categories</option>
+                    <?php foreach ($categories as $category): ?>
+                        <option value="<?php echo htmlspecialchars($category['category_name']); ?>" 
+                            <?php echo ($_GET['category'] ?? '') == $category['category_name'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($category['category_name']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                
+                <?php if ($isAdmin): ?>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="btn btn-icon" onclick="openAddCategoryModal()" title="Add New Category">
+                            <i class="fas fa-plus-circle" style="color: #2563eb; font-size: 24px;"></i>
+                        </button>
+                        <?php if (isset($_GET['category']) && $_GET['category'] !== 'All Categories'): ?>
+                            <?php 
+                            $selectedCategory = null;
+                            foreach ($categories as $cat) {
+                                if ($cat['category_name'] === $_GET['category']) {
+                                    $selectedCategory = $cat;
+                                    break;
+                                }
+                            }
+                            ?>
+                            <?php if ($selectedCategory): ?>
+                                <button class="btn btn-icon" onclick="openDeleteCategoryModal(<?php echo $selectedCategory['id']; ?>, '<?php echo htmlspecialchars($selectedCategory['category_name']); ?>')" title="Delete Category">
+                                    <i class="fas fa-trash" style="color: #e11d48; font-size: 20px;"></i>
+                                </button>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
             
-            <?php if ($isAdmin): ?>
-                <button class="btn btn-icon" onclick="openAddCategoryModal()" title="Add New Category">
-                    <i class="fas fa-plus-circle" style="color: #2563eb; font-size: 24px;"></i>
-                </button>
-            <?php endif; ?>
+            <!-- Supplier Filter with Delete -->
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <select class="category-select" onchange="window.location.href='?supplier='+this.value<?php echo isset($_GET['category']) ? '+\'&category='.$_GET['category'].'\'' : ''; ?>">
+                    <option value="All Suppliers">Suppliers Products</option>
+                    <?php foreach ($suppliers as $supplier): ?>
+                        <option value="<?php echo htmlspecialchars($supplier['supplier_name']); ?>" 
+                            <?php echo ($_GET['supplier'] ?? '') == $supplier['supplier_name'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($supplier['supplier_name']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                
+                <?php if ($isAdmin): ?>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="btn btn-icon" onclick="openAddSupplierModal()" title="Add New Supplier">
+                            <i class="fas fa-plus-circle" style="color: #10b981; font-size: 24px;"></i>
+                        </button>
+                        <?php if (isset($_GET['supplier']) && $_GET['supplier'] !== 'All Suppliers'): ?>
+                            <?php 
+                            $selectedSupplier = null;
+                            foreach ($suppliers as $sup) {
+                                if ($sup['supplier_name'] === $_GET['supplier']) {
+                                    $selectedSupplier = $sup;
+                                    break;
+                                }
+                            }
+                            ?>
+                            <?php if ($selectedSupplier): ?>
+                                <button class="btn btn-icon" onclick="openDeleteSupplierModal(<?php echo $selectedSupplier['id']; ?>, '<?php echo htmlspecialchars($selectedSupplier['supplier_name']); ?>')" title="Delete Supplier">
+                                    <i class="fas fa-trash" style="color: #e11d48; font-size: 20px;"></i>
+                                </button>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
     
-    <div class="action-buttons">
-    <button class="btn btn-outline" onclick="exportData()">
-        <i class="fas fa-download"></i>
-        Export
-    </button>
-    
-    <?php if ($isAdmin): ?>
-        <button class="btn btn-primary" onclick="openAddModal()">
-            <i class="fas fa-plus"></i>
-            Add Item
-        </button>
-    <?php endif; ?>
+        <div class="action-buttons">
+            <button class="btn btn-outline" onclick="exportData()">
+                <i class="fas fa-download"></i>
+                Export
+            </button>
+            
+            <?php if ($isAdmin): ?>
+                <button class="btn btn-primary" onclick="openAddModal()">
+                    <i class="fas fa-plus"></i>
+                    Add Item
+                </button>
+            <?php endif; ?>
+        </div>
 </div>
+<!-- Delete Category Confirmation Modal -->
+<div id="deleteCategoryModal" class="modal modal-hidden">
+    <div class="modal-content delete-modal">
+        <div class="delete-icon">
+            <i class="fas fa-exclamation-triangle" style="color: #e11d48;"></i>
+        </div>
+        <h3 class="delete-title">Delete Category</h3>
+        <p class="delete-text" id="deleteCategoryText">Are you sure you want to delete this category? This action cannot be undone.</p>
+        <input type="hidden" id="delete_category_id">
+        <div class="delete-actions">
+            <button class="btn btn-outline" onclick="closeModal('deleteCategoryModal')">Cancel</button>
+            <button class="btn btn-primary" style="background: linear-gradient(135deg, #e11d48, #be123c);" onclick="confirmDeleteCategory()">Delete Category</button>
+        </div>
+    </div>
 </div>
 
+<!-- Delete Supplier Confirmation Modal -->
+<div id="deleteSupplierModal" class="modal modal-hidden">
+    <div class="modal-content delete-modal">
+        <div class="delete-icon">
+            <i class="fas fa-exclamation-triangle" style="color: #e11d48;"></i>
+        </div>
+        <h3 class="delete-title">Delete Supplier</h3>
+        <p class="delete-text" id="deleteSupplierText">Are you sure you want to delete this supplier? This action cannot be undone.</p>
+        <input type="hidden" id="delete_supplier_id">
+        <div class="delete-actions">
+            <button class="btn btn-outline" onclick="closeModal('deleteSupplierModal')">Cancel</button>
+            <button class="btn btn-primary" style="background: linear-gradient(135deg, #e11d48, #be123c);" onclick="confirmDeleteSupplier()">Delete Supplier</button>
+        </div>
+    </div>
+</div>
+
+
+
+
+           <!-- Add Supplier Modal -->
+<div id="addSupplierModal" class="modal modal-hidden">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Add New Supplier</h3>
+            <button class="modal-close" onclick="closeModal('addSupplierModal')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <form id="addSupplierForm" onsubmit="return submitAddSupplier(event)">
+            <div class="form-group">
+                <label class="form-label">Supplier Name</label>
+                <input type="text" id="supplier_name" class="form-input" placeholder="Enter supplier name" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Contact Person (Optional)</label>
+                <input type="text" id="contact_person" class="form-input" placeholder="Enter contact person">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Email (Optional)</label>
+                <input type="email" id="supplier_email" class="form-input" placeholder="Enter email">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Phone (Optional)</label>
+                <input type="text" id="supplier_phone" class="form-input" placeholder="Enter phone number">
+            </div>
+            
+            <div class="form-group full-width">
+                <label class="form-label">Address (Optional)</label>
+                <textarea id="supplier_address" rows="2" class="form-textarea" placeholder="Enter address"></textarea>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeModal('addSupplierModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Supplier</button>
+            </div>
+        </form>
+    </div>
+</div>
                <!-- Add Category Modal -->
 <div id="addCategoryModal" class="modal modal-hidden">
     <div class="modal-content" style="max-width: 400px;">
@@ -367,128 +559,336 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
                     
             
             
-            <!-- Inventory Table -->
-            <div class="table-container">
-                <div style="overflow-x: auto;">
-                    <table class="table">
-                        <thead>
+            
+           <!-- Main Content Area - Shows either Inventory or Suppliers -->
+<?php if (isset($_GET['view']) && $_GET['view'] === 'suppliers'): ?>
+    
+    <!-- SUPPLIERS TABLE - Shows when "All Suppliers" is clicked -->
+    <?php if ($isAdmin): ?>
+    <div class="suppliers-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+                <h2 style="font-size: 1.5rem; font-weight: 600; color: #333;">Supplier Management</h2>
+                <p style="color: #666; margin-top: 4px;">View and manage all your suppliers</p>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <div style="overflow-x: auto;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Supplier Name</th>
+                            <th>Contact Person</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Address</th>
+                            <th>Products</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        // Get suppliers with product count
+                          $suppliers_with_count = $inventory->getSuppliersWithProductCount();
+                        ?>
+                        
+                        <?php if (empty($suppliers_with_count)): ?>
                             <tr>
-                                <th>
-                                    <input type="checkbox" class="checkbox" id="selectAll" <?php echo $isEmployee ? 'disabled' : ''; ?>>
-                                </th>
-                                <th>Item Details</th>
-                                <th>Category</th>
-                                <th>Stock Level</th>
-                                <th>Price</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <td colspan="9" style="text-align: center; padding: 40px;">
+                                    <i class="fas fa-truck" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
+                                    <p style="color: #666;">No suppliers found</p>
+                                    <button class="btn btn-primary" onclick="openAddSupplierModal()" style="margin-top: 16px;">
+                                        <i class="fas fa-plus"></i> Add Your First Supplier
+                                    </button>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody id="inventoryTableBody">
-                            <?php if (empty($items)): ?>
-                                <tr>
-                                    <td colspan="7" style="text-align: center; padding: 40px;">
-                                        <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
-                                        <p style="color: #666;">No inventory items found</p>
-                                    </td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($items as $item): ?>
-                                <tr id="row-<?php echo $item['id']; ?>">
-                                    <td>
-                                        <input type="checkbox" class="checkbox" value="<?php echo $item['id']; ?>" <?php echo $isEmployee ? 'disabled' : ''; ?>>
-                                    </td>
-                                    <td>
-                                        <div class="item-details">
-                                            <div class="item-icon">
-                                                <?php
-                                                $icon = match($item['category_name'] ?? '') {
-                                                    'Electronics' => 'laptop',
-                                                    'Furniture' => 'chair',
-                                                    'Clothing' => 'tshirt',
-                                                    default => 'box'
-                                                };
-                                                ?>
-                                                <i class="fas fa-<?php echo $icon; ?>"></i>
-                                            </div>
-                                            <div class="item-info">
-                                                <span class="item-name"><?php echo htmlspecialchars($item['item_name']); ?></span>
-                                                <span class="item-sku">SKU: <?php echo htmlspecialchars($item['sku']); ?></span>
-                                            </div>
+                        <?php else: ?>
+                            <?php foreach ($suppliers_with_count as $supplier): ?>
+                            <tr>
+                                <td><span style="font-weight: 600;">#<?php echo $supplier['id']; ?></span></td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                            <i class="fas fa-building" style="color: white; font-size: 16px;"></i>
                                         </div>
-                                    </td>
-                                    <td>
-                                        <span class="category-badge <?php echo $item['category_color'] ?? 'blue'; ?>">
-                                            <?php echo htmlspecialchars($item['category_name'] ?? 'Uncategorized'); ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="stock-level">
-                                            <div class="progress-small">
-                                                <?php 
-                                                $max_stock = max($item['reorder_level'] * 2, 1);
-                                                $percentage = min(100, ($item['quantity'] / $max_stock) * 100);
-                                                $colorClass = match($item['status'] ?? '') {
-                                                    'low_stock' => 'amber',
-                                                    'out_of_stock' => 'rose',
-                                                    default => 'emerald'
-                                                };
-                                                ?>
-                                                <div class="progress-fill <?php echo $colorClass; ?>" style="width: <?php echo $percentage; ?>%"></div>
-                                            </div>
-                                            <span class="stock-text"><?php echo $item['quantity']; ?> units</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="price">$<?php echo number_format($item['price'], 2); ?></span>
-                                    </td>
-                                    <td>
+                                        <span style="font-weight: 600;"><?php echo htmlspecialchars($supplier['supplier_name']); ?></span>
+                                    </div>
+                                </td>
+                                <td><?php echo htmlspecialchars($supplier['contact_person']); ?></td>
+                                <td>
+                                    <?php if ($supplier['email'] !== '—'): ?>
+                                        <a href="mailto:<?php echo htmlspecialchars($supplier['email']); ?>" style="color: #2563eb; text-decoration: none;">
+                                            <?php echo htmlspecialchars($supplier['email']); ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <span style="color: #999;">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if ($supplier['phone'] !== '—'): ?>
+                                        <span><?php echo htmlspecialchars($supplier['phone']); ?></span>
+                                    <?php else: ?>
+                                        <span style="color: #999;">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td style="max-width: 200px;">
+                                    <span style="font-size: 13px; color: #666;">
+                                        <?php echo htmlspecialchars($supplier['address']); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span style="background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                                        <?php echo $supplier['product_count']; ?> items
+                                    </span>
+                                </td>
+                                <td>
+                                    <?php 
+                                    if (!empty($supplier['created_at'])) {
+                                        echo date('M d, Y', strtotime($supplier['created_at']));
+                                    } else {
+                                        echo '—';
+                                    }
+                                    ?>
+                                </td>
+                                <td>
+                                    <div class="action-group">
+                                        <button class="action-btn view" onclick="viewSupplierDetails(<?php echo $supplier['id']; ?>)" title="View Supplier">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="action-btn edit" onclick="editSupplier(<?php echo $supplier['id']; ?>)" title="Edit Supplier">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="action-btn delete" onclick="openDeleteSupplierModal(<?php echo $supplier['id']; ?>, '<?php echo htmlspecialchars($supplier['supplier_name']); ?>')" 
+                                            <?php echo $supplier['product_count'] > 0 ? 'disabled title="Cannot delete supplier with existing items"' : ''; ?>>
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+<?php else: ?>
+    
+    <!-- INVENTORY TABLE - Shows by default or when filters are used -->
+    <div class="table-container">
+        <div style="overflow-x: auto;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>
+                            <input type="checkbox" class="checkbox" id="selectAll" <?php echo $isEmployee ? 'disabled' : ''; ?>>
+                        </th>
+                        <th>Item Details</th>
+                        <th>Category</th>
+                        <th>Stock Level</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryTableBody">
+                    <?php if (empty($items)): ?>
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 40px;">
+                                <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
+                                <p style="color: #666;">No inventory items found</p>
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($items as $item): ?>
+                        <tr id="row-<?php echo $item['id']; ?>">
+                            <td>
+                                <input type="checkbox" class="checkbox" value="<?php echo $item['id']; ?>" <?php echo $isEmployee ? 'disabled' : ''; ?>>
+                            </td>
+                            <td>
+                                <div class="item-details">
+                                    <div class="item-icon">
                                         <?php
-                                        $status_class = match($item['status'] ?? '') {
-                                            'low_stock' => 'low-stock',
-                                            'out_of_stock' => 'out-of-stock',
-                                            default => 'in-stock'
-                                        };
-                                        $status_icon = match($item['status'] ?? '') {
-                                            'low_stock' => 'exclamation-circle',
-                                            'out_of_stock' => 'times-circle',
-                                            default => 'check-circle'
-                                        };
-                                        $status_text = match($item['status'] ?? '') {
-                                            'low_stock' => 'Low Stock',
-                                            'out_of_stock' => 'Out of Stock',
-                                            default => 'In Stock'
+                                        $icon = match($item['category_name'] ?? '') {
+                                            'Electronics' => 'laptop',
+                                            'Furniture' => 'chair',
+                                            'Clothing' => 'tshirt',
+                                            default => 'box'
                                         };
                                         ?>
-                                        <span class="status-badge <?php echo $status_class; ?>">
-                                            <i class="fas fa-<?php echo $status_icon; ?>"></i>
-                                            <?php echo $status_text; ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="action-group">
-                                            <button class="action-btn view" onclick="openViewModal(<?php echo $item['id']; ?>)">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                            
-                                            <?php if ($isAdmin): ?>
-                                                <button class="action-btn edit" onclick="openEditModal(<?php echo $item['id']; ?>)">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button class="action-btn delete" onclick="deleteItem(<?php echo $item['id']; ?>)">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            <?php else: ?>
-                                                
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                                        <i class="fas fa-<?php echo $icon; ?>"></i>
+                                    </div>
+                                    <div class="item-info">
+                                        <span class="item-name"><?php echo htmlspecialchars($item['item_name']); ?></span>
+                                        <span class="item-sku">SKU: <?php echo htmlspecialchars($item['sku']); ?></span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="category-badge <?php echo $item['category_color'] ?? 'blue'; ?>">
+                                    <?php echo htmlspecialchars($item['category_name'] ?? 'Uncategorized'); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="stock-level">
+                                    <div class="progress-small">
+                                        <?php 
+                                        $max_stock = max($item['reorder_level'] * 2, 1);
+                                        $percentage = min(100, ($item['quantity'] / $max_stock) * 100);
+                                        $colorClass = match($item['status'] ?? '') {
+                                            'low_stock' => 'amber',
+                                            'out_of_stock' => 'rose',
+                                            default => 'emerald'
+                                        };
+                                        ?>
+                                        <div class="progress-fill <?php echo $colorClass; ?>" style="width: <?php echo $percentage; ?>%"></div>
+                                    </div>
+                                    <span class="stock-text"><?php echo $item['quantity']; ?> units</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="price">₱<?php echo number_format($item['price'], 2); ?></span>
+                            </td>
+                            <td>
+                                <?php
+                                $status_class = match($item['status'] ?? '') {
+                                    'low_stock' => 'low-stock',
+                                    'out_of_stock' => 'out-of-stock',
+                                    default => 'in-stock'
+                                };
+                                $status_icon = match($item['status'] ?? '') {
+                                    'low_stock' => 'exclamation-circle',
+                                    'out_of_stock' => 'times-circle',
+                                    default => 'check-circle'
+                                };
+                                $status_text = match($item['status'] ?? '') {
+                                    'low_stock' => 'Low Stock',
+                                    'out_of_stock' => 'Out of Stock',
+                                    default => 'In Stock'
+                                };
+                                ?>
+                                <span class="status-badge <?php echo $status_class; ?>">
+                                    <i class="fas fa-<?php echo $status_icon; ?>"></i>
+                                    <?php echo $status_text; ?>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-group">
+                                    <button class="action-btn view" onclick="openViewModal(<?php echo $item['id']; ?>)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    
+                                    <?php if ($isAdmin): ?>
+                                        <button class="action-btn edit" onclick="openEditModal(<?php echo $item['id']; ?>)">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="action-btn delete" onclick="deleteItem(<?php echo $item['id']; ?>)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination (only show for inventory, not for suppliers) -->
+        <?php if ($total_pages > 1): ?>
+        <div class="pagination">
+            <p class="pagination-info">
+                Showing <?php echo $start_from; ?> to <?php echo $end_to; ?> of <?php echo $total_items; ?> results
+            </p>
+            <div class="pagination-controls">
+                <a href="?page=<?php echo max(1, $current_page - 1); ?>&filter=<?php echo $_GET['filter'] ?? 'all'; ?>&category=<?php echo urlencode($_GET['category'] ?? ''); ?>" 
+                   class="page-btn <?php echo $current_page <= 1 ? 'disabled' : ''; ?>">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+                
+                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                    <a href="?page=<?php echo $i; ?>&filter=<?php echo $_GET['filter'] ?? 'all'; ?>&category=<?php echo urlencode($_GET['category'] ?? ''); ?>" 
+                       class="page-btn <?php echo $current_page == $i ? 'active' : ''; ?>">
+                        <?php echo $i; ?>
+                    </a>
+                <?php endfor; ?>
+                
+                <a href="?page=<?php echo min($total_pages, $current_page + 1); ?>&filter=<?php echo $_GET['filter'] ?? 'all'; ?>&category=<?php echo urlencode($_GET['category'] ?? ''); ?>" 
+                   class="page-btn <?php echo $current_page >= $total_pages ? 'disabled' : ''; ?>">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+    
+<?php endif; ?>
+
+<!-- View Supplier Modal -->
+<div id="viewSupplierModal" class="modal modal-hidden">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Supplier Details</h3>
+            <button class="modal-close" onclick="closeModal('viewSupplierModal')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div style="padding: 10px;">
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-building" style="color: white; font-size: 30px;"></i>
                 </div>
+                <div>
+                    <h2 style="font-size: 20px; font-weight: 600; margin: 0;" id="view_supplier_name"></h2>
+                    <p style="color: #666; margin: 4px 0 0;" id="view_supplier_id"></p>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                <div style="background: #f8f9fa; padding: 12px; border-radius: 8px;">
+                    <p style="color: #666; font-size: 12px; margin-bottom: 4px;">Contact Person</p>
+                    <p style="font-weight: 500; margin: 0;" id="view_supplier_contact"></p>
+                </div>
+                <div style="background: #f8f9fa; padding: 12px; border-radius: 8px;">
+                    <p style="color: #666; font-size: 12px; margin-bottom: 4px;">Phone</p>
+                    <p style="font-weight: 500; margin: 0;" id="view_supplier_phone"></p>
+                </div>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                <p style="color: #666; font-size: 12px; margin-bottom: 4px;">Email</p>
+                <p style="font-weight: 500; margin: 0;" id="view_supplier_email"></p>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                <p style="color: #666; font-size: 12px; margin-bottom: 4px;">Address</p>
+                <p style="font-weight: 500; margin: 0;" id="view_supplier_address"></p>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                <p style="color: #666; font-size: 12px; margin-bottom: 4px;">Products Supplied</p>
+                <p style="font-weight: 500; margin: 0;" id="view_supplier_products"></p>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 12px; border-radius: 8px;">
+                <p style="color: #666; font-size: 12px; margin-bottom: 4px;">Created On</p>
+                <p style="font-weight: 500; margin: 0;" id="view_supplier_created"></p>
+            </div>
+            
+            <div class="modal-footer" style="margin-top: 20px;">
+                <button class="btn btn-outline" onclick="closeModal('viewSupplierModal')">Close</button>
+                <button class="btn btn-primary" onclick="editSupplierFromView()">Edit Supplier</button>
+            </div>
+        </div>
+    </div>
+</div>
                 
                 <!-- Pagination -->
                 <?php if ($total_pages > 1): ?>
@@ -765,6 +1165,72 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
     <script>
         let currentViewItemId = null;
         let itemToDelete = null;
+        // View Supplier Details
+let currentViewSupplierId = null;
+
+function viewSupplierDetails(id) {
+    currentViewSupplierId = id;
+    
+    const formData = new FormData();
+    formData.append('action', 'get_supplier');
+    formData.append('id', id);
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data) {
+            document.getElementById('view_supplier_name').textContent = data.supplier_name;
+            document.getElementById('view_supplier_id').textContent = `Supplier ID: #${data.id}`;
+            document.getElementById('view_supplier_contact').textContent = data.contact_person || '—';
+            document.getElementById('view_supplier_phone').textContent = data.phone || '—';
+            document.getElementById('view_supplier_email').textContent = data.email || '—';
+            document.getElementById('view_supplier_address').textContent = data.address || '—';
+            document.getElementById('view_supplier_products').textContent = (data.product_count || 0) + ' items';
+            
+            if (data.created_at) {
+                const date = new Date(data.created_at);
+                document.getElementById('view_supplier_created').textContent = date.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+            } else {
+                document.getElementById('view_supplier_created').textContent = '—';
+            }
+            
+            document.getElementById('viewSupplierModal').classList.remove('modal-hidden');
+        }
+    });
+}
+
+function editSupplierFromView() {
+    closeModal('viewSupplierModal');
+    if (currentViewSupplierId) {
+        editSupplier(currentViewSupplierId);
+    }
+}
+
+// Edit Supplier function (update your existing one)
+function editSupplier(id) {
+    const formData = new FormData();
+    formData.append('action', 'get_supplier');
+    formData.append('id', id);
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data) {
+            // You'll need to create an edit supplier modal first
+            alert('Edit functionality coming soon!');
+        }
+    });
+}
         
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('active');
@@ -1005,6 +1471,151 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
         function openAddCategoryModal() {
     document.getElementById('addCategoryModal').classList.remove('modal-hidden');
     document.getElementById('addCategoryForm').reset();
+}
+
+function openAddSupplierModal() {
+    document.getElementById('addSupplierModal').classList.remove('modal-hidden');
+    document.getElementById('addSupplierForm').reset();
+}
+
+function submitAddSupplier(event) {
+    event.preventDefault();
+    
+    const formData = new FormData();
+    formData.append('action', 'add_supplier');
+    formData.append('supplier_name', document.getElementById('supplier_name').value);
+    formData.append('contact_person', document.getElementById('contact_person').value);
+    formData.append('email', document.getElementById('supplier_email').value);
+    formData.append('phone', document.getElementById('supplier_phone').value);
+    formData.append('address', document.getElementById('supplier_address').value);
+    
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+    submitBtn.disabled = true;
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Supplier added successfully!');
+            closeModal('addSupplierModal');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while adding the supplier.');
+    })
+    .finally(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+    
+    return false;
+}
+
+// Add these functions to your JavaScript section
+
+// Category Management Functions
+function openDeleteCategoryModal(id, categoryName) {
+    <?php if ($isAdmin): ?>
+        document.getElementById('delete_category_id').value = id;
+        document.getElementById('deleteCategoryText').textContent = 
+            `Are you sure you want to delete the category "${categoryName}"? This action cannot be undone.`;
+        document.getElementById('deleteCategoryModal').classList.remove('modal-hidden');
+    <?php else: ?>
+        alert('Only administrators can delete categories.');
+    <?php endif; ?>
+}
+
+function confirmDeleteCategory() {
+    const id = document.getElementById('delete_category_id').value;
+    
+    const formData = new FormData();
+    formData.append('action', 'delete_category');
+    formData.append('id', id);
+    
+    const deleteBtn = document.querySelector('#deleteCategoryModal .btn-primary');
+    const originalText = deleteBtn.innerHTML;
+    deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+    deleteBtn.disabled = true;
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Category deleted successfully!');
+            closeModal('deleteCategoryModal');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while deleting the category.');
+    })
+    .finally(() => {
+        deleteBtn.innerHTML = originalText;
+        deleteBtn.disabled = false;
+    });
+}
+
+// Supplier Management Functions
+function openDeleteSupplierModal(id, supplierName) {
+    <?php if ($isAdmin): ?>
+        document.getElementById('delete_supplier_id').value = id;
+        document.getElementById('deleteSupplierText').textContent = 
+            `Are you sure you want to delete the supplier "${supplierName}"? This action cannot be undone.`;
+        document.getElementById('deleteSupplierModal').classList.remove('modal-hidden');
+    <?php else: ?>
+        alert('Only administrators can delete suppliers.');
+    <?php endif; ?>
+}
+
+function confirmDeleteSupplier() {
+    const id = document.getElementById('delete_supplier_id').value;
+    
+    const formData = new FormData();
+    formData.append('action', 'delete_supplier');
+    formData.append('id', id);
+    
+    const deleteBtn = document.querySelector('#deleteSupplierModal .btn-primary');
+    const originalText = deleteBtn.innerHTML;
+    deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+    deleteBtn.disabled = true;
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Supplier deleted successfully!');
+            closeModal('deleteSupplierModal');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while deleting the supplier.');
+    })
+    .finally(() => {
+        deleteBtn.innerHTML = originalText;
+        deleteBtn.disabled = false;
+    });
 }
 
 function submitAddCategory(event) {

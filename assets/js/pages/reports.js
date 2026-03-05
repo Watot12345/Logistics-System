@@ -69,7 +69,7 @@ const ReportsModule = {
     // Load Inventory Report
     loadInventoryReport: function() {
         const reportBody = document.getElementById('inventoryReport');
-        if (!reportBody) return;
+        if (!reportBody) return;A
 
         // Mock data
         const data = {
