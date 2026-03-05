@@ -645,6 +645,7 @@ main {
 }
 
 /* Button Styles - Consolidated */
+
 .btn {
     padding: 8px 16px;
     border-radius: 8px;
@@ -1320,6 +1321,79 @@ main {
         transform: translateY(0);
     }
 }
+/* Ensure status badge styles match your existing CSS or add these */
+.status-badge.status-good {
+    background-color: #10b98120;
+    color: #059669;
+    border: 1px solid #10b98140;
+}
+
+.status-badge.status-warning {
+    background-color: #f59e0b20;
+    color: #d97706;
+    border: 1px solid #f59e0b40;
+}
+
+.status-badge.status-critical {
+    background-color: #ef444420;
+    color: #dc2626;
+    border: 1px solid #ef444440;
+}
+
+/* Shipment item hover effect */
+.shipment-item:hover {
+    background-color: #f1f5f9 !important;
+    transition: background-color 0.2s ease;
+}
+
+/* Action buttons visibility on hover */
+.shipment-item .action-buttons {
+    opacity: 0.3;
+    transition: opacity 0.2s ease;
+}
+
+.shipment-item:hover .action-buttons {
+    opacity: 1;
+}
+
+/* Button styles */
+.btn-sm {
+    padding: 6px 12px;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-sm:hover {
+    background-color: #2563eb;
+}
+
+.btn-icon:hover {
+    transform: scale(1.1);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .shipment-item {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+    
+    .shipment-item > div:last-child {
+        margin-top: 10px;
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+
 /* Downloads */
 .download-section {
     display: flex;

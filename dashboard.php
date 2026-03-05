@@ -1,6 +1,7 @@
 <?php
 session_start();
-
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../index.php");
     exit();
@@ -9,21 +10,15 @@ require 'config/db.php';
 $page_title = 'Dashboard | Logistics System';
 $page_css = 'assets/css/style.css';
 include 'includes/header.php';
-include '../dashboard/maintenance.php';
-
-/*function getActiveShipments($conn, $limit = 5) {
-    $query = "SELECT s.*, 
-                     o.order_number, 
-                     o.customer_name,
-                     o.delivery_address,
-                     v.vehicle_plate,
-                     v.vehicle_type,
-                     e.full_name as driver_name,
-                     e.phone as driver_phone
+$shipments = getActiveShipments($pdo, 10);
+function getActiveShipments($pdo, $limit = 5) {
+    $query = "SELECT s.*,
+                     u.full_name as driver_name,
+                     a.asset_name as vehicle_name,
+                     a.asset_condition as vehicle_condition
               FROM shipments s
-              JOIN orders o ON s.order_id = o.order_id
-              JOIN fleet v ON s.vehicle_id = v.vehicle_id
-              JOIN employees e ON s.driver_id = e.employee_id
+              LEFT JOIN users u ON s.driver_id = u.id
+              LEFT JOIN assets a ON s.vehicle_id = a.id
               WHERE s.shipment_status IN ('pending', 'in_transit')
               ORDER BY 
                   CASE 
@@ -31,12 +26,12 @@ include '../dashboard/maintenance.php';
                       WHEN s.shipment_status = 'pending' THEN 2
                   END,
                   s.departure_time ASC
-              LIMIT ?";
+              LIMIT :limit";
     
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $limit);
+    $stmt = $pdo->prepare($query);
+    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
-    return $stmt->get_result();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function getShipmentProgress($shipment) {
@@ -45,7 +40,6 @@ function getShipmentProgress($shipment) {
     if ($shipment['shipment_status'] == 'pending') return 20;
     return 0;
 }
-*/
 
 
 // Handle document upload
@@ -1023,14 +1017,309 @@ if ($user_role === 'admin') {
 </div>
         
         <!-- Logistics Document Tracking -->
-         <div class="card card-full">
+    <div class="card card-full">
     <div class="card-header">
         <h2><i class="fas fa-truck"></i> Logistics Records</h2>
         <span class="card-badge">Active shipments</span>
+        <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
+        <button class="btn-sm" style="margin-left: auto;" onclick="openAddModal()">
+            <i class="fas fa-plus"></i> Add New
+        </button>
+        <?php endif; ?>
     </div>
     <div class="card-body">
+        <!-- Alert container for notifications -->
+        <div id="alertContainer"></div>
+        
+        <div class="tracking-list" style="display: flex; flex-direction: column; gap: 12px;">
+            <?php
+            // Fetch shipments with driver and vehicle info
+            $shipments = getActiveShipments($pdo, 10);
+            
+            if (!empty($shipments)) {
+                foreach ($shipments as $shipment) {
+                    $progress = getShipmentProgress($shipment);
+                    
+                    $status_class = 'status-good';
+                    if ($shipment['shipment_status'] == 'in_transit') {
+                        $status_class = 'status-warning';
+                    } elseif ($shipment['shipment_status'] == 'pending' || $shipment['shipment_status'] == 'delayed') {
+                        $status_class = 'status-critical';
+                    }
+                    
+                    if ($shipment['shipment_status'] == 'delivered' && !empty($shipment['actual_arrival'])) {
+                        $time_display = 'Delivered: ' . date('M d, H:i', strtotime($shipment['actual_arrival']));
+                    } elseif (!empty($shipment['estimated_arrival'])) {
+                        $time_display = 'ETA: ' . date('M d, H:i', strtotime($shipment['estimated_arrival']));
+                    } elseif (!empty($shipment['departure_time'])) {
+                        $time_display = 'Departed: ' . date('M d, H:i', strtotime($shipment['departure_time']));
+                    } else {
+                        $time_display = 'Created: ' . date('M d, H:i', strtotime($shipment['created_at']));
+                    }
+                    
+                    $location = !empty($shipment['current_location']) ? $shipment['current_location'] : 'Not started';
+                    ?>
+                    <div class="shipment-item" data-id="<?php echo $shipment['shipment_id']; ?>" 
+                         style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                                <span style="font-weight: 600; font-size: 14px; color: #1e293b;">
+                                    #<?php echo $shipment['shipment_id']; ?>
+                                </span>
+                                <?php if (!empty($shipment['driver_name'])): ?>
+                                <span style="font-size: 12px; color: #64748b;">
+                                    <i class="fas fa-user-tie" style="margin-right: 2px;"></i>
+                                    <?php echo htmlspecialchars($shipment['driver_name']); ?>
+                                </span>
+                                <?php endif; ?>
+                                <?php if (!empty($shipment['vehicle_name'])): ?>
+                                <span style="font-size: 12px; color: #64748b;">
+                                    <i class="fas fa-truck" style="margin-right: 2px;"></i>
+                                    <?php echo htmlspecialchars($shipment['vehicle_name']); ?>
+                                </span>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <div style="font-size: 13px; color: #64748b; margin-top: 4px;">
+                                <i class="fas fa-map-marker-alt" style="margin-right: 4px; font-size: 11px;"></i>
+                                <?php echo htmlspecialchars($location); ?>
+                            </div>
+                            
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
+                                <i class="far fa-clock" style="margin-right: 4px;"></i>
+                                <?php echo $time_display; ?>
+                            </div>
+
+                            <?php if ($shipment['shipment_status'] != 'delivered'): ?>
+                            <div style="margin-top: 8px; width: 100%; height: 4px; background-color: #e2e8f0; border-radius: 2px;">
+                                <div style="width: <?php echo $progress; ?>%; height: 100%; background-color: <?php 
+                                    echo $progress >= 60 ? '#10b981' : ($progress >= 20 ? '#f59e0b' : '#ef4444'); 
+                                ?>; border-radius: 2px;"></div>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px;">
+                            <span class="status-badge <?php echo $status_class; ?>" 
+                                  style="padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; display: inline-block; white-space: nowrap;">
+                                <?php echo ucfirst(str_replace('_', ' ', $shipment['shipment_status'])); ?>
+                            </span>
+                            
+                            <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
+                            <div class="action-buttons" style="display: flex; gap: 4px;">
+                                <button class="btn-icon" onclick="openEditModal(<?php echo $shipment['shipment_id']; ?>)" 
+                                        style="color: #3b82f6; background: none; border: none; cursor: pointer; padding: 4px;" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-icon" onclick="deleteShipment(<?php echo $shipment['shipment_id']; ?>)" 
+                                        style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 4px;" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php
+                }
+            } else {
+                ?>
+                <div style="text-align: center; padding: 40px 20px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <i class="fas fa-truck" style="font-size: 40px; color: #cbd5e1; margin-bottom: 10px;"></i>
+                    <p style="color: #64748b; margin: 0;">No active shipments found</p>
+                    <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
+                    <button class="btn-sm" style="margin-top: 10px;" onclick="openAddModal()">
+                        <i class="fas fa-plus"></i> Add Your First Shipment
+                    </button>
+                    <?php endif; ?>
+                </div>
+                <?php
+            }
+            ?>
+        </div>
+        
+        <div style="margin-top: 16px; text-align: center;">
+            <a href="#" style="color: #3b82f6; text-decoration: none; font-size: 13px; font-weight: 500;">
+                View All Shipments <i class="fas fa-arrow-right" style="margin-left: 4px; font-size: 11px;"></i>
+            </a>
+        </div>
     </div>
 </div>
+
+<!-- ADD MODAL -->
+<div id="addModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
+    <div class="modal-content" style="background: white; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-header" style="padding: 20px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="font-size: 18px;"><i class="fas fa-plus-circle"></i> Add New Shipment</h3>
+            <button class="close-btn" onclick="closeModal('addModal')" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <form id="addForm" onsubmit="submitAddForm(event)">
+            <div class="modal-body" style="padding: 24px;">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Customer Name *</label>
+                    <input type="text" name="customer_name" required placeholder="Enter customer name" 
+                           style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Delivery Address *</label>
+                    <textarea name="delivery_address" required rows="2" placeholder="Enter delivery address" 
+                              style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;"></textarea>
+                </div>
+                
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Driver</label>
+                        <select name="driver_id" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                            <option value="">-- Select Driver --</option>
+                            <?php 
+                            // Fetch drivers
+                            $drivers = $pdo->query("SELECT id, full_name FROM users WHERE role = 'driver' AND status = 'active'")->fetchAll(PDO::FETCH_ASSOC);
+                            foreach ($drivers as $driver): ?>
+                                <option value="<?php echo $driver['id']; ?>"><?php echo htmlspecialchars($driver['full_name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Vehicle</label>
+                        <select name="vehicle_id" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                            <option value="">-- Select Vehicle --</option>
+                            <?php 
+                            $vehicles = $pdo->query("SELECT id, asset_name FROM assets WHERE asset_type = 'vehicle'")->fetchAll(PDO::FETCH_ASSOC);
+                            foreach ($vehicles as $vehicle): ?>
+                                <option value="<?php echo $vehicle['id']; ?>"><?php echo htmlspecialchars($vehicle['asset_name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Status</label>
+                        <select name="shipment_status" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                            <option value="pending">Pending</option>
+                            <option value="in_transit">In Transit</option>
+                            <option value="delayed">Delayed</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Current Location</label>
+                        <input type="text" name="current_location" placeholder="Current location" 
+                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                    </div>
+                </div>
+                
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Departure Time</label>
+                        <input type="datetime-local" name="departure_time" 
+                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Estimated Arrival</label>
+                        <input type="datetime-local" name="estimated_arrival" 
+                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="padding: 20px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('addModal')" 
+                        style="padding: 10px 20px; background: #e2e8f0; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+                <button type="submit" class="btn btn-primary" 
+                        style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer;">Create Shipment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div id="editModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
+    <div class="modal-content" style="background: white; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-header" style="padding: 20px 24px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="font-size: 18px;"><i class="fas fa-edit"></i> Edit Shipment</h3>
+            <button class="close-btn" onclick="closeModal('editModal')" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <form id="editForm" onsubmit="submitEditForm(event)">
+            <input type="hidden" name="shipment_id" id="edit_shipment_id">
+            <input type="hidden" name="old_status" id="old_status">
+            
+            <div class="modal-body" style="padding: 24px;">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Status</label>
+                    <select name="shipment_status" id="edit_status" onchange="toggleArrivalField()" 
+                            style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                        <option value="pending">Pending</option>
+                        <option value="in_transit">In Transit</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="delayed">Delayed</option>
+                    </select>
+                </div>
+                
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Driver</label>
+                        <select name="driver_id" id="edit_driver_id" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                            <option value="">-- Select Driver --</option>
+                            <?php foreach ($drivers as $driver): ?>
+                                <option value="<?php echo $driver['id']; ?>"><?php echo htmlspecialchars($driver['full_name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Vehicle</label>
+                        <select name="vehicle_id" id="edit_vehicle_id" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                            <option value="">-- Select Vehicle --</option>
+                            <?php foreach ($vehicles as $vehicle): ?>
+                                <option value="<?php echo $vehicle['id']; ?>"><?php echo htmlspecialchars($vehicle['asset_name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Current Location</label>
+                    <input type="text" name="current_location" id="edit_location" placeholder="Current location" 
+                           style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                </div>
+                
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Departure Time</label>
+                        <input type="datetime-local" name="departure_time" id="edit_departure" 
+                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Estimated Arrival</label>
+                        <input type="datetime-local" name="estimated_arrival" id="edit_estimated" 
+                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                    </div>
+                </div>
+                
+                <div class="form-group" id="actual_arrival_group" style="display: none; margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Actual Arrival Time</label>
+                    <input type="datetime-local" name="actual_arrival" id="edit_actual" 
+                           style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                    <small style="color: #666; display: block; margin-top: 5px;">Leave empty to use current time</small>
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="padding: 20px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')" 
+                        style="padding: 10px 20px; background: #e2e8f0; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+                <button type="submit" class="btn btn-primary" 
+                        style="padding: 10px 20px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; border-radius: 8px; cursor: pointer;">Update Shipment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+
         
         <!-- Employee Activity Logs (admin only) -->
         <?php if ($user_role === 'admin'): ?>
@@ -1078,6 +1367,189 @@ if ($user_role === 'admin') {
 
 <!-- Admin CRUD JavaScript -->
 <script>
+   function openAddModal() {
+    document.getElementById('addModal').style.display = 'flex';
+}
+
+function openEditModal(shipmentId) {
+    // Fetch shipment data from your backend
+    fetch('backend/get-shipment.php?id=' + shipmentId)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const s = data.data;
+            
+            // Populate form fields
+            document.getElementById('edit_shipment_id').value = s.shipment_id;
+            document.getElementById('old_status').value = s.shipment_status;
+            document.getElementById('edit_status').value = s.shipment_status;
+            document.getElementById('edit_driver_id').value = s.driver_id || '';
+            document.getElementById('edit_vehicle_id').value = s.vehicle_id || '';
+            document.getElementById('edit_location').value = s.current_location || '';
+            
+            // Format datetime fields
+            if (s.departure_time) {
+                document.getElementById('edit_departure').value = s.departure_time.slice(0, 16);
+            }
+            if (s.estimated_arrival) {
+                document.getElementById('edit_estimated').value = s.estimated_arrival.slice(0, 16);
+            }
+            if (s.actual_arrival) {
+                document.getElementById('edit_actual').value = s.actual_arrival.slice(0, 16);
+            }
+            
+            // Show/hide actual arrival field
+            toggleArrivalField();
+            
+            // Open modal
+            document.getElementById('editModal').style.display = 'flex';
+        } else {
+            showAlert('error', 'Failed to load shipment data');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('error', 'An error occurred');
+    });
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+function toggleArrivalField() {
+    const status = document.getElementById('edit_status').value;
+    const arrivalGroup = document.getElementById('actual_arrival_group');
+    
+    if (status === 'delivered') {
+        arrivalGroup.style.display = 'block';
+        
+        // Set default to current time if empty
+        const arrivalInput = document.getElementById('edit_actual');
+        if (!arrivalInput.value) {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            arrivalInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+    } else {
+        arrivalGroup.style.display = 'none';
+    }
+}
+
+// ============================================
+// FORM SUBMISSION HANDLERS
+// ============================================
+
+function submitAddForm(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    fetch('backend/add-shipment.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', 'Shipment added successfully!');
+            closeModal('addModal');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showAlert('error', data.message || 'Failed to add shipment');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('error', 'An error occurred');
+    });
+}
+
+function submitEditForm(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    fetch('backend/edit-shipment.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', 'Shipment updated successfully!');
+            closeModal('editModal');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showAlert('error', data.message || 'Failed to update shipment');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('error', 'An error occurred');
+    });
+}
+
+function deleteShipment(shipmentId) {
+    if (confirm('Are you sure you want to delete this shipment? This action cannot be undone.')) {
+        const formData = new FormData();
+        formData.append('id', shipmentId);
+        
+        fetch('backend/delete-shipment.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('success', 'Shipment deleted successfully!');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showAlert('error', data.message || 'Failed to delete shipment');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('error', 'An error occurred');
+        });
+    }
+}
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+function showAlert(type, message) {
+    const alertContainer = document.getElementById('alertContainer');
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
+    const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+    
+    alertContainer.innerHTML = `
+        <div class="alert ${alertClass}" style="padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; ${type === 'success' ? 'background: #d4edda; color: #155724; border: 1px solid #c3e6cb;' : 'background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;'}">
+            <i class="fas ${icon}"></i> ${message}
+        </div>
+    `;
+    
+    // Auto hide after 3 seconds
+    setTimeout(() => {
+        alertContainer.innerHTML = '';
+    }, 3000);
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+    }
+}
+
+
 function toggleAssetForm() {
     const form = document.getElementById('assetFormContainer');
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
@@ -1150,5 +1622,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('documentFormContainer').style.display = 'none';
 });
 <?php endif; ?>
+
+
 </script>
 </script>
