@@ -6,6 +6,13 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: ../index.php");
     exit();
 }
+
+// Redirect fleet_manager and driver to fleet.php
+if (in_array($_SESSION['role'], ['fleet_manager', 'driver'])) {
+    header("Location: modules/fleet.php");
+    exit();
+}
+
 require 'config/db.php';
 $page_title = 'Dashboard | Logistics System';
 $page_css = 'assets/css/style.css';
@@ -355,12 +362,12 @@ if ($user_role === 'admin') {
 
     
     // Fetch activity logs for admin
-     try {
-    // Get downloads from activity logs table
+      try {
     $logs_result = $pdo->query("
         (SELECT 
+            l.id,
             u.full_name as user,
-            d.file_name as document,
+            d.title as document,
             l.action_type as action_type,
             l.timestamp as time
         FROM user_activity_logs l
@@ -371,6 +378,7 @@ if ($user_role === 'admin') {
         UNION ALL
         
         (SELECT 
+            NULL as id,
             username as user,
             'Login' as document,
             'Logged In' as action_type,
@@ -401,10 +409,7 @@ if ($user_role === 'admin') {
                 <button class="menu-toggle" onclick="toggleSidebar()">
                     <i class="fas fa-bars"></i>
                 </button>
-                <div class="search-container">
-                    <i class="fas fa-search search-icon"></i>
-                    <input type="text" class="search-input" placeholder="Search...">
-                </div>
+                
             </div>
             
             <div class="header-right">
@@ -442,7 +447,7 @@ if ($user_role === 'admin') {
         <div class="page-header">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
-                    <h1>Logistics Dashboard</h1>
+                    <h1>Asset Lifecycle & Maintenance</h1>
                     <p>Monitor assets, maintenance, and documentation</p>
                 </div>
             </div>
@@ -573,9 +578,57 @@ if ($user_role === 'admin') {
                     </table>
                 </div>
             </div>
+            <!-- Edit Asset Modal -->
+<div id="editAssetModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
+    <div class="modal-content" style="background: white; border-radius: 16px; width: 90%; max-width: 500px;">
+        <div class="modal-header" style="padding: 20px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="font-size: 18px;"><i class="fas fa-edit"></i> Edit Asset</h3>
+            <button class="close-btn" onclick="closeEditModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <form method="POST" action="">
+            <input type="hidden" name="action" value="update_asset">
+            <input type="hidden" name="asset_id" id="edit_asset_id">
             
+            <div class="modal-body" style="padding: 24px;">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Asset Name *</label>
+                    <input type="text" name="asset_name" id="edit_asset_name" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Asset Type *</label>
+                    <select name="asset_type" id="edit_asset_type" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="vehicle">Vehicle</option>
+                        <option value="equipment">Equipment</option>
+                        <option value="warehouse">Warehouse</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Status *</label>
+                    <select name="status" id="edit_asset_status" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="good">Good</option>
+                        <option value="warning">Warning</option>
+                        <option value="bad">Bad</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Asset Condition (%) *</label>
+                    <input type="number" name="asset_condition" id="edit_asset_condition" required min="0" max="100" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="padding: 20px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeEditModal()" style="padding: 8px 16px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Update Asset</button>
+            </div>
+        </form>
+    </div>
+</div>
             <?php else: ?>
-            <!-- Asset List & Condition (for employees) -->
+          
             
             <?php endif; ?>
             
@@ -655,9 +708,15 @@ if ($user_role === 'admin') {
                                 </td>
                                 <td style="padding:12px;"><?php echo date('M d, Y', strtotime($alert['due_date'])); ?></td>
                                 <td style="padding:12px; text-align:center;">
-                                    <button class="btn-edit" onclick="editAlertModal(<?php echo $alert['id']; ?>)" style="padding:6px 10px; margin-right:5px; background:#007bff; color:white; border:none; border-radius:4px; cursor:pointer;">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </button>
+                                    <button class="btn-edit" onclick="editAlertModal(
+                                         <?php echo $alert['id']; ?>, 
+                                         '<?php echo addslashes($alert['asset_name']); ?>', 
+                                         '<?php echo addslashes($alert['issue']); ?>', 
+                                            '<?php echo $alert['priority']; ?>', 
+                                            '<?php echo $alert['due_date']; ?>'
+                                         )" style="padding:6px 10px; margin-right:5px; background:#007bff; color:white; border:none; border-radius:4px; cursor:pointer;">
+                                            <i class="fas fa-edit"></i> Edit
+                                          </button>
 
                                     <?php if ($alert['status'] === 'pending'): ?>
                                         <form method="POST" style="display:inline;" onsubmit="return confirm('Mark this alert as completed?');">
@@ -685,6 +744,50 @@ if ($user_role === 'admin') {
                     </tbody>
                 </table>
             </div>
+            <!-- Edit Alert Modal -->
+<div id="editAlertModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
+    <div class="modal-content" style="background: white; border-radius: 16px; width: 90%; max-width: 500px;">
+        <div class="modal-header" style="padding: 20px 24px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="font-size: 18px;"><i class="fas fa-edit"></i> Edit Alert</h3>
+            <button class="close-btn" onclick="closeEditAlertModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <form method="POST" action="">
+            <input type="hidden" name="action" value="update_alert">
+            <input type="hidden" name="alert_id" id="edit_alert_id">
+            
+            <div class="modal-body" style="padding: 24px;">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Asset Name *</label>
+                    <input type="text" name="asset_name" id="edit_alert_asset_name" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Issue *</label>
+                    <input type="text" name="issue" id="edit_alert_issue" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Priority *</label>
+                    <select name="priority" id="edit_alert_priority" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">Due Date *</label>
+                    <input type="date" name="due_date" id="edit_alert_due_date" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="padding: 20px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeEditAlertModal()" style="padding: 8px 16px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Update Alert</button>
+            </div>
+        </form>
+    </div>
+</div>
         </div>
         <?php endif; ?>
 
@@ -865,7 +968,7 @@ if ($user_role === 'admin') {
         <!-- Digital Document Repository -->
         <div class="card card-full">
     <div class="card-header">
-        <h2><i class="fas fa-folder"></i> Document Tracking</h2>
+        <h2><i class="fas fa-folder"></i> Document Management Tracking & </h2>
         <div style="display: flex; gap: 10px; align-items: center;">
             <span class="card-badge"><?php echo $document_count ?? 0; ?> documents</span>
             <?php if ($user_role === 'admin'): ?>
@@ -1019,7 +1122,7 @@ if ($user_role === 'admin') {
         <!-- Logistics Document Tracking -->
     <div class="card card-full">
     <div class="card-header">
-        <h2><i class="fas fa-truck"></i> Logistics Records</h2>
+        <h2><i class="fas fa-truck"></i> Project Logistics Tracker</h2>
         <span class="card-badge">Active shipments</span>
         <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
         <button class="btn-sm" style="margin-left: auto;" onclick="openAddModal()">
@@ -1358,9 +1461,6 @@ if ($user_role === 'admin') {
             </div>
         </div>
         <?php endif; ?>
-        
-       
-        
     </div>
 </main>
 
@@ -1581,7 +1681,8 @@ function toggleAlertForm() {
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
 }
 
-function editAlert(id, asset_name, issue, priority, due_date) {
+// Function to OPEN the edit alert modal
+function editAlertModal(id, asset_name, issue, priority, due_date) {
     const modal = document.getElementById('editAlertModal');
     document.getElementById('edit_alert_id').value = id;
     document.getElementById('edit_alert_asset_name').value = asset_name;
@@ -1591,6 +1692,7 @@ function editAlert(id, asset_name, issue, priority, due_date) {
     modal.style.display = 'block';
 }
 
+// Function to CLOSE the edit alert modal
 function closeEditAlertModal() {
     document.getElementById('editAlertModal').style.display = 'none';
 }
@@ -1625,4 +1727,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 </script>
-</script>
+

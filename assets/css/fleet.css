@@ -3,6 +3,50 @@
 /* Fleet Management Specific Styles */
 
 /* Page Header Actions */
+/* Warning message styles */
+.warning-container {
+    text-align: center;
+    padding: 30px;
+}
+
+.warning-box {
+    background-color: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.warning-box i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    color: #856404;
+}
+
+.warning-box h3 {
+    margin-bottom: 10px;
+    color: #856404;
+}
+
+.info-box {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+}
+
+.info-box i {
+    font-size: 48px;
+    color: #17a2b8;
+    margin-bottom: 16px;
+}
+
+.info-box h3 {
+    color: #17a2b8;
+    margin-bottom: 10px;
+}
+
 .page-content {
    flex: 1;
     margin-left: 288px;
@@ -1231,7 +1275,271 @@
     font-size: 14px;
     outline: 0;
 }
+/* ============================================
+   DRIVER PERFORMANCE STATS
+   ============================================ */
 
+/* Stats Mini Grid for Driver Performance */
+.stats-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    text-align: center;
+}
+
+.stat-mini {
+    padding: 16px;
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.stat-mini:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
+    border-color: #cbd5e1;
+}
+
+.stat-mini .value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.2;
+    margin-bottom: 4px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stat-mini .label {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Different colors for each stat */
+.stat-mini:nth-child(1) .value {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.stat-mini:nth-child(2) .value {
+    background: linear-gradient(135deg, #059669, #047857);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.stat-mini:nth-child(3) .value {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Assignment Details Styles */
+.assignment-details {
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+}
+
+.detail-row {
+    padding: 12px 0;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    gap: 16px;
+    align-items: baseline;
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-row strong {
+    min-width: 120px;
+    color: #475569;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.detail-row span {
+    color: #1e293b;
+    font-size: 14px;
+}
+
+/* Quick Actions Buttons */
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn {
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    width: 100%;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 8px -1px rgba(37, 99, 235, 0.3);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 8px -1px rgba(16, 185, 129, 0.3);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.2);
+}
+
+.btn-warning:hover {
+    background: linear-gradient(135deg, #d97706, #b45309);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 8px -1px rgba(245, 158, 11, 0.3);
+}
+
+/* Card Badge Status Colors */
+.card-badge.status-warning {
+    background: #fef3c7;
+    color: #d97706;
+    border: 1px solid #fde68a;
+}
+
+.card-badge.status-info {
+    background: #dbeafe;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+}
+
+.card-badge.status-critical {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+/* Loading Spinner Animation */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.fa-spinner.fa-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Trip Status Colors in Driver View */
+.trip-status.delivered {
+    background: #d1fae5;
+    color: #059669;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.trip-status.in_transit {
+    background: #dbeafe;
+    color: #2563eb;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.trip-status.pending {
+    background: #fef3c7;
+    color: #d97706;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.btn-assign, .btn-change {
+    transition: all 0.3s ease;
+}
+.btn-assign:hover {
+    background-color: #1d4ed8 !important;
+}
+.btn-change:hover {
+    background-color: #d97706 !important;
+}
+/* Responsive Design for Driver Stats */
+@media (max-width: 768px) {
+    .stats-mini-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .detail-row {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .detail-row strong {
+        min-width: auto;
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Empty State Styles */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #94a3b8;
+}
+
+.empty-state i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    color: #1e293b;
+    margin-bottom: 8px;
+    font-size: 18px;
+}
+
+.empty-state p {
+    color: #64748b;
+    font-size: 14px;
+}
 /* Responsive */
 @media (max-width: 1200px) {
     .dashboard-grid-4 {
