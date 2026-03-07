@@ -113,6 +113,48 @@ async function loadItemsForModal() {
     }
 }
 
+// Add this function to orders.js
+async function updatePOStatus(poId, newStatus) {
+    console.log(`Updating PO ${poId} to ${newStatus}...`);
+    
+    // Confirm action
+    const action = newStatus === 'approved' ? 'approve' : 'reject';
+    if (!confirm(`Are you sure you want to ${action} this purchase order?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('../api/update_po_status.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                po_id: poId,
+                status: newStatus
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Server response:', result);
+        
+        if (result.success) {
+            alert(`Purchase order ${newStatus} successfully!`);
+            // Reload the page to show updated status
+            window.location.reload();
+        } else {
+            alert('Error updating PO: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error updating PO:', error);
+        alert('Error updating purchase order: ' + error.message);
+    }
+}
+
 function addItem() {
     const tbody = document.querySelector('.items-table tbody');
     if (!tbody) {

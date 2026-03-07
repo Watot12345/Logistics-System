@@ -167,7 +167,17 @@ include '../includes/header.php';
                         <span class="stat-badge green">+15.5%</span>
                     </div>
                     <p class="stat-label">Total Spend</p>
-                    <p class="stat-value">$<?php echo number_format($total_spend / 1000000, 1); ?>M</p>
+                   <p class="stat-value">
+    ₱<?php 
+    if ($total_spend >= 1000000) {
+        echo number_format($total_spend / 1000000, 2) . 'M';
+    } elseif ($total_spend >= 1000) {
+        echo number_format($total_spend / 1000, 2) . 'K';
+    } else {
+        echo number_format($total_spend, 2);
+    }
+    ?>
+</p>
                     <div class="stat-trend">
                         <i class="fas fa-arrow-up"></i> 15.5% from last quarter
                     </div>
@@ -245,7 +255,7 @@ include '../includes/header.php';
                                             <td><strong><?php echo htmlspecialchars($order['po_number']); ?></strong></td>
                                             <td><?php echo htmlspecialchars($order['supplier_name']); ?></td>
                                             <td><?php echo date('Y-m-d', strtotime($order['order_date'])); ?></td>
-                                            <td>$<?php echo number_format($order['total_amount'], 2); ?></td>
+                                            <td>₱<?php echo number_format($order['total_amount'], 2); ?></td>
                                             <td>
                                                 <span class="status-badge status-<?php echo $order['status']; ?>">
                                                     <?php echo ucfirst($order['status']); ?>
@@ -384,7 +394,7 @@ include '../includes/header.php';
                                         <p><?php echo htmlspecialchars($item['supplier_name']); ?></p>
                                     </div>
                                     <div class="history-amount">
-                                        $<?php echo number_format($item['total_amount'], 2); ?>
+                                        ₱<?php echo number_format($item['total_amount'], 2); ?>
                                     </div>
                                 </div>
                                 <?php endforeach; ?>
@@ -438,14 +448,14 @@ include '../includes/header.php';
                         <div class="procurement-stats">
                             <div class="procurement-stat-item">
                                 <div class="procurement-stat-label">Approved</div>
-                                <div class="procurement-stat-value">$<?php echo number_format($approved_month); ?></div>
+                                <div class="procurement-stat-value">₱<?php echo number_format($approved_month); ?></div>
                                 <div class="procurement-stat-trend trend-up">
                                     <i class="fas fa-arrow-up"></i> 12% vs last month
                                 </div>
                             </div>
                             <div class="procurement-stat-item">
                                 <div class="procurement-stat-label">Pending</div>
-                                <div class="procurement-stat-value">$<?php echo number_format($pending_month); ?></div>
+                                <div class="procurement-stat-value">₱<?php echo number_format($pending_month); ?></div>
                                 <div class="procurement-stat-trend trend-down">
                                     <i class="fas fa-arrow-down"></i> 5% vs last month
                                 </div>
@@ -468,7 +478,7 @@ include '../includes/header.php';
                                         <p><?php echo htmlspecialchars($item['supplier_name']); ?> • Requested by <?php echo htmlspecialchars($item['requester']); ?></p>
                                     </div>
                                     <div class="approval-amount">
-                                        $<?php echo number_format($item['total_amount'], 2); ?>
+                                        ₱<?php echo number_format($item['total_amount'], 2); ?>
                                     </div>
                                     <div class="approval-actions">
                                         <button class="btn-approve-small" onclick="updatePOStatus(<?php echo $item['id']; ?>, 'approved')">
@@ -574,11 +584,11 @@ include '../includes/header.php';
                 <div class="totals">
                     <div class="total-row">
                         <span class="total-label">Subtotal:</span>
-                        <span class="total-value" id="subtotal">$0.00</span>
+                        <span class="total-value" id="subtotal">₱0.00</span>
                     </div>
                     <div class="total-row">
                         <span class="total-label">Tax (10%):</span>
-                        <span class="total-value" id="tax">$0.00</span>
+                        <span class="total-value" id="tax">₱0.00</span>
                     </div>
                     <div class="total-row grand-total">
                         <span class="total-label">Total:</span>

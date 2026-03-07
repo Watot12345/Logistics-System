@@ -1,16 +1,34 @@
-// assets/js/fleet.js
+// assets/js/fleet.js - Combined Fleet Management JavaScript
 
-// Initialize Fleet Dashboard
+// ============================================
+// INITIALIZATION
+// ============================================
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Fleet dashboard loaded');
+    
+    // Load all data
     loadFleetData();
+    
+    // Initialize UI
     setupEventListeners();
     initTabs();
+    
+    // Start real-time updates
     startRealTimeUpdates();
+    
+    // Load role-specific data
+    loadDriverAssignment();
+    loadDriverStats();
+    loadDriverTrips();
 });
 
-// Load All Fleet Data
+// ============================================
+// INITIALIZATION FUNCTIONS
+// ============================================
+
 function loadFleetData() {
+    // Load data for all tabs
     loadVehicleAvailability();
     loadTransportEfficiency();
     loadDelayAnalysis();
@@ -24,13 +42,19 @@ function loadFleetData() {
     loadFleetCondition();
 }
 
-// Setup Event Listeners
 function setupEventListeners() {
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', function() {
             const tabId = this.dataset.tab;
             switchTab(tabId);
+        });
+    });
+    
+    // Reservations tab specific listener
+    document.querySelectorAll('.tab[data-tab="reservations"]').forEach(tab => {
+        tab.addEventListener('click', function() {
+            setTimeout(loadVehicleReservations, 100);
         });
     });
     
@@ -59,20 +83,21 @@ function setupEventListeners() {
     }
 }
 
-// Initialize Tabs
 function initTabs() {
     const tabs = document.querySelectorAll('.tab');
     const tabPanes = document.querySelectorAll('.tab-pane');
     
     if (tabs.length > 0) {
-        tabs[0].classList.add('active');
-        tabPanes.forEach(pane => pane.style.display = 'none');
-        const tabOverview = document.getElementById('tab-overview');
-        if (tabOverview) tabOverview.style.display = 'block';
+        const activeTab = document.querySelector('.tab.active');
+        if (!activeTab && tabs.length > 0) {
+            tabs[0].classList.add('active');
+            tabPanes.forEach(pane => pane.style.display = 'none');
+            const tabOverview = document.getElementById('tab-overview');
+            if (tabOverview) tabOverview.style.display = 'block';
+        }
     }
 }
 
-// Switch Tabs
 function switchTab(tabId) {
     document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.remove('active');
@@ -84,63 +109,999 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-pane').forEach(pane => {
         pane.style.display = 'none';
     });
-    document.getElementById(`tab-${tabId}`).style.display = 'block';
+    
+    const selectedPane = document.getElementById(`tab-${tabId}`);
+    if (selectedPane) {
+        selectedPane.style.display = 'block';
+    }
 }
 
-// Real-time updates simulation
 function startRealTimeUpdates() {
+    // Refresh every 30 seconds for driver data
+    setInterval(loadDriverAssignment, 30000);
+    setInterval(loadDriverStats, 60000);
+    
+    // Refresh fleet data
     setInterval(() => {
-        // Update driver activity every 30 seconds
         updateDriverActivity();
-        // Update vehicle availability
         updateVehicleAvailability();
     }, 30000);
 }
-// Load Vehicle Availability
+
+// ============================================
+// DRIVER FUNCTIONS
+// ============================================
+
+function loadDriverAssignment() {
+    fetch('../api/get_driver_assignment.php')
+        .then(response => response.json())
+        .then(data => {
+            const content = document.getElementById('assignment-content');
+            const statusBadge = document.getElementById('assignment-status');
+            
+            if (!content || !statusBadge) return;
+            
+            if (data.success) {
+                if (data.has_assignment) {
+                    const a = data.assignment;
+                    statusBadge.textContent = a.shipment_status.toUpperCase();
+                    statusBadge.className = 'card-badge ' + 
+                        (a.shipment_status === 'in_transit' ? 'status-warning' : 'status-info');
+                    
+                    content.innerHTML = `
+                        <div class="assignment-details">
+                            <div class="detail-row">
+                                <strong>Vehicle:</strong> ${a.vehicle_name} (${a.vehicle_condition}% condition)
+                            </div>
+                            <div class="detail-row">
+                                <strong>Customer:</strong> ${a.customer_name || 'N/A'}
+                            </div>
+                            <div class="detail-row">
+                                <strong>Delivery Address:</strong> ${a.delivery_address || 'N/A'}
+                            </div>
+                            <div class="detail-row">
+                                <strong>Current Location:</strong> ${a.current_location || 'Not started'}
+                            </div>
+                            <div class="detail-row">
+                                <strong>Estimated Arrival:</strong> ${a.estimated_arrival ? new Date(a.estimated_arrival).toLocaleString() : 'N/A'}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    statusBadge.textContent = 'NO ASSIGNMENT';
+                    statusBadge.className = 'card-badge status-warning';
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 30px;">
+                            <div style="background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px; color: #856404;"></i>
+                                <h3 style="margin-bottom: 10px; color: #856404;">No Active Assignment</h3>
+                                <p style="margin-bottom: 15px;">${data.message || 'You don\'t have any active assignments at the moment.'}</p>
+                                <p style="font-size: 13px; color: #666;">Please contact your dispatcher to get assigned to a shipment.</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading assignment:', error);
+        });
+}
+
+function loadDriverTrips() {
+    const tripHistory = document.getElementById('trip-history');
+    if (!tripHistory) {
+        console.error('Trip history element not found');
+        return;
+    }
+    
+    console.log('Loading driver trips...');
+    tripHistory.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading trips...</div>';
+    
+    fetch('../api/get_driver_trips.php?limit=5&_=' + new Date().getTime())
+        .then(response => response.json())
+        .then(data => {
+            console.log('Trips data received:', data);
+            
+            // Log debug info to console
+            if (data.debug) {
+                console.log('Debug info:', data.debug);
+            }
+            
+            if (data.success) {
+                if (data.trips && data.trips.length > 0) {
+                    let html = '';
+                    data.trips.forEach(trip => {
+                        let statusColor = '#6b7280';
+                        let statusBg = '#6b728020';
+                        let icon = 'truck';
+                        
+                        if (trip.shipment_status === 'delivered' || trip.shipment_status === 'completed') {
+                            statusColor = '#10b981';
+                            statusBg = '#10b98120';
+                            icon = 'check-circle';
+                        } else if (trip.shipment_status === 'in_transit' || trip.shipment_status === 'in-progress') {
+                            statusColor = '#f59e0b';
+                            statusBg = '#f59e0b20';
+                            icon = 'play-circle';
+                        }
+                        
+                        html += `
+                            <div class="trip-item" style="padding: 15px; border-bottom: 1px solid #eee; display: flex; align-items: center;">
+                                <div style="width: 40px; height: 40px; border-radius: 8px; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
+                                    <i class="fas fa-${icon}" style="color: #2563eb;"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600;">${trip.customer_name || 'Trip'}</div>
+                                    <div style="font-size: 13px; color: #666;">
+                                        <span>${trip.vehicle_name || 'Unknown'}</span> • 
+                                        <span>${trip.departure_time || 'N/A'}</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span style="padding: 4px 12px; border-radius: 20px; font-size: 12px; background-color: ${statusBg}; color: ${statusColor};">
+                                        ${trip.shipment_status || 'pending'}
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    tripHistory.innerHTML = html;
+                } else {
+                    // Show more detailed message if debug info is available
+                    let debugMessage = '';
+                    if (data.debug) {
+                        debugMessage = `<p style="font-size: 12px; color: #999; margin-top: 10px;">
+                            Debug: Driver ID ${data.debug.driver_id}, Records: ${data.debug.total_records || 0}
+                        </p>`;
+                    }
+                    
+                    tripHistory.innerHTML = `
+                        <div style="text-align: center; padding: 40px; background-color: #f8f9fa; border-radius: 8px;">
+                            <i class="fas fa-info-circle" style="font-size: 48px; color: #17a2b8; margin-bottom: 16px;"></i>
+                            <h3 style="color: #17a2b8; margin-bottom: 10px;">No Trip History</h3>
+                            <p style="color: #6c757d;">You don't have any trip history yet.</p>
+                            ${debugMessage}
+                        </div>
+                    `;
+                }
+            } else {
+                tripHistory.innerHTML = '<div class="error-state">Error: ' + (data.error || 'Unknown error') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading trips:', error);
+            tripHistory.innerHTML = '<div class="error-state">Failed to load trips: ' + error.message + '</div>';
+        });
+}
+
+function loadDriverStats() {
+    fetch('../api/get_driver_stats.php')
+        .then(response => response.json())
+        .then(data => {
+            const statsDiv = document.getElementById('driver-stats');
+            if (!statsDiv) return;
+            
+            if (data.success) {
+                const stats = data.stats;
+                statsDiv.innerHTML = `
+                    <div class="stat-mini">
+                        <div class="value">${stats.total_trips}</div>
+                        <div class="label">Total Trips</div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="value">${stats.completed_trips}</div>
+                        <div class="label">Completed</div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="value">${stats.performance_score}%</div>
+                        <div class="label">Performance</div>
+                    </div>
+                `;
+            }
+        });
+}
+
+function updateStatus(newStatus) {
+    // First, get the current assignment to get the dispatch_schedule ID
+    fetch('../api/get_driver_assignment.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.has_assignment) {
+                const assignment = data.assignment;
+                const assignmentId = assignment.id; // This is the dispatch_schedule ID
+                
+                // Ask for current location if starting trip or delivering
+                let currentLocation = '';
+                if (newStatus === 'in_transit' || newStatus === 'delivered') {
+                    currentLocation = prompt('Enter current location:');
+                    if (!currentLocation) return;
+                }
+                
+                // Map status for dispatch_schedule
+                let dispatchStatus = 'scheduled';
+                if (newStatus === 'in_transit') {
+                    dispatchStatus = 'in-progress';
+                } else if (newStatus === 'delivered') {
+                    dispatchStatus = 'completed';
+                }
+                
+                // Show loading notification
+                showNotification('Updating status...', 'info');
+                
+                // Update the dispatch schedule status
+                fetch('../api/update_dispatch_status.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        schedule_id: assignmentId,
+                        status: dispatchStatus,
+                        current_location: currentLocation,
+                        new_status: newStatus // Pass the original status for shipment update
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        let message = '';
+                        if (newStatus === 'in_transit') {
+                            message = 'Trip started successfully!';
+                        } else if (newStatus === 'delivered') {
+                            message = 'Delivery completed successfully!';
+                        }
+                        
+                        showNotification(message, 'success');
+                        
+                        // Refresh the assignment display
+                        setTimeout(() => {
+                            loadDriverAssignment();
+                            loadDriverTrips();
+                        }, 500);
+                    } else {
+                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    showNotification('Error: ' + error.message, 'error');
+                });
+            } else {
+                showNotification('No active assignment found', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error getting assignment:', error);
+            showNotification('Error: ' + error.message, 'error');
+        });
+}
+
+function updateLocation() {
+    // First, get the current assignment
+    fetch('../api/get_driver_assignment.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.has_assignment) {
+                const assignment = data.assignment;
+                const assignmentId = assignment.id;
+                
+                const currentLocation = prompt('Enter current location:');
+                if (!currentLocation) return;
+                
+                // Update location
+                fetch('../api/update_dispatch_location.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        schedule_id: assignmentId,
+                        current_location: currentLocation
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('Location updated successfully!', 'success');
+                        loadDriverAssignment();
+                    } else {
+                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    showNotification('Error: ' + error.message, 'error');
+                });
+            } else {
+                showNotification('No active assignment found', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error getting assignment:', error);
+            showNotification('Error: ' + error.message, 'error');
+        });
+}
+
+// ============================================
+// RESERVATION FUNCTIONS
+// ============================================
+function openReservationModal() {
+    const modal = document.getElementById('reservationModal');
+    if (!modal) return;
+    
+    console.log('Opening reservation modal...');
+    
+    // Reset form
+    const form = document.getElementById('reservationForm');
+    if (form) form.reset();
+    
+    // Set default dates (Manila time)
+    const now = new Date();
+    const manilaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    const twoHoursLater = new Date(manilaTime.getTime() + 2 * 60 * 60 * 1000);
+    
+    const formatDateForInput = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+    
+    const fromDate = document.getElementById('fromDate');
+    const toDate = document.getElementById('toDate');
+    
+    if (fromDate) fromDate.value = formatDateForInput(manilaTime);
+    if (toDate) toDate.value = formatDateForInput(twoHoursLater);
+    
+    // Load available vehicles
+    loadAvailableVehicles();
+    
+    modal.style.display = 'flex';
+}
+
+function closeReservationModal() {
+    const modal = document.getElementById('reservationModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function submitReservation(event) {
+    event.preventDefault();
+    
+    // Get form elements
+    const vehicleSelect = document.getElementById('vehicleSelect');
+    const customer_name = document.getElementById('customer_name');
+    const department = document.getElementById('department');
+    const delivery_address = document.getElementById('delivery_address');
+    const purpose = document.getElementById('purpose');
+    const fromDate = document.getElementById('fromDate');
+    const toDate = document.getElementById('toDate');
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    
+    // Validate
+    if (!vehicleSelect.value) {
+        showNotification('Please select a vehicle', 'error');
+        return;
+    }
+    
+    if (!customer_name.value.trim()) {
+        showNotification('Please enter customer name', 'error');
+        return;
+    }
+    
+    if (!delivery_address.value.trim()) {
+        showNotification('Please enter delivery address', 'error');
+        return;
+    }
+    
+    if (!purpose.value.trim()) {
+        showNotification('Please enter a purpose for the reservation', 'error');
+        return;
+    }
+    
+    const from = new Date(fromDate.value);
+    const to = new Date(toDate.value);
+    
+    if (from >= to) {
+        showNotification('End date must be after start date', 'error');
+        return;
+    }
+    
+    // Check if reservation is at least 1 hour
+    const diffHours = (to - from) / (1000 * 60 * 60);
+    if (diffHours < 1) {
+        showNotification('Reservation must be at least 1 hour', 'error');
+        return;
+    }
+    
+    // Prepare data
+    const formData = {
+        vehicle_id: vehicleSelect.value,
+        customer_name: customer_name.value.trim(),
+        department: department.value.trim() || 'Not specified',
+        delivery_address: delivery_address.value.trim(),
+        purpose: purpose.value.trim(),
+        from_date: fromDate.value,
+        to_date: toDate.value
+    };
+    
+    console.log('Submitting reservation:', formData);
+    
+    // Show loading state
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+    submitBtn.disabled = true;
+    
+    // Submit
+    fetch('../api/create_reservation.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => {
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Reservation response:', data);
+        
+        if (data.success) {
+            showNotification('Reservation submitted successfully!', 'success');
+            closeReservationModal();
+            
+            // Refresh relevant data
+            loadVehicleReservations();
+            loadVehicleAvailability();
+            
+            // If user is admin/dispatcher, also refresh pending approvals
+            const userRole = document.body.dataset.userRole;
+            if (userRole === 'admin' || userRole === 'dispatcher') {
+                loadDispatchSchedule();
+            }
+        } else {
+            showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Submit error:', error);
+        showNotification('Error: ' + error.message, 'error');
+    })
+    .finally(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
+function checkVehicleAvailability() {
+    const vehicleId = document.getElementById('vehicleSelect').value;
+    const fromDate = document.getElementById('fromDate').value;
+    const toDate = document.getElementById('toDate').value;
+    
+    if (!vehicleId || !fromDate || !toDate) return;
+    
+    fetch('../api/check_vehicle_availability.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            vehicle_id: vehicleId,
+            from_date: fromDate,
+            to_date: toDate
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        const availabilityMsg = document.getElementById('availabilityMessage');
+        if (!availabilityMsg) return;
+        
+        if (data.available) {
+            availabilityMsg.innerHTML = '<i class="fas fa-check-circle"></i> Vehicle is available for this time';
+            availabilityMsg.style.color = '#10b981';
+            document.querySelector('#reservationForm button[type="submit"]').disabled = false;
+        } else {
+            availabilityMsg.innerHTML = '<i class="fas fa-exclamation-circle"></i> Vehicle is not available for this time';
+            availabilityMsg.style.color = '#ef4444';
+            document.querySelector('#reservationForm button[type="submit"]').disabled = true;
+        }
+    })
+    .catch(error => console.error('Availability check error:', error));
+}
+
+// Add event listeners for real-time checking
+document.addEventListener('DOMContentLoaded', function() {
+    const fromDate = document.getElementById('fromDate');
+    const toDate = document.getElementById('toDate');
+    const vehicleSelect = document.getElementById('vehicleSelect');
+    
+    if (fromDate && toDate && vehicleSelect) {
+        [fromDate, toDate, vehicleSelect].forEach(element => {
+            element.addEventListener('change', checkVehicleAvailability);
+        });
+    }
+});
+
+function loadVehicleReservations() {
+    console.log('Loading vehicle reservations...');
+    
+    // Try multiple possible selectors
+    const possibleSelectors = [
+        '#tab-reservations .card-full .reservation-list',
+        '#tab-reservations .reservation-list',
+        '#tab-reservations .card-body .reservation-list'
+    ];
+    
+    let reservationList = null;
+    for (let selector of possibleSelectors) {
+        reservationList = document.querySelector(selector);
+        if (reservationList) {
+            console.log('Found reservation list with selector:', selector);
+            break;
+        }
+    }
+    
+    if (!reservationList) {
+        console.warn('Reservation list container not found. Available elements in tab-reservations:');
+        const tab = document.getElementById('tab-reservations');
+        if (tab) {
+            console.log(tab.innerHTML.substring(0, 500) + '...');
+        } else {
+            console.warn('tab-reservations element not found');
+        }
+        return;
+    }
+    
+    // Show loading state
+    reservationList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading reservations...</div>';
+    
+    fetch('../api/get_reservations.php')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Reservations data received:', data);
+            
+            if (data.success && data.reservations) {
+                console.log(`Displaying ${data.reservations.length} reservations`);
+                displayReservations(data.reservations);
+                updateReservationStats(data.reservations);
+            } else {
+                console.warn('No reservations data:', data);
+                reservationList.innerHTML = '<div class="empty-state">No reservations found</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading reservations:', error);
+            reservationList.innerHTML = '<div class="error-state">Failed to load reservations: ' + error.message + '</div>';
+        });
+}
+
+function displayReservations(reservations) {
+    console.log('Displaying reservations:', reservations);
+    
+    // Find all the containers
+    const allReservationsContainer = document.querySelector('#tab-reservations .card-full .reservation-list') || 
+                                     document.querySelector('#tab-reservations .reservation-list');
+    
+    const approvedContainer = document.querySelector('#tab-reservations .dashboard-grid .card:first-child .reservation-list');
+    const rejectedContainer = document.querySelector('#tab-reservations .dashboard-grid .card:last-child .reservation-list');
+    
+    if (!allReservationsContainer) {
+        console.error('Could not find reservations container');
+        return;
+    }
+    
+    // Filter reservations by status
+    const approved = reservations.filter(r => r.status === 'approved');
+    const rejected = reservations.filter(r => r.status === 'rejected');
+    const pending = reservations.filter(r => r.status === 'pending');
+    
+    console.log(`Stats - Total: ${reservations.length}, Approved: ${approved.length}, Rejected: ${rejected.length}, Pending: ${pending.length}`);
+    
+    // Update badges
+    document.querySelectorAll('#tab-reservations .card-badge').forEach(badge => {
+        const cardHeader = badge.closest('.card-header');
+        if (cardHeader) {
+            const headerText = cardHeader.textContent || '';
+            if (headerText.includes('Approved')) {
+                badge.textContent = approved.length + ' this week';
+            } else if (headerText.includes('Rejected')) {
+                badge.textContent = rejected.length + ' this week';
+            }
+        }
+    });
+    
+    // Display all reservations
+    if (reservations.length === 0) {
+        allReservationsContainer.innerHTML = '<div class="empty-state">No reservations found</div>';
+    } else {
+        let allHtml = '';
+        reservations.forEach(res => {
+            // Your data structure uses 'from' and 'to' which already have formatted dates
+            const fromDisplay = res.from || 'N/A';
+            const toDisplay = res.to || 'N/A';
+            
+            // Determine status styling
+            let statusColor, statusIcon, statusBg;
+            if (res.status === 'approved') {
+                statusColor = '#10b981';
+                statusIcon = 'check-circle';
+                statusBg = '#10b98120';
+            } else if (res.status === 'rejected') {
+                statusColor = '#ef4444';
+                statusIcon = 'times-circle';
+                statusBg = '#ef444420';
+            } else if (res.status === 'pending') {
+                statusColor = '#f59e0b';
+                statusIcon = 'clock';
+                statusBg = '#f59e0b20';
+            } else {
+                statusColor = '#6b7280';
+                statusIcon = 'question-circle';
+                statusBg = '#6b728020';
+            }
+            
+            allHtml += `
+                <div class="reservation-item" style="display: flex; align-items: center; justify-content: space-between; padding: 15px; border-bottom: 1px solid #f0f0f0;">
+                    <div style="flex: 2;">
+                        <div style="font-weight: 600; font-size: 16px; margin-bottom: 5px;">
+                            ${res.vehicle_name || 'Unknown Vehicle'}
+                        </div>
+                        <div style="font-size: 13px; color: #64748b; margin-bottom: 3px;">
+                            <i class="fas fa-user"></i> ${res.requester || 'Unknown'} • ${res.department || 'N/A'}
+                        </div>
+                        <div style="font-size: 13px; color: #2563eb; margin-bottom: 3px;">
+                            <i class="fas fa-calendar"></i> ${fromDisplay} - ${toDisplay}
+                        </div>
+                        <div style="font-size: 13px; color: #666;">
+                            <i class="fas fa-align-left"></i> ${res.purpose || 'No purpose specified'}
+                        </div>
+                        ${res.notes ? `<div style="font-size: 12px; color: #999; margin-top: 5px;"><i class="fas fa-sticky-note"></i> ${res.notes}</div>` : ''}
+                    </div>
+                    <div style="flex: 1; text-align: right;">
+                        <span style="display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background-color: ${statusBg}; color: ${statusColor};">
+                            <i class="fas fa-${statusIcon}"></i> ${res.status.toUpperCase()}
+                        </span>
+                        ${res.status === 'pending' ? `
+                            <div style="margin-top: 10px;">
+                                <button onclick="approveReservation(${res.id})" class="btn-small" style="background-color: #10b981; color: white; border: none; padding: 5px 10px; border-radius: 4px; margin-right: 5px; cursor: pointer;">
+                                    <i class="fas fa-check"></i> Approve
+                                </button>
+                                <button onclick="rejectReservation(${res.id})" class="btn-small" style="background-color: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                                    <i class="fas fa-times"></i> Reject
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        allReservationsContainer.innerHTML = allHtml;
+    }
+    
+    // Display approved reservations in the approved card
+    if (approvedContainer) {
+        if (approved.length === 0) {
+            approvedContainer.innerHTML = '<div class="empty-state">No approved reservations</div>';
+        } else {
+            let approvedHtml = '';
+            approved.forEach(res => {
+                approvedHtml += `
+                    <div style="padding: 12px; border-bottom: 1px solid #f0f0f0;">
+                        <div style="font-weight: 500;">${res.vehicle_name}</div>
+                        <div style="font-size: 12px; color: #666;">${res.requester} • ${res.from}</div>
+                    </div>
+                `;
+            });
+            approvedContainer.innerHTML = approvedHtml;
+        }
+    }
+    
+    // Display rejected reservations in the rejected card
+    if (rejectedContainer) {
+        if (rejected.length === 0) {
+            rejectedContainer.innerHTML = '<div class="empty-state">No rejected reservations</div>';
+        } else {
+            let rejectedHtml = '';
+            rejected.forEach(res => {
+                rejectedHtml += `
+                    <div style="padding: 12px; border-bottom: 1px solid #f0f0f0;">
+                        <div style="font-weight: 500;">${res.vehicle_name}</div>
+                        <div style="font-size: 12px; color: #666;">${res.requester} • ${res.from}</div>
+                    </div>
+                `;
+            });
+            rejectedContainer.innerHTML = rejectedHtml;
+        }
+    }
+}
+
+function updateReservationStats(reservations) {
+    const pending = reservations.filter(r => r.status === 'pending').length;
+    const approved = reservations.filter(r => r.status === 'approved').length;
+    const rejected = reservations.filter(r => r.status === 'rejected').length;
+    console.log(`Pending: ${pending}, Approved: ${approved}, Rejected: ${rejected}`);
+}
+
+function approveReservation(resId) {
+    if (!confirm('Approve this reservation? This will create a shipment.')) return;
+    
+    fetch('../api/update_reservation_status.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            reservation_id: resId,
+            status: 'approved',
+            reason: 'Approved by dispatcher'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Reservation approved! Shipment created.', 'success');
+            loadVehicleReservations();
+            loadDispatchSchedule();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    });
+}
+
+function rejectReservation(resId) {
+    const reason = prompt('Please enter reason for rejection:');
+    if (reason === null) return;
+    
+    fetch('../api/update_reservation_status.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            reservation_id: resId,
+            status: 'rejected',
+            reason: reason
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Reservation rejected!', 'info');
+            loadVehicleReservations();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    });
+}
+
+function viewReservation(resId) {
+    console.log('Viewing reservation:', resId);
+    showNotification(`Viewing reservation ${resId}`, 'info');
+}
+
+function editReservation(resId) {
+    console.log('Editing reservation:', resId);
+    openReservationModal(resId);
+}
+
+// ============================================
+// DISPATCHER FUNCTIONS
+// ============================================
+
+function openAssignDriverModal(scheduleId, vehicle, route) {
+    const modal = document.getElementById('assignDriverModal');
+    if (!modal) return;
+    
+    document.getElementById('scheduleId').value = scheduleId;
+    document.getElementById('assignVehicle').textContent = vehicle;
+    document.getElementById('assignRoute').textContent = route;
+    
+    const driverSelect = document.getElementById('driverSelect');
+    driverSelect.innerHTML = '<option value="">Loading drivers...</option>';
+    
+    fetch('../api/get_available_drivers.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.drivers.length > 0) {
+                let options = '<option value="">Select a driver</option>';
+                data.drivers.forEach(d => {
+                    options += `<option value="${d.id}">${d.full_name} (${d.employee_id})</option>`;
+                });
+                driverSelect.innerHTML = options;
+            } else {
+                driverSelect.innerHTML = '<option value="">No available drivers</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading drivers:', error);
+            driverSelect.innerHTML = '<option value="">Error loading drivers</option>';
+        });
+    
+    modal.style.display = 'flex';
+}
+
+function closeAssignDriverModal() {
+    document.getElementById('assignDriverModal').style.display = 'none';
+}
+
+function assignDriver(event) {
+    event.preventDefault();
+    
+    const scheduleId = document.getElementById('scheduleId').value;
+    const driverId = document.getElementById('driverSelect').value;
+    
+    if (!driverId) {
+        alert('Please select a driver');
+        return;
+    }
+    
+    fetch('../api/assign_driver_to_schedule.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            schedule_id: scheduleId,
+            driver_id: driverId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Driver assigned successfully!', 'success');
+            closeAssignDriverModal();
+            loadDispatchSchedule();
+        } else {
+            showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('Error: ' + error.message, 'error');
+    });
+}
+
+// ============================================
+// VEHICLE FUNCTIONS
+// ============================================
+// In your fleet.js file, update the loadAvailableVehicles function
+
+function loadAvailableVehicles() {
+    const vehicleSelect = document.getElementById('vehicleSelect');
+    if (!vehicleSelect) return;
+    
+    vehicleSelect.innerHTML = '<option value="">Loading available vehicles...</option>';
+    vehicleSelect.disabled = true;
+    
+    fetch('../api/get_vehicles_for_reservation.php?_=' + new Date().getTime())
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Available vehicles:', data);
+            
+            if (data.success && data.vehicles && data.vehicles.length > 0) {
+                let options = '<option value="">Select a vehicle</option>';
+                
+                data.vehicles.forEach(v => {
+                    options += `<option value="${v.id}">
+                        ${v.asset_name} (Condition: ${v.asset_condition}%) - Available Now
+                    </option>`;
+                });
+                
+                vehicleSelect.innerHTML = options;
+                vehicleSelect.disabled = false;
+            } else {
+                vehicleSelect.innerHTML = '<option value="">No vehicles available at this time</option>';
+                vehicleSelect.disabled = true;
+                
+                // Show helpful message
+                if (data.message) {
+                    showNotification(data.message, 'info');
+                } else {
+                    showNotification('All vehicles are currently in use or under maintenance', 'info');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading vehicles:', error);
+            vehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+            vehicleSelect.disabled = true;
+            showNotification('Failed to load vehicles. Please try again.', 'error');
+        });
+}
+
+// Update the openReservationModal function
 function loadVehicleAvailability() {
     const vehicleList = document.querySelector('.vehicle-list');
     if (!vehicleList) return;
     
-    const vehicles = [
-        { id: 'VH-001', name: 'Volvo FH16', type: 'Truck', plate: 'ABC-1234', availability: 'available', fuel: 78, mileage: 45230, driver: 'John Smith' },
-        { id: 'VH-002', name: 'Scania R500', type: 'Truck', plate: 'XYZ-5678', availability: 'in-use', fuel: 45, mileage: 67890, driver: 'Mike Johnson' },
-        { id: 'VH-003', name: 'Mercedes Sprinter', type: 'Van', plate: 'DEF-9012', availability: 'maintenance', fuel: 92, mileage: 12340, driver: null },
-        { id: 'VH-004', name: 'MAN TGX', type: 'Truck', plate: 'GHI-3456', availability: 'available', fuel: 67, mileage: 34560, driver: 'Sarah Wilson' },
-        { id: 'VH-005', name: 'Ford Transit', type: 'Van', plate: 'JKL-7890', availability: 'reserved', fuel: 89, mileage: 23450, driver: null },
-        { id: 'VH-006', name: 'Iveco Stralis', type: 'Truck', plate: 'MNO-1234', availability: 'in-use', fuel: 34, mileage: 89120, driver: 'Tom Brown' }
-    ];
+    vehicleList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading vehicles...</div>';
+    
+    fetch('../api/get_vehicles.php')
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.vehicles.length > 0) {
+                displayVehicles(data.vehicles);
+            } else {
+                vehicleList.innerHTML = '<div class="empty-state">No vehicles available</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading vehicles:', error);
+            vehicleList.innerHTML = '<div class="error-state">Failed to load vehicles</div>';
+        });
+}
+
+function displayVehicles(vehicles) {
+    const vehicleList = document.querySelector('.vehicle-list');
+    if (!vehicleList) return;
     
     let html = '';
     vehicles.forEach(vehicle => {
+        // Determine status based on actual data
+        let availability, statusText, statusIcon, statusColor, extraInfo = '';
+        
+        if (vehicle.has_pending_maintenance) {
+            availability = 'maintenance';
+            statusText = 'IN MAINTENANCE';
+            statusIcon = 'wrench';
+            statusColor = '#ef4444'; // red
+            extraInfo = `<div style="font-size: 11px; color: #ef4444; margin-top: 5px;">
+                <i class="fas fa-exclamation-triangle"></i> 
+                Maintenance: ${vehicle.maintenance_issue || 'Scheduled'} 
+                (Due: ${vehicle.due_date || 'N/A'})
+            </div>`;
+        } else if (vehicle.is_in_use) {
+            availability = 'in-use';
+            statusText = 'IN USE';
+            statusIcon = 'play-circle';
+            statusColor = '#f59e0b'; // orange
+            extraInfo = `<div style="font-size: 11px; color: #f59e0b; margin-top: 5px;">
+                <i class="fas fa-user"></i> 
+                Driver: ${vehicle.current_driver || 'Unknown'}
+            </div>`;
+        } else {
+            availability = 'available';
+            statusText = 'AVAILABLE';
+            statusIcon = 'check-circle';
+            statusColor = '#10b981'; // green
+        }
+        
         html += `
-            <div class="vehicle-item">
+            <div class="vehicle-item" data-type="${vehicle.asset_type}" data-status="${vehicle.asset_status}">
                 <div class="vehicle-info">
                     <div class="vehicle-icon">
-                        <i class="fas fa-${vehicle.type === 'Truck' ? 'truck' : 'van-shuttle'}"></i>
+                        <i class="fas fa-${vehicle.asset_type === 'vehicle' ? 'truck' : 'cog'}"></i>
                     </div>
                     <div class="vehicle-details">
-                        <h3>${vehicle.name} (${vehicle.id})</h3>
+                        <h3>${vehicle.asset_name} (VH-${String(vehicle.id).padStart(3, '0')})</h3>
                         <div class="vehicle-meta">
-                            <span><i class="fas fa-plate"></i> ${vehicle.plate}</span>
-                            <span><i class="fas fa-tachometer-alt"></i> ${vehicle.mileage.toLocaleString()} km</span>
-                            ${vehicle.driver ? `<span><i class="fas fa-user"></i> ${vehicle.driver}</span>` : ''}
+                            <span><i class="fas fa-plate"></i> ABC-${String(vehicle.id).padStart(4, '0')}</span>
+                            <span><i class="fas fa-tachometer-alt"></i> ${vehicle.mileage || 'N/A'} km</span>
+                            ${vehicle.current_driver ? `<span><i class="fas fa-user"></i> ${vehicle.current_driver}</span>` : ''}
                         </div>
+                        ${extraInfo}
                     </div>
                 </div>
                 <div class="vehicle-status">
-                    <span class="availability-badge availability-${vehicle.availability}">
-                        <i class="fas fa-${vehicle.availability === 'available' ? 'check-circle' : vehicle.availability === 'in-use' ? 'play-circle' : vehicle.availability === 'maintenance' ? 'wrench' : 'calendar-check'}"></i>
-                        ${vehicle.availability.replace('-', ' ').toUpperCase()}
+                    <span class="availability-badge availability-${availability}" style="background-color: ${statusColor}20; color: ${statusColor};">
+                        <i class="fas fa-${statusIcon}"></i>
+                        ${statusText}
                     </span>
                 </div>
                 <div class="vehicle-metrics">
                     <div class="vehicle-metric">
-                        <div class="value">${vehicle.fuel}%</div>
+                        <div class="value">${vehicle.fuel_level || '85'}%</div>
                         <div class="label">Fuel</div>
                     </div>
                     <div class="vehicle-metric">
-                        <div class="value">${Math.round(vehicle.mileage / 100)}%</div>
-                        <div class="label">Usage</div>
+                        <div class="value">${vehicle.asset_condition}%</div>
+                        <div class="label">Condition</div>
                     </div>
                 </div>
             </div>
@@ -150,18 +1111,179 @@ function loadVehicleAvailability() {
     vehicleList.innerHTML = html;
 }
 
-// Load Transport Efficiency
+function loadVehicleAssignments() {
+    const assignmentList = document.querySelector('.assignment-list');
+    if (!assignmentList) return;
+    
+    assignmentList.innerHTML = '<div class="empty-state">Loading assignments...</div>';
+    
+    fetch('../api/get_vehicle_assignments.php')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Assignment data:', data);
+            
+            if (data.success) {
+                if (data.assignments && data.assignments.length > 0) {
+                    let html = '';
+                    data.assignments.forEach(assignment => {
+                        // Determine status color based on your status values
+                        let statusColor = '#10b981';
+                        let statusIcon = 'check';
+                        
+                        if (assignment.status === 'pending' || assignment.status === 'scheduled') {
+                            statusColor = '#f59e0b'; // orange
+                            statusIcon = 'clock';
+                        } else if (assignment.status === 'in_transit' || assignment.status === 'in_progress') {
+                            statusColor = '#3b82f6'; // blue
+                            statusIcon = 'play';
+                        } else if (assignment.status === 'completed' || assignment.status === 'delivered') {
+                            statusColor = '#10b981'; // green
+                            statusIcon = 'check';
+                        }
+                        
+                        html += `
+                            <div class="assignment-item" style="display: flex; align-items: center; justify-content: space-between; padding: 15px; border-bottom: 1px solid #f0f0f0;">
+                                <div style="flex: 2;">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <div style="width: 40px; height: 40px; background-color: #e6f0ff; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #2563eb;">
+                                            <i class="fas fa-truck"></i>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 600;">${assignment.vehicle || 'Unknown Vehicle'}</div>
+                                            <div style="font-size: 12px; color: #64748b;">
+                                                <i class="fas fa-hashtag"></i> ${assignment.vehicle_code || 'N/A'} • 
+                                                <i class="fas fa-plate"></i> ${assignment.plate || 'No plate'}
+                                            </div>
+                                            ${assignment.purpose ? `<div style="font-size: 11px; color: #999; margin-top: 2px;">${assignment.purpose.substring(0, 30)}${assignment.purpose.length > 30 ? '...' : ''}</div>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="flex: 2;">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <div style="width: 40px; height: 40px; background-color: #f3f4f6; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #4b5563;">
+                                            <i class="fas fa-user"></i>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 500;">${assignment.driver || 'Unassigned'}</div>
+                                            <div style="font-size: 12px; color: #64748b;">Driver</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 13px; font-weight: 500;">
+                                        <i class="fas fa-calendar"></i> ${assignment.date || 'TBD'}
+                                    </div>
+                                    <div style="font-size: 12px; color: #64748b;">
+                                        <i class="fas fa-clock"></i> ${assignment.shift || 'Regular'}
+                                    </div>
+                                </div>
+                                <div style="flex: 1; text-align: center;">
+                                    <span style="display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background-color: ${statusColor}20; color: ${statusColor};">
+                                        <i class="fas fa-${statusIcon}"></i> ${assignment.status || 'pending'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <button class="btn-icon" onclick="editAssignment(${assignment.id})" style="background: none; border: none; color: #64748b; cursor: pointer; padding: 8px; border-radius: 4px;" title="Edit Assignment">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    assignmentList.innerHTML = html;
+                } else {
+                    assignmentList.innerHTML = '<div class="empty-state">No vehicle assignments found</div>';
+                }
+            } else {
+                assignmentList.innerHTML = '<div class="empty-state">Error loading assignments: ' + (data.error || 'Unknown error') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading assignments:', error);
+            assignmentList.innerHTML = '<div class="error-state">Failed to load assignments. Please try again.</div>';
+        });
+}
+
+
+
+function loadFleetCondition() {
+    const conditionGrid = document.querySelector('.condition-grid');
+    if (!conditionGrid) return;
+    
+    conditionGrid.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading fleet condition...</div>';
+    
+    fetch('../api/get_fleet_condition.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayFleetCondition(data.conditions);
+            } else {
+                conditionGrid.innerHTML = '<div class="empty-state">No condition data</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading fleet condition:', error);
+            conditionGrid.innerHTML = '<div class="error-state">Failed to load condition</div>';
+        });
+}
+
+function displayFleetCondition(conditions) {
+    const conditionGrid = document.querySelector('.condition-grid');
+    if (!conditionGrid) return;
+    
+    let html = '';
+    conditions.forEach(condition => {
+        html += `
+            <div class="condition-item">
+                <div class="condition-icon">
+                    <i class="fas fa-${condition.icon}"></i>
+                </div>
+                <h3>${condition.category}</h3>
+                <div class="condition-value">${condition.count}</div>
+                <div class="condition-bar">
+                    <div class="condition-fill ${condition.color}" style="width: ${condition.percentage}%"></div>
+                </div>
+                <div class="condition-label">${condition.percentage}% of fleet</div>
+            </div>
+        `;
+    });
+    
+    conditionGrid.innerHTML = html;
+}
+
+// ============================================
+// TRANSPORT EFFICIENCY FUNCTIONS
+// ============================================
+
 function loadTransportEfficiency() {
     const efficiencyList = document.querySelector('.efficiency-list');
     if (!efficiencyList) return;
     
-    const efficiency = [
-        { metric: 'Fuel Efficiency', current: 8.2, average: 9.5, target: 10, unit: 'km/l' },
-        { metric: 'Load Capacity Utilization', current: 78, average: 75, target: 85, unit: '%' },
-        { metric: 'Empty Running', current: 12, average: 15, target: 10, unit: '%' },
-        { metric: 'On-time Delivery', current: 94, average: 92, target: 98, unit: '%' },
-        { metric: 'Cost per Kilometer', current: 1.24, average: 1.35, target: 1.2, unit: '$' }
-    ];
+    efficiencyList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading efficiency data...</div>';
+    
+    fetch('../api/get_transport_efficiency.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayEfficiency(data.efficiency);
+            } else {
+                efficiencyList.innerHTML = '<div class="empty-state">No efficiency data available</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading efficiency:', error);
+            efficiencyList.innerHTML = '<div class="error-state">Failed to load efficiency data</div>';
+        });
+}
+
+function displayEfficiency(efficiency) {
+    const efficiencyList = document.querySelector('.efficiency-list');
+    if (!efficiencyList) return;
     
     let html = '';
     efficiency.forEach(item => {
@@ -188,18 +1310,34 @@ function loadTransportEfficiency() {
     efficiencyList.innerHTML = html;
 }
 
-// Load Delay Analysis
+// ============================================
+// DELAY ANALYSIS FUNCTIONS
+// ============================================
+
 function loadDelayAnalysis() {
     const delayList = document.querySelector('.delay-list');
     if (!delayList) return;
     
-    const delays = [
-        { id: 'TR-2024-001', route: 'Warehouse A to Distribution Center', reason: 'Traffic congestion', duration: 45, type: 'traffic' },
-        { id: 'TR-2024-002', route: 'Port to Warehouse B', reason: 'Loading delay', duration: 30, type: 'operational' },
-        { id: 'TR-2024-003', route: 'Depot to Customer Site', reason: 'Vehicle breakdown', duration: 120, type: 'mechanical' },
-        { id: 'TR-2024-004', route: 'Supplier to Factory', reason: 'Weather conditions', duration: 60, type: 'weather' },
-        { id: 'TR-2024-005', route: 'Cross-dock to Store', reason: 'Documentation issues', duration: 25, type: 'administrative' }
-    ];
+    delayList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading delay data...</div>';
+    
+    fetch('../api/get_delay_analysis.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.delays.length > 0) {
+                displayDelays(data.delays);
+            } else {
+                delayList.innerHTML = '<div class="empty-state">No delays reported</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading delays:', error);
+            delayList.innerHTML = '<div class="error-state">Failed to load delay data</div>';
+        });
+}
+
+function displayDelays(delays) {
+    const delayList = document.querySelector('.delay-list');
+    if (!delayList) return;
     
     let html = '';
     delays.forEach(delay => {
@@ -228,28 +1366,46 @@ function loadDelayAnalysis() {
     delayList.innerHTML = html;
 }
 
-// Load Driver Performance
+// ============================================
+// DRIVER PERFORMANCE FUNCTIONS
+// ============================================
+
 function loadDriverPerformance() {
     const driverList = document.querySelector('.driver-list');
     if (!driverList) return;
     
-    const drivers = [
-        { name: 'John Smith', id: 'DR-001', trips: 45, rating: 4.8, efficiency: 96, safety: 98, avatar: 'JS' },
-        { name: 'Mike Johnson', id: 'DR-002', trips: 38, rating: 4.6, efficiency: 92, safety: 94, avatar: 'MJ' },
-        { name: 'Sarah Wilson', id: 'DR-003', trips: 42, rating: 4.9, efficiency: 98, safety: 99, avatar: 'SW' },
-        { name: 'Tom Brown', id: 'DR-004', trips: 35, rating: 4.5, efficiency: 89, safety: 92, avatar: 'TB' },
-        { name: 'Emily Davis', id: 'DR-005', trips: 28, rating: 4.7, efficiency: 94, safety: 96, avatar: 'ED' }
-    ];
+    driverList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading driver data...</div>';
+    
+    fetch('../api/get_driver_performance.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.drivers.length > 0) {
+                displayDriverPerformance(data.drivers);
+            } else {
+                driverList.innerHTML = '<div class="empty-state">No driver data available</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading driver performance:', error);
+            driverList.innerHTML = '<div class="error-state">Failed to load driver data</div>';
+        });
+}
+
+function displayDriverPerformance(drivers) {
+    const driverList = document.querySelector('.driver-list');
+    if (!driverList) return;
     
     let html = '';
     drivers.forEach(driver => {
+        const initials = driver.full_name.split(' ').map(n => n[0]).join('').substring(0, 2);
+        
         html += `
             <div class="driver-item">
-                <div class="driver-avatar">${driver.avatar}</div>
+                <div class="driver-avatar">${initials}</div>
                 <div class="driver-info">
-                    <h3>${driver.name}</h3>
+                    <h3>${driver.full_name}</h3>
                     <div class="driver-meta">
-                        <span>${driver.id}</span>
+                        <span>${driver.employee_id}</span>
                         <span>${driver.trips} trips</span>
                     </div>
                 </div>
@@ -274,19 +1430,85 @@ function loadDriverPerformance() {
     driverList.innerHTML = html;
 }
 
-// Load Trip History
+function loadDriverActivity() {
+    const activityTimeline = document.querySelector('.activity-timeline');
+    if (!activityTimeline) return;
+    
+    activityTimeline.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading activity...</div>';
+    
+    fetch('../api/get_driver_activity.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.activities.length > 0) {
+                displayDriverActivity(data.activities);
+            } else {
+                activityTimeline.innerHTML = '<div class="empty-state">No driver activity</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading driver activity:', error);
+            activityTimeline.innerHTML = '<div class="error-state">Failed to load activity</div>';
+        });
+}
+
+function displayDriverActivity(activities) {
+    const activityTimeline = document.querySelector('.activity-timeline');
+    if (!activityTimeline) return;
+    
+    let html = '';
+    activities.forEach(activity => {
+        html += `
+            <div class="activity-item">
+                <div class="activity-dot ${activity.type}"></div>
+                <div class="activity-content">
+                    <div class="activity-header">
+                        <span class="activity-title">${activity.driver}</span>
+                        <span class="activity-time">${activity.time}</span>
+                    </div>
+                    <div class="activity-desc">${activity.action} - ${activity.detail}</div>
+                    <div class="activity-meta">
+                        <span><i class="fas fa-map-marker-alt"></i> GPS Tracking</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    activityTimeline.innerHTML = html;
+}
+
+function updateDriverActivity() {
+    console.log('Updating driver activity...');
+}
+
+// ============================================
+// TRIP HISTORY FUNCTIONS
+// ============================================
+
 function loadTripHistory() {
     const tripList = document.querySelector('.trip-list');
     if (!tripList) return;
     
-    const trips = [
-        { id: 'TR-001', from: 'Warehouse A', to: 'Distribution Center', date: '2024-02-20', distance: 245, duration: 3.5, status: 'completed', driver: 'John Smith' },
-        { id: 'TR-002', from: 'Port', to: 'Warehouse B', date: '2024-02-20', distance: 180, duration: 2.5, status: 'in-progress', driver: 'Mike Johnson' },
-        { id: 'TR-003', from: 'Depot', to: 'Customer Site', date: '2024-02-19', distance: 95, duration: 1.5, status: 'completed', driver: 'Sarah Wilson' },
-        { id: 'TR-004', from: 'Supplier', to: 'Factory', date: '2024-02-19', distance: 320, duration: 4.5, status: 'delayed', driver: 'Tom Brown' },
-        { id: 'TR-005', from: 'Cross-dock', to: 'Store', date: '2024-02-18', distance: 65, duration: 1.2, status: 'completed', driver: 'Emily Davis' },
-        { id: 'TR-006', from: 'Warehouse B', to: 'Airport', date: '2024-02-18', distance: 150, duration: 2.2, status: 'completed', driver: 'John Smith' }
-    ];
+    tripList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading trip history...</div>';
+    
+    fetch('../api/get_trip_history.php?limit=10')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.trips.length > 0) {
+                displayTripHistory(data.trips);
+            } else {
+                tripList.innerHTML = '<div class="empty-state">No trip history available</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading trip history:', error);
+            tripList.innerHTML = '<div class="error-state">Failed to load trip history</div>';
+        });
+}
+
+function displayTripHistory(trips) {
+    const tripList = document.querySelector('.trip-list');
+    if (!tripList) return;
     
     let html = '';
     trips.forEach(trip => {
@@ -323,191 +1545,94 @@ function loadTripHistory() {
     tripList.innerHTML = html;
 }
 
-// Load Driver Activity
-function loadDriverActivity() {
-    const activityTimeline = document.querySelector('.activity-timeline');
-    if (!activityTimeline) return;
-    
-    const activities = [
-        { driver: 'John Smith', action: 'Started trip', detail: 'Warehouse A → Distribution Center', time: '10 minutes ago', type: 'green' },
-        { driver: 'Mike Johnson', action: 'Completed trip', detail: 'Port → Warehouse B', time: '25 minutes ago', type: 'blue' },
-        { driver: 'Sarah Wilson', action: 'Vehicle check', detail: 'Pre-trip inspection', time: '1 hour ago', type: 'blue' },
-        { driver: 'Tom Brown', action: 'Delay reported', detail: 'Traffic on Highway 101', time: '2 hours ago', type: 'amber' },
-        { driver: 'Emily Davis', action: 'Started break', detail: '30 min rest stop', time: '3 hours ago', type: 'amber' }
-    ];
-    
-    let html = '';
-    activities.forEach(activity => {
-        html += `
-            <div class="activity-item">
-                <div class="activity-dot ${activity.type}"></div>
-                <div class="activity-content">
-                    <div class="activity-header">
-                        <span class="activity-title">${activity.driver}</span>
-                        <span class="activity-time">${activity.time}</span>
-                    </div>
-                    <div class="activity-desc">${activity.action} - ${activity.detail}</div>
-                    <div class="activity-meta">
-                        <span><i class="fas fa-map-marker-alt"></i> GPS Tracking</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    
-    activityTimeline.innerHTML = html;
-}
+// ============================================
+// DISPATCH SCHEDULE FUNCTIONS
+// ============================================
 
-// Load Vehicle Reservations
-function loadVehicleReservations() {
-    const reservationList = document.querySelector('.reservation-list');
-    if (!reservationList) return;
-    
-    const reservations = [
-        { id: 'RES-001', vehicle: 'Volvo FH16', requester: 'John Smith', department: 'Logistics', from: '2024-02-21', to: '2024-02-23', status: 'approved' },
-        { id: 'RES-002', vehicle: 'Scania R500', requester: 'Mike Johnson', department: 'Transport', from: '2024-02-22', to: '2024-02-24', status: 'pending' },
-        { id: 'RES-003', vehicle: 'Mercedes Sprinter', requester: 'Sarah Wilson', department: 'Delivery', from: '2024-02-21', to: '2024-02-22', status: 'rejected' },
-        { id: 'RES-004', vehicle: 'MAN TGX', requester: 'Tom Brown', department: 'Logistics', from: '2024-02-23', to: '2024-02-25', status: 'approved' },
-        { id: 'RES-005', vehicle: 'Ford Transit', requester: 'Emily Davis', department: 'Maintenance', from: '2024-02-21', to: '2024-02-21', status: 'pending' }
-    ];
-    
-    let html = '';
-    reservations.forEach(res => {
-        html += `
-            <div class="reservation-item">
-                <div class="reservation-info">
-                    <div class="reservation-icon">
-                        <i class="fas fa-calendar-check"></i>
-                    </div>
-                    <div class="reservation-details">
-                        <h3>${res.vehicle}</h3>
-                        <div class="reservation-meta">
-                            <span>${res.id}</span>
-                            <span>${res.requester}</span>
-                            <span>${res.department}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="reservation-dates">
-                    <i class="fas fa-calendar"></i>
-                    ${res.from} - ${res.to}
-                </div>
-                <div class="reservation-status">
-                    <span class="reservation-badge reservation-${res.status}">
-                        <i class="fas fa-${res.status === 'approved' ? 'check-circle' : res.status === 'pending' ? 'clock' : 'times-circle'}"></i>
-                        ${res.status}
-                    </span>
-                </div>
-                <div class="reservation-actions">
-                    <button class="reservation-btn" onclick="viewReservation('${res.id}')" title="View">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="reservation-btn" onclick="editReservation('${res.id}')" title="Edit">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-    });
-    
-    reservationList.innerHTML = html;
-}
-
-// Load Dispatch Schedule
 function loadDispatchSchedule() {
     const scheduleList = document.querySelector('.schedule-list');
     if (!scheduleList) return;
     
-    const schedules = [
-        { time: '08:00', vehicle: 'Volvo FH16', driver: 'John Smith', route: 'Warehouse A → DC', type: 'Delivery' },
-        { time: '09:30', vehicle: 'Scania R500', driver: 'Mike Johnson', route: 'Port → Warehouse B', type: 'Pickup' },
-        { time: '11:00', vehicle: 'Mercedes Sprinter', driver: 'Sarah Wilson', route: 'Depot → Customer', type: 'Delivery' },
-        { time: '13:30', vehicle: 'MAN TGX', driver: 'Tom Brown', route: 'Supplier → Factory', type: 'Pickup' },
-        { time: '15:00', vehicle: 'Ford Transit', driver: 'Emily Davis', route: 'Cross-dock → Store', type: 'Delivery' },
-        { time: '16:30', vehicle: 'Iveco Stralis', driver: 'Pending', route: 'Warehouse B → Airport', type: 'Transfer' }
-    ];
+    scheduleList.innerHTML = '<div class="empty-state">Loading schedule...</div>';
     
-    let html = '';
-    schedules.forEach(schedule => {
-        html += `
-            <div class="schedule-item">
-                <div class="schedule-time">${schedule.time}</div>
-                <div class="schedule-content">
-                    <div class="schedule-title">${schedule.route}</div>
-                    <div class="schedule-meta">
-                        <span>${schedule.vehicle}</span>
-                        <span>${schedule.type}</span>
-                    </div>
-                </div>
-                <div class="schedule-assignee">
-                    <div class="assignee-avatar">${schedule.driver.split(' ').map(n => n[0]).join('')}</div>
-                    <span class="assignee-name">${schedule.driver}</span>
-                </div>
-            </div>
-        `;
-    });
-    
-    scheduleList.innerHTML = html;
+    fetch('../api/get_dispatch_schedule.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.schedule && data.schedule.length > 0) {
+                    let html = '';
+                    data.schedule.forEach(item => {
+                        const vehicle = item.vehicle.replace(/'/g, "\\'");
+                        const route = item.route.replace(/'/g, "\\'");
+                        
+                        html += `
+                            <div class="schedule-item" style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0;">
+                                <div style="width: 80px; font-weight: 600; color: #2563eb;">${item.time}</div>
+                                <div style="flex: 2;">
+                                    <div style="font-weight: 500;">${item.route}</div>
+                                    <div style="font-size: 12px; color: #64748b;">${item.vehicle} • ${item.type}</div>
+                                </div>
+                                <div style="text-align: right; min-width: 150px;">
+                                    <div style="font-weight: 500;">${item.driver}</div>
+                                    <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">Driver</div>
+                                    ${item.driver === 'Unassigned' ? 
+                                        `<button class="btn-assign" onclick="openAssignDriverModal(${item.id}, '${vehicle}', '${route}')" style="background-color: #2563eb; color: white; border: none; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                            <i class="fas fa-user-plus"></i> Assign Driver
+                                        </button>` : 
+                                        `<button class="btn-change" onclick="openAssignDriverModal(${item.id}, '${vehicle}', '${route}')" style="background-color: #f59e0b; color: white; border: none; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                            <i class="fas fa-edit"></i> Change Driver
+                                        </button>`
+                                    }
+                                </div>
+                            </div>
+                        `;
+                    });
+                    scheduleList.innerHTML = html;
+                } else {
+                    scheduleList.innerHTML = '<div class="empty-state">No dispatch schedule for today</div>';
+                }
+            } else {
+                scheduleList.innerHTML = '<div class="empty-state">Error loading schedule</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading schedule:', error);
+            scheduleList.innerHTML = '<div class="empty-state">Error loading schedule</div>';
+        });
 }
 
-// Load Vehicle Assignments
-function loadVehicleAssignments() {
-    const assignmentList = document.querySelector('.assignment-list');
-    if (!assignmentList) return;
-    
-    const assignments = [
-        { vehicle: 'Volvo FH16', plate: 'ABC-1234', driver: 'John Smith', date: '2024-02-20', shift: 'Morning', status: 'active' },
-        { vehicle: 'Scania R500', plate: 'XYZ-5678', driver: 'Mike Johnson', date: '2024-02-20', shift: 'Afternoon', status: 'active' },
-        { vehicle: 'MAN TGX', plate: 'GHI-3456', driver: 'Sarah Wilson', date: '2024-02-20', shift: 'Morning', status: 'active' },
-        { vehicle: 'Iveco Stralis', plate: 'MNO-1234', driver: 'Tom Brown', date: '2024-02-20', shift: 'Night', status: 'active' }
-    ];
-    
-    let html = '';
-    assignments.forEach(assignment => {
-        html += `
-            <div class="assignment-item">
-                <div class="assignment-vehicle">
-                    <i class="fas fa-truck"></i>
-                    <span>${assignment.vehicle}</span>
-                    <span style="font-size: 12px; color: #64748b;">${assignment.plate}</span>
-                </div>
-                <div class="assignment-driver">
-                    <i class="fas fa-user"></i>
-                    <span>${assignment.driver}</span>
-                </div>
-                <div class="assignment-date">
-                    <i class="fas fa-calendar"></i>
-                    ${assignment.date} (${assignment.shift})
-                </div>
-                <div class="assignment-status">
-                    <span class="availability-badge availability-available">
-                        <i class="fas fa-check-circle"></i>
-                        ${assignment.status}
-                    </span>
-                </div>
-            </div>
-        `;
-    });
-    
-    assignmentList.innerHTML = html;
-}
+// ============================================
+// MAINTENANCE FUNCTIONS
+// ============================================
 
-// Load Maintenance Report
 function loadMaintenanceReport() {
     const maintenanceList = document.querySelector('.maintenance-list');
     if (!maintenanceList) return;
     
-    const maintenance = [
-        { vehicle: 'Volvo FH16', type: 'Oil Change', due: '2024-02-25', status: 'upcoming', priority: 'normal' },
-        { vehicle: 'Scania R500', type: 'Brake Inspection', due: '2024-02-22', status: 'due-soon', priority: 'high' },
-        { vehicle: 'Mercedes Sprinter', type: 'Engine Service', due: '2024-02-21', status: 'overdue', priority: 'critical' },
-        { vehicle: 'MAN TGX', type: 'Tire Replacement', due: '2024-02-28', status: 'upcoming', priority: 'normal' },
-        { vehicle: 'Ford Transit', type: 'Annual Inspection', due: '2024-02-23', status: 'due-soon', priority: 'high' }
-    ];
+    maintenanceList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading maintenance...</div>';
+    
+    fetch('../api/get_maintenance_alerts.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.alerts.length > 0) {
+                displayMaintenanceAlerts(data.alerts);
+            } else {
+                maintenanceList.innerHTML = '<div class="empty-state">No maintenance alerts</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading maintenance:', error);
+            maintenanceList.innerHTML = '<div class="error-state">Failed to load maintenance</div>';
+        });
+}
+
+function displayMaintenanceAlerts(alerts) {
+    const maintenanceList = document.querySelector('.maintenance-list');
+    if (!maintenanceList) return;
     
     let html = '';
-    maintenance.forEach(item => {
-        const dueClass = item.status === 'overdue' ? 'due-overdue' : item.status === 'due-soon' ? 'due-soon' : '';
+    alerts.forEach(alert => {
+        const dueClass = alert.status === 'overdue' ? 'due-overdue' : alert.status === 'due-soon' ? 'due-soon' : '';
         
         html += `
             <div class="maintenance-item">
@@ -515,13 +1640,14 @@ function loadMaintenanceReport() {
                     <i class="fas fa-wrench"></i>
                 </div>
                 <div class="maintenance-content">
-                    <div class="maintenance-title">${item.vehicle} - ${item.type}</div>
+                    <div class="maintenance-title">${alert.asset_name} - ${alert.issue}</div>
                     <div class="maintenance-meta">
-                        <span>Due: ${item.due}</span>
+                        <span>Due: ${alert.due_date}</span>
+                        <span class="priority-${alert.priority}">${alert.priority} Priority</span>
                     </div>
                 </div>
                 <div class="maintenance-due ${dueClass}">
-                    ${item.status.replace('-', ' ')}
+                    ${alert.status}
                 </div>
             </div>
         `;
@@ -530,102 +1656,29 @@ function loadMaintenanceReport() {
     maintenanceList.innerHTML = html;
 }
 
-// Load Fleet Condition
-function loadFleetCondition() {
-    const conditionGrid = document.querySelector('.condition-grid');
-    if (!conditionGrid) return;
-    
-    const conditions = [
-        { category: 'Excellent', count: 12, percentage: 40, color: 'good' },
-        { category: 'Good', count: 10, percentage: 33, color: 'good' },
-        { category: 'Fair', count: 5, percentage: 17, color: 'warning' },
-        { category: 'Poor', count: 3, percentage: 10, color: 'critical' }
-    ];
-    
-    let html = '';
-    conditions.forEach(condition => {
-        html += `
-            <div class="condition-item">
-                <div class="condition-icon">
-                    <i class="fas fa-${condition.category === 'Excellent' ? 'star' : condition.category === 'Good' ? 'thumbs-up' : condition.category === 'Fair' ? 'exclamation' : 'exclamation-triangle'}"></i>
-                </div>
-                <h3>${condition.category}</h3>
-                <div class="condition-value">${condition.count}</div>
-                <div class="condition-bar">
-                    <div class="condition-fill ${condition.color}" style="width: ${condition.percentage}%"></div>
-                </div>
-                <div class="condition-label">${condition.percentage}% of fleet</div>
-            </div>
-        `;
-    });
-    
-    conditionGrid.innerHTML = html;
-}
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
 
-// Update Driver Activity (real-time)
-function updateDriverActivity() {
-    console.log('Updating driver activity...');
-    // In real app, fetch new data and update
-}
-
-// Update Vehicle Availability (real-time)
-function updateVehicleAvailability() {
-    console.log('Updating vehicle availability...');
-    // In real app, fetch new data and update
-}
-
-// Refresh Card
-function refreshCard(cardTitle) {
-    console.log(`Refreshing ${cardTitle}...`);
-    showNotification(`${cardTitle} refreshed`, 'success');
-    
-    // Refresh specific data based on card title
-    if (cardTitle.includes('Vehicle')) {
-        loadVehicleAvailability();
-    } else if (cardTitle.includes('Efficiency')) {
-        loadTransportEfficiency();
-    } else if (cardTitle.includes('Delay')) {
-        loadDelayAnalysis();
-    } else if (cardTitle.includes('Driver Performance')) {
-        loadDriverPerformance();
+function formatDateTime(dateTimeStr) {
+    try {
+        const date = new Date(dateTimeStr);
+        if (isNaN(date.getTime())) return dateTimeStr;
+        
+        const options = {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        };
+        return date.toLocaleString('en-US', options);
+    } catch (e) {
+        return dateTimeStr;
     }
 }
 
-// Filter Data
-function filterData(filterId, value) {
-    console.log(`Filtering ${filterId}: ${value}`);
-    // Implement filter logic
-}
-
-// Search Fleet
-function searchFleet(term) {
-    console.log('Searching fleet:', term);
-    // Implement search logic
-}
-
-// View Reservation
-function viewReservation(resId) {
-    console.log('Viewing reservation:', resId);
-    showNotification(`Viewing reservation ${resId}`, 'info');
-}
-
-// Edit Reservation
-function editReservation(resId) {
-    console.log('Editing reservation:', resId);
-    openReservationModal(resId);
-}
-
-// Open Reservation Modal
-function openReservationModal(resId = null) {
-    if (resId) {
-        console.log('Opening reservation modal for ID:', resId);
-    } else {
-        console.log('Opening new reservation modal');
-    }
-    showNotification('Reservation modal opened', 'info');
-}
-
-// Helper function for star rating
 function getStarRating(rating) {
     const fullStars = Math.floor(rating);
     const halfStar = rating % 1 >= 0.5;
@@ -645,7 +1698,6 @@ function getStarRating(rating) {
     return stars;
 }
 
-// Show Notification
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.style.cssText = `
@@ -663,41 +1715,93 @@ function showNotification(message, type = 'info') {
         animation: slideIn 0.3s ease;
     `;
     notification.textContent = message;
-    
     document.body.appendChild(notification);
     
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => {
-            document.body.removeChild(notification);
-        }, 300);
+        setTimeout(() => document.body.removeChild(notification), 300);
     }, 3000);
 }
 
-// Debounce function
+function refreshCard(cardTitle) {
+    console.log(`Refreshing ${cardTitle}...`);
+    showNotification(`${cardTitle} refreshed`, 'success');
+    
+    if (cardTitle.includes('Vehicle')) {
+        loadVehicleAvailability();
+    } else if (cardTitle.includes('Efficiency')) {
+        loadTransportEfficiency();
+    } else if (cardTitle.includes('Delay')) {
+        loadDelayAnalysis();
+    } else if (cardTitle.includes('Driver Performance')) {
+        loadDriverPerformance();
+    } else if (cardTitle.includes('Reservation')) {
+        loadVehicleReservations();
+    } else if (cardTitle.includes('Dispatch')) {
+        loadDispatchSchedule();
+    } else if (cardTitle.includes('Maintenance')) {
+        loadMaintenanceReport();
+    }
+}
+
+function filterData(filterId, value) {
+    console.log(`Filtering ${filterId}: ${value}`);
+}
+
+function searchFleet(term) {
+    console.log('Searching fleet:', term);
+}
+
+function updateVehicleAvailability() {
+    loadVehicleAvailability();
+}
+
+function editAssignment(assignmentId) {
+    console.log('Editing assignment:', assignmentId);
+    showNotification('Edit assignment modal opened', 'info');
+}
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
         clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+        timeout = setTimeout(() => func(...args), wait);
     };
 }
 
-// Add animation styles
+// ============================================
+// STYLES
+// ============================================
+
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {
         from { transform: translateX(100%); opacity: 0; }
         to { transform: translateX(0); opacity: 1; }
     }
-    
     @keyframes slideOut {
         from { transform: translateX(0); opacity: 1; }
         to { transform: translateX(100%); opacity: 0; }
+    }
+    .loading-spinner {
+        text-align: center;
+        padding: 30px;
+        color: #64748b;
+    }
+    .loading-spinner i {
+        margin-right: 8px;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #94a3b8;
+    }
+    .error-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #ef4444;
+        background: #fee2e2;
+        border-radius: 8px;
     }
 `;
 document.head.appendChild(style);
