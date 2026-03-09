@@ -3,7 +3,16 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+// DEBUG - Add this temporary code
+$debug_role = $_SESSION['role'] ?? 'NOT SET';
+$debug_check = in_array($debug_role, ['admin', 'dispatcher', 'employee', 'fleet_manager']) ? 'YES' : 'NO';
 ?>
+<!-- ========== SESSION DEBUG ========== -->
+<!-- Session Role: <?php echo $debug_role; ?> -->
+<!-- Allowed Check: <?php echo $debug_check; ?> -->
+<!-- Session Data: <?php echo htmlspecialchars(print_r($_SESSION, true)); ?> -->
+<!-- ========== END DEBUG ========== -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -43,61 +52,58 @@ if (session_status() === PHP_SESSION_NONE) {
                 </div>
             </div>
             
-            <nav class="nav-menu">
+<nav class="nav-menu">
     <div class="nav-section">
         <p class="nav-section-title">Main Menu</p>
         <ul class="nav-list">
-            <!-- Dashboard - visible to admin, dispatcher, employee (NOT fleet_manager or driver) -->
-            <?php if (in_array($_SESSION['role'], ['admin', 'dispatcher', 'employee', 'fleet_manager'])): ?>
-            <li class="nav-item">
-                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? '../dashboard.php' : 'dashboard.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'dashboard.php') ? 'active' : ''; ?>">
-                    <i class="fas fa-th-large"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
-            <?php endif; ?>
             
-            <!-- Smart warehousing - visible to admin, dispatcher, employee (NOT fleet_manager or driver) -->
+            <!-- Dashboard - visible to admin, dispatcher, employee, fleet_manager -->
+<?php 
+$show_dashboard = in_array($_SESSION['role'], ['admin', 'dispatcher', 'employee', 'fleet_manager']);
+echo "<!-- DEBUG: Show Dashboard = " . ($show_dashboard ? 'YES' : 'NO') . " -->";
+
+if ($show_dashboard): 
+?>
+<li class="nav-item">
+    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? '../dashboard.php' : 'dashboard.php'; ?>" 
+       class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'dashboard.php') ? 'active' : ''; ?>">
+        <i class="fas fa-th-large"></i>
+        <span>Dashboard</span>
+    </a>
+</li>
+<?php endif; ?>
+            
+            <!-- Smart warehousing - visible to admin, dispatcher, employee, fleet_manager -->
             <?php if (in_array($_SESSION['role'], ['admin', 'dispatcher', 'employee', 'fleet_manager'])): ?>
             <li class="nav-item">
-                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'inventory.php' : 'modules/inventory.php'; ?>" class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'inventory.php') ? 'active' : ''; ?>">
+                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'inventory.php' : 'modules/inventory.php'; ?>" 
+                   class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'inventory.php') ? 'active' : ''; ?>">
                     <i class="fas fa-boxes"></i>
                     <span>Smart warehousing</span>
                 </a>
             </li>
             <?php endif; ?>
             
-            <!-- Purchase Orders - visible to admin, employee (NOT fleet_manager, driver, dispatcher) -->
+            <!-- Purchase Orders - visible to admin, employee -->
             <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
             <li class="nav-item">
-                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'orders.php' : 'modules/orders.php'; ?>" class="nav-link <?php echo (strpos($_SERVER['PHP_SELF'], 'orders.php') !== false) ? 'active' : ''; ?>">
+                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'orders.php' : 'modules/orders.php'; ?>" 
+                   class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'orders.php') ? 'active' : ''; ?>">
                     <i class="fas fa-shopping-cart"></i>
                     <span>Purchase Orders</span>
                 </a>
             </li>
             <?php endif; ?>
             
-            <!-- Fleet Management - visible to admin, fleet_manager, driver, dispatcher (NOT employee) -->
+            <!-- Fleet Management - visible to admin, fleet_manager, driver, dispatcher -->
             <?php if (in_array($_SESSION['role'], ['admin', 'fleet_manager', 'driver', 'dispatcher'])): ?>
-<li class="nav-item">
-    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'fleet.php' : 'modules/fleet.php'; ?>" 
-       class="nav-link 
-       <?php 
-       // Make active if:
-       // 1. Current page is fleet.php, OR
-       // 2. User is fleet_manager or driver (they should always see it as their main page)
-       $current_page = basename($_SERVER['PHP_SELF']);
-       $is_fleet_page = ($current_page == 'fleet.php');
-       $is_fleet_role = in_array($_SESSION['role'], ['fleet_manager', 'driver']);
-       
-       if ($is_fleet_page || $is_fleet_role) {
-           echo 'active';
-       }
-       ?>">
-        <i class="fas fa-truck"></i>
-        <span>Fleet Operations</span>
-    </a>
-</li>
+            <li class="nav-item">
+                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'fleet.php' : 'modules/fleet.php'; ?>" 
+                   class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'fleet.php') ? 'active' : ''; ?>">
+                    <i class="fas fa-truck"></i>
+                    <span>Fleet Operations</span>
+                </a>
+            </li>
             <?php endif; ?>
         </ul>
     </div>
