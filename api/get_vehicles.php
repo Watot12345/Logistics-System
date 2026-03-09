@@ -10,7 +10,7 @@ if (!isset($_SESSION['user_id'])) {
 require_once '../config/db.php';
 
 try {
-    // Get all vehicles with their current status for the AVAILABILITY REPORT
+    // Get all vehicles with their current status
     $stmt = $pdo->prepare("
         SELECT 
             a.id, 
@@ -24,6 +24,7 @@ try {
                 ELSE 0
             END as is_in_use,
             s.shipment_status,
+            -- Get driver from dispatch_schedule (where drivers are actually assigned)
             u.full_name as current_driver,
             -- Check if vehicle has pending maintenance
             CASE 
@@ -33,25 +34,19 @@ try {
             m.issue as maintenance_issue,
             m.priority as maintenance_priority,
             m.due_date,
-            -- Determine display status for the report
-            CASE 
-                WHEN m.id IS NOT NULL THEN 'maintenance'
-                WHEN s.shipment_id IS NOT NULL THEN 'in-use'
-                WHEN a.status = 'bad' THEN 'maintenance'
-                ELSE 'available'
-            END as display_status,
             -- Default values
             '85' as fuel_level,
             '15000' as mileage
         FROM assets a
         LEFT JOIN shipments s ON a.id = s.vehicle_id 
             AND s.shipment_status IN ('in_transit', 'pending')
-        LEFT JOIN users u ON s.driver_id = u.id
+        LEFT JOIN dispatch_schedule ds ON a.id = ds.vehicle_id 
+            AND ds.status IN ('in-progress', 'scheduled')
+        LEFT JOIN users u ON COALESCE(s.driver_id, ds.driver_id) = u.id
         LEFT JOIN maintenance_alerts m ON a.asset_name = m.asset_name 
             AND m.status = 'pending'
         WHERE a.asset_type = 'vehicle'
         ORDER BY 
-            -- Show maintenance first, then in-use, then available
             CASE 
                 WHEN m.id IS NOT NULL THEN 1
                 WHEN s.shipment_id IS NOT NULL THEN 2

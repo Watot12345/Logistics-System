@@ -11,47 +11,51 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 try {
-    // Get driver performance from actual shipments
+    // Get driver performance from dispatch_schedule (where your data actually is)
     $stmt = $pdo->query("
         SELECT 
             u.id,
             u.full_name,
             u.employee_id,
-            COUNT(DISTINCT s.shipment_id) as trips,
-            SUM(CASE WHEN s.shipment_status = 'delivered' THEN 1 ELSE 0 END) as completed_trips,
-            SUM(CASE WHEN s.actual_arrival <= s.estimated_arrival AND s.actual_arrival IS NOT NULL THEN 1 ELSE 0 END) as on_time_trips,
-            AVG(CASE 
-                WHEN s.actual_arrival IS NOT NULL AND s.estimated_arrival IS NOT NULL 
-                THEN TIMESTAMPDIFF(MINUTE, s.estimated_arrival, s.actual_arrival)
-                ELSE 0 
-            END) as avg_delay
+            COUNT(ds.id) as trips,
+            SUM(CASE WHEN ds.status = 'completed' THEN 1 ELSE 0 END) as completed_trips,
+            SUM(CASE WHEN ds.status = 'in-progress' THEN 1 ELSE 0 END) as ongoing_trips,
+            SUM(CASE WHEN ds.status = 'scheduled' THEN 1 ELSE 0 END) as scheduled_trips
         FROM users u
-        LEFT JOIN shipments s ON u.id = s.driver_id
+        LEFT JOIN dispatch_schedule ds ON u.id = ds.driver_id
         WHERE u.role = 'driver' AND u.status = 'active'
-        GROUP BY u.id
+        GROUP BY u.id, u.full_name, u.employee_id
         ORDER BY trips DESC
-        LIMIT 10
     ");
     
     $drivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Calculate performance metrics
-    foreach ($drivers as &$driver) {
-        $trips = $driver['trips'] ?: 1;
-        $driver['trips'] = intval($driver['trips'] ?? 0);
-        $driver['efficiency'] = $trips > 0 ? round(($driver['completed_trips'] / $trips) * 100) : 95;
-        $driver['safety'] = 98; // You might need a separate safety table
-        $driver['rating'] = round(($driver['on_time_trips'] / $trips) * 5, 1);
+    $result = [];
+    foreach ($drivers as $driver) {
+        $total_trips = $driver['trips'] ?: 0;
+        $completed = $driver['completed_trips'] ?: 0;
         
-        // Clean up
-        unset($driver['completed_trips']);
-        unset($driver['on_time_trips']);
-        unset($driver['avg_delay']);
+        // Calculate efficiency (completed vs total attempted)
+        $efficiency = $total_trips > 0 ? round(($completed / $total_trips) * 100) : 0;
+        
+        $result[] = [
+            'id' => $driver['id'],
+            'full_name' => $driver['full_name'],
+            'employee_id' => $driver['employee_id'],
+            'trips' => $total_trips,
+            'completed_trips' => $completed,
+            'ongoing_trips' => $driver['ongoing_trips'] ?: 0,
+            'scheduled_trips' => $driver['scheduled_trips'] ?: 0,
+            'efficiency' => $efficiency,
+            'safety' => 98, // You can calculate this from another table if needed
+            'rating' => $total_trips > 0 ? round(($completed / $total_trips) * 5, 1) : 0
+        ];
     }
     
     echo json_encode([
         'success' => true,
-        'drivers' => $drivers
+        'drivers' => $result
     ]);
     
 } catch (PDOException $e) {

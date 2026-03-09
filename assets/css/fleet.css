@@ -1459,7 +1459,67 @@
 .fa-spinner.fa-spin {
     animation: spin 1s linear infinite;
 }
+/* Add to your fleet.css */
+.badge.critical {
+    background: #ef444420;
+    color: #ef4444;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: 8px;
+}
 
+.badge.major {
+    background: #f59e0b20;
+    color: #f59e0b;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: 8px;
+}
+
+.badge.minor {
+    background: #3b82f620;
+    color: #3b82f6;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: 8px;
+}
+
+.badge.in-progress {
+    background: #8b5cf620;
+    color: #8b5cf6;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+}
+
+.maintenance-actions {
+    display: flex;
+    gap: 5px;
+    margin-left: 15px;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+.btn-icon:hover {
+    background: #f1f5f9;
+    color: #2563eb;
+}
+
+.progress-indicator {
+    margin-top: 5px;
+    font-size: 12px;
+    color: #64748b;
+}
 /* Trip Status Colors in Driver View */
 .trip-status.delivered {
     background: #d1fae5;

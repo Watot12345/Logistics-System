@@ -3,6 +3,8 @@
 // ============================================
 // INITIALIZATION
 // ============================================
+// Add this at the very beginning of your fleet.js
+
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Fleet dashboard loaded');
@@ -17,10 +19,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start real-time updates
     startRealTimeUpdates();
     
-    // Load role-specific data
-    loadDriverAssignment();
-    loadDriverStats();
-    loadDriverTrips();
+    // Load role-specific data - ONLY for drivers
+    const userRole = document.body.dataset.userRole;
+    if (userRole === 'driver') {
+        loadDriverAssignment();
+        loadDriverStats();
+        loadDriverTrips();
+    }
+    
+    // 🔴 YOU ARE MISSING THIS LINE:
+    const activeTab = document.querySelector('.tab.active');
+    
+    // Check if overview tab is active and user is not driver
+    if (userRole !== 'driver' && activeTab && activeTab.dataset.tab === 'overview') {
+        console.log('Overview tab active on load, loading trip history...');
+        setTimeout(loadTripHistory, 1000);
+    }
 });
 
 // ============================================
@@ -43,15 +57,75 @@ function loadFleetData() {
 }
 
 function setupEventListeners() {
-    // Tab switching
+    // Tab switching - UPDATED VERSION
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', function() {
             const tabId = this.dataset.tab;
-            switchTab(tabId);
+            console.log('Tab clicked:', tabId);
+            
+            // Update active tab
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Hide all tab panes
+            document.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.style.display = 'none';
+            });
+            
+            // Show selected tab pane
+            const selectedPane = document.getElementById(`tab-${tabId}`);
+            if (selectedPane) {
+                selectedPane.style.display = 'block';
+                
+                // Load data based on tab
+                if (tabId === 'overview') {
+                    console.log('Overview tab activated, loading data...');
+                    // Load all overview data with delays to ensure DOM is ready
+                    setTimeout(() => {
+                        loadTransportEfficiency();
+                        loadDelayAnalysis();
+                        loadFleetCondition();
+                        loadDriverPerformance();
+                        loadDriverActivity();
+                    }, 200);
+                    
+                    // Load trip history with a slightly longer delay
+                    setTimeout(() => {
+                        loadTripHistory();
+                    }, 500);
+                } else if (tabId === 'vehicles') {
+                    setTimeout(() => {
+                        loadVehicleAvailability();
+                        loadVehicleAssignments();
+                    }, 200);
+                } else if (tabId === 'reservations') {
+                    setTimeout(() => {
+                        loadVehicleReservations();
+                        loadDispatchSchedule();
+                    }, 200);
+                } else if (tabId === 'maintenance') {
+                    setTimeout(() => {
+                        loadMaintenanceReport();
+                        loadFleetCondition();
+                    }, 200);
+                }// Add this to your existing tab click handler:
+else if (tabId === 'mechanic') {
+    setTimeout(() => {
+        loadMechanicTasks();
+    }, 200);
+}              
+                else if (tabId === 'drivers') {
+    setTimeout(() => {
+        loadDriverAssignment();
+        loadDriverStats();
+        loadDriverTrips();  // Only called when drivers tab is clicked
+    }, 200);
+}
+            }
         });
     });
     
-    // Reservations tab specific listener
+    // Reservations tab specific listener (keep this)
     document.querySelectorAll('.tab[data-tab="reservations"]').forEach(tab => {
         tab.addEventListener('click', function() {
             setTimeout(loadVehicleReservations, 100);
@@ -82,7 +156,6 @@ function setupEventListeners() {
         }, 300));
     }
 }
-
 function initTabs() {
     const tabs = document.querySelectorAll('.tab');
     const tabPanes = document.querySelectorAll('.tab-pane');
@@ -93,7 +166,18 @@ function initTabs() {
             tabs[0].classList.add('active');
             tabPanes.forEach(pane => pane.style.display = 'none');
             const tabOverview = document.getElementById('tab-overview');
-            if (tabOverview) tabOverview.style.display = 'block';
+            if (tabOverview) {
+                tabOverview.style.display = 'block';
+                // Load overview data
+                setTimeout(() => {
+                    loadTransportEfficiency();
+                    loadDelayAnalysis();
+                    loadFleetCondition();
+                    loadDriverPerformance();
+                    loadDriverActivity();
+                    loadTripHistory();
+                }, 300);
+            }
         }
     }
 }
@@ -1041,8 +1125,20 @@ function displayVehicles(vehicles) {
     const vehicleList = document.querySelector('.vehicle-list');
     if (!vehicleList) return;
     
+    console.log('Vehicle data received:', vehicles); // Debug: see what's in the data
+    
     let html = '';
     vehicles.forEach(vehicle => {
+        // Log each vehicle to see its properties
+        console.log('Single vehicle:', vehicle);
+        
+        // Try to find driver name from any possible property
+        let driverName = vehicle.current_driver || 
+                        vehicle.driver_name || 
+                        vehicle.driver || 
+                        vehicle.full_name || 
+                        null;
+        
         // Determine status based on actual data
         let availability, statusText, statusIcon, statusColor, extraInfo = '';
         
@@ -1050,7 +1146,7 @@ function displayVehicles(vehicles) {
             availability = 'maintenance';
             statusText = 'IN MAINTENANCE';
             statusIcon = 'wrench';
-            statusColor = '#ef4444'; // red
+            statusColor = '#ef4444';
             extraInfo = `<div style="font-size: 11px; color: #ef4444; margin-top: 5px;">
                 <i class="fas fa-exclamation-triangle"></i> 
                 Maintenance: ${vehicle.maintenance_issue || 'Scheduled'} 
@@ -1060,16 +1156,16 @@ function displayVehicles(vehicles) {
             availability = 'in-use';
             statusText = 'IN USE';
             statusIcon = 'play-circle';
-            statusColor = '#f59e0b'; // orange
+            statusColor = '#f59e0b';
             extraInfo = `<div style="font-size: 11px; color: #f59e0b; margin-top: 5px;">
                 <i class="fas fa-user"></i> 
-                Driver: ${vehicle.current_driver || 'Unknown'}
+                Driver: ${driverName || 'Unknown'}
             </div>`;
         } else {
             availability = 'available';
             statusText = 'AVAILABLE';
             statusIcon = 'check-circle';
-            statusColor = '#10b981'; // green
+            statusColor = '#10b981';
         }
         
         html += `
@@ -1083,7 +1179,9 @@ function displayVehicles(vehicles) {
                         <div class="vehicle-meta">
                             <span><i class="fas fa-plate"></i> ABC-${String(vehicle.id).padStart(4, '0')}</span>
                             <span><i class="fas fa-tachometer-alt"></i> ${vehicle.mileage || 'N/A'} km</span>
-                            ${vehicle.current_driver ? `<span><i class="fas fa-user"></i> ${vehicle.current_driver}</span>` : ''}
+                            ${driverName ? `<span><i class="fas fa-user"></i> ${driverName}</span>` : ''}
+                            <!-- Debug info - remove later -->
+                            <span style="display:none;">Props: ${Object.keys(vehicle).join(', ')}</span>
                         </div>
                         ${extraInfo}
                     </div>
@@ -1110,7 +1208,6 @@ function displayVehicles(vehicles) {
     
     vehicleList.innerHTML = html;
 }
-
 function loadVehicleAssignments() {
     const assignmentList = document.querySelector('.assignment-list');
     if (!assignmentList) return;
@@ -1209,7 +1306,216 @@ function loadVehicleAssignments() {
         });
 }
 
+// Add to your fleet.js
+function openAssignMechanicModal(id, vehicleName, issue) {
+    document.getElementById('maintenanceId').value = id;
+    document.getElementById('modalVehicleName').textContent = vehicleName;
+    document.getElementById('modalIssue').textContent = issue;
+    
+    // Set default due date (7 days from now)
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+    document.getElementById('dueDate').value = dueDate.toISOString().split('T')[0];
+    
+    document.getElementById('assignMechanicModal').style.display = 'flex';
+}
 
+function closeAssignMechanicModal() {
+    document.getElementById('assignMechanicModal').style.display = 'none';
+}
+
+function assignMechanic(event) {
+    event.preventDefault();
+    
+    const data = {
+        id: document.getElementById('maintenanceId').value,
+        issue_type: document.getElementById('issueType').value,
+        priority: document.getElementById('priority').value,
+        assigned_mechanic: document.getElementById('assignedMechanic').value,
+        estimated_hours: document.getElementById('estimatedHours').value,
+        due_date: document.getElementById('dueDate').value,
+        notes: document.getElementById('maintenanceNotes').value
+    };
+    
+    fetch('../api/assign_mechanic.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Maintenance task assigned successfully', 'success');
+            closeAssignMechanicModal();
+            loadMaintenanceReport(); // Refresh the list
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    });
+}
+
+// ============================================
+// MAINTENANCE MODAL FUNCTIONS
+// ============================================
+function closeCreateMaintenanceModal() {
+    document.getElementById('createMaintenanceModal').style.display = 'none';
+}
+function openCreateMaintenanceModal() {
+    console.log('Opening create maintenance modal');
+    
+    // Set default due date (7 days from now)
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+    const dueDateInput = document.getElementById('createDueDate');
+    if (dueDateInput) {
+        dueDateInput.value = dueDate.toISOString().split('T')[0];
+    }
+    
+    // Show the modal
+    const modal = document.getElementById('createMaintenanceModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    } else {
+        console.error('Create maintenance modal not found');
+        alert('Maintenance modal not found. Please refresh the page.');
+    }
+}
+
+function closeCreateMaintenanceModal() {
+    const modal = document.getElementById('createMaintenanceModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function createMaintenance(event) {
+    event.preventDefault();
+    
+    // Get form values
+    const formData = {
+        asset_name: document.getElementById('createAssetName').value,
+        issue: document.getElementById('createIssue').value,
+        issue_type: document.getElementById('createIssueType').value,
+        priority: document.getElementById('createPriority').value,
+        assigned_mechanic: document.getElementById('createAssignedMechanic').value || null,
+        estimated_hours: document.getElementById('createEstimatedHours').value || null,
+        due_date: document.getElementById('createDueDate').value
+    };
+    
+    // Validate
+    if (!formData.asset_name || !formData.issue || !formData.due_date) {
+        showNotification('Please fill all required fields', 'error');
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+    submitBtn.disabled = true;
+    
+    // Send to server
+    fetch('../api/create_maintenance.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Maintenance task created successfully', 'success');
+            closeCreateMaintenanceModal();
+            loadMaintenanceReport(); // Refresh the list
+        } else {
+            showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating maintenance:', error);
+        showNotification('Error: ' + error.message, 'error');
+    })
+    .finally(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
+function updateDriverActivity() {
+    console.log('Updating driver activity...');
+    // You can add logic here to refresh driver activity data
+    loadDriverActivity(); // This will refresh the driver activity display
+}
+// Also make sure you have these other maintenance functions if needed
+function startMaintenance(id) {
+    if (!confirm('Start this maintenance task?')) return;
+    
+    fetch('../api/start_maintenance.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Maintenance started', 'success');
+            loadMaintenanceReport();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    });
+}
+
+function completeMaintenance(id) {
+    const notes = prompt('Enter completion notes:');
+    
+    fetch('../api/complete_maintenance.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id, notes: notes })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Maintenance completed', 'success');
+            loadMaintenanceReport();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    });
+}
+function openCompleteMaintenanceModal(id) {
+    document.getElementById('completeMaintenanceId').value = id;
+    document.getElementById('completeMaintenanceModal').style.display = 'flex';
+}
+
+function closeCompleteMaintenanceModal() {
+    document.getElementById('completeMaintenanceModal').style.display = 'none';
+}
+
+function completeMaintenance(event) {
+    event.preventDefault();
+    
+    const data = {
+        id: document.getElementById('completeMaintenanceId').value,
+        notes: document.getElementById('completionNotes').value
+    };
+    
+    fetch('../api/complete_maintenance.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Maintenance completed', 'success');
+            closeCompleteMaintenanceModal();
+            loadMaintenanceReport();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    });
+}
 
 function loadFleetCondition() {
     const conditionGrid = document.querySelector('.condition-grid');
@@ -1290,18 +1596,28 @@ function displayEfficiency(efficiency) {
         const percentage = (item.current / item.target) * 100;
         const fillClass = percentage >= 90 ? 'high' : percentage >= 75 ? 'medium' : 'low';
         
+        // Determine color based on performance
+        let statusColor = '#6b7280';
+        if (item.current >= item.target) {
+            statusColor = '#10b981'; // green if meeting/exceeding target
+        } else if (item.current >= item.average) {
+            statusColor = '#f59e0b'; // orange if above average but below target
+        } else {
+            statusColor = '#ef4444'; // red if below average
+        }
+        
         html += `
-            <div class="efficiency-item">
-                <div class="efficiency-header">
-                    <span class="efficiency-title">${item.metric}</span>
-                    <span class="efficiency-value">${item.current} ${item.unit}</span>
+            <div class="efficiency-item" style="margin-bottom: 20px;">
+                <div class="efficiency-header" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span class="efficiency-title" style="font-weight: 500; color: #1e293b;">${item.metric}</span>
+                    <span class="efficiency-value" style="font-weight: 600; color: ${statusColor};">${item.current}${item.unit}</span>
                 </div>
-                <div class="efficiency-bar">
-                    <div class="efficiency-fill ${fillClass}" style="width: ${percentage}%"></div>
+                <div class="efficiency-bar" style="height: 8px; background-color: #e9eef2; border-radius: 4px; overflow: hidden; margin-bottom: 5px;">
+                    <div class="efficiency-fill ${fillClass}" style="width: ${percentage}%; height: 100%; background-color: ${statusColor};"></div>
                 </div>
-                <div class="efficiency-stats">
-                    <span>Target: ${item.target} ${item.unit}</span>
-                    <span>Avg: ${item.average} ${item.unit}</span>
+                <div class="efficiency-stats" style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b;">
+                    <span>Target: ${item.target}${item.unit}</span>
+                    <span>Avg: ${item.average}${item.unit}</span>
                 </div>
             </div>
         `;
@@ -1434,51 +1750,274 @@ function loadDriverActivity() {
     const activityTimeline = document.querySelector('.activity-timeline');
     if (!activityTimeline) return;
     
-    activityTimeline.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading activity...</div>';
+    activityTimeline.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading driver activity...</div>';
     
-    fetch('../api/get_driver_activity.php')
+    fetch('../api/get_all_driver_activity.php?_=' + new Date().getTime())
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.activities.length > 0) {
-                displayDriverActivity(data.activities);
+            console.log('Driver activity data:', data);
+            
+            if (data.success && data.drivers && data.drivers.length > 0) {
+                displayDriverActivity(data.drivers);
             } else {
-                activityTimeline.innerHTML = '<div class="empty-state">No driver activity</div>';
+                activityTimeline.innerHTML = '<div class="empty-state">No active drivers</div>';
             }
         })
         .catch(error => {
             console.error('Error loading driver activity:', error);
-            activityTimeline.innerHTML = '<div class="error-state">Failed to load activity</div>';
+            activityTimeline.innerHTML = '<div class="error-state">Failed to load driver activity</div>';
         });
 }
 
-function displayDriverActivity(activities) {
+function displayDriverActivity(drivers) {
     const activityTimeline = document.querySelector('.activity-timeline');
     if (!activityTimeline) return;
     
-    let html = '';
-    activities.forEach(activity => {
+    // Add horizontal scroll container
+    let html = `
+        <div style="margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">
+                        <i class="fas fa-users" style="color: #3b82f6; margin-right: 8px;"></i>
+                        Driver Monitoring
+                    </h3>
+                   
+                </div>
+                <div style="display: flex; gap: 5px;">
+                    <button onclick="scrollDrivers('left')" style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px;">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button onclick="scrollDrivers('right')" style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px;">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Horizontal Scroll Container -->
+            <div id="driverScrollContainer" style="overflow-x: auto; overflow-y: hidden; white-space: nowrap; padding: 5px 0; scroll-behavior: smooth; -webkit-overflow-scrolling: touch;">
+                <div style="display: inline-flex; gap: 15px;">
+    `;
+    
+    drivers.forEach((driver, index) => {
+        // Get initials
+        const initials = driver.driver_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        
         html += `
-            <div class="activity-item">
-                <div class="activity-dot ${activity.type}"></div>
-                <div class="activity-content">
-                    <div class="activity-header">
-                        <span class="activity-title">${activity.driver}</span>
-                        <span class="activity-time">${activity.time}</span>
+            <div style="width: 260px; background: white; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #f0f0f0; display: inline-block; vertical-align: top;">
+                
+                <!-- Driver Header with Avatar -->
+                <div style="padding: 16px; display: flex; align-items: center; gap: 12px;">
+                    <div class="driver-avatar" style="width: 48px; height: 48px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 18px;">
+                        ${initials}
                     </div>
-                    <div class="activity-desc">${activity.action} - ${activity.detail}</div>
-                    <div class="activity-meta">
-                        <span><i class="fas fa-map-marker-alt"></i> GPS Tracking</span>
+                    <div>
+                        <h4 style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #1e293b;">${driver.driver_name}</h4>
+                        <div style="font-size: 12px; color: #64748b;">
+                            <span>${driver.employee_id}</span>
+                            <span style="margin-left: 8px;">${driver.total_trips} trips</span>
+                        </div>
                     </div>
+                </div>
+                
+                <!-- Stats Row -->
+                <div style="padding: 0 16px 16px 16px; display: flex; justify-content: space-between;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 18px; font-weight: 700; color: #3b82f6;">${driver.total_trips}</div>
+                        <div style="font-size: 11px; color: #64748b;">Total</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 18px; font-weight: 700; color: #10b981;">${driver.completed_trips}</div>
+                        <div style="font-size: 11px; color: #64748b;">Completed</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 18px; font-weight: 700; color: #8b5cf6;">${driver.performance}%</div>
+                        <div style="font-size: 11px; color: #64748b;">Perf</div>
+                    </div>
+                </div>
+                
+                <!-- Current Status Badge -->
+                <div style="padding: 0 16px 16px 16px;">
+                    <div style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 500; background-color: ${
+                        driver.current_status === 'On Trip' ? '#f59e0b20' : 
+                        driver.current_status === 'Assigned' ? '#3b82f620' : 
+                        '#10b98120'
+                    }; color: ${
+                        driver.current_status === 'On Trip' ? '#f59e0b' : 
+                        driver.current_status === 'Assigned' ? '#3b82f6' : 
+                        '#10b981'
+                    };">
+                        <i class="fas fa-${
+                            driver.current_status === 'On Trip' ? 'truck' : 
+                            driver.current_status === 'Assigned' ? 'calendar-check' : 
+                            'circle'
+                        }"></i>
+                        ${driver.current_status}
+                    </div>
+                </div>
+                
+                <!-- Location & Vehicle (compact) -->
+                <div style="padding: 12px 16px; border-top: 1px solid #f0f0f0; background: #fafafa;">
+                    <div style="font-size: 12px; color: #475569; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <i class="fas fa-map-marker-alt" style="color: #ef4444; width: 16px; margin-right: 6px;"></i>
+                        ${driver.current_location || 'No location'}
+                    </div>
+                    <div style="font-size: 12px; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <i class="fas fa-truck" style="color: #f59e0b; width: 16px; margin-right: 6px;"></i>
+                        ${driver.current_vehicle}
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div style="padding: 10px 16px; border-top: 1px solid #f0f0f0; display: flex; gap: 8px;">
+                    <button onclick="viewDriverDetails(${driver.driver_id})" style="flex: 1; padding: 6px; border: none; background: #3b82f6; border-radius: 6px; font-size: 11px; color: white; cursor: pointer;">
+                        <i class="fas fa-eye"></i> View
+                    </button>
+                    <button onclick="contactDriver(${driver.driver_id})" style="padding: 6px 10px; border: none; background: #f1f5f9; border-radius: 6px; color: #64748b; cursor: pointer;">
+                        <i class="fas fa-phone"></i>
+                    </button>
                 </div>
             </div>
         `;
     });
     
+    // Close the container
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+    
     activityTimeline.innerHTML = html;
+    
+    // Add scroll buttons functionality
+    window.scrollDrivers = function(direction) {
+        const container = document.getElementById('driverScrollContainer');
+        const scrollAmount = 275; // Width of card + gap
+        if (direction === 'left') {
+            container.scrollLeft -= scrollAmount;
+        } else {
+            container.scrollLeft += scrollAmount;
+        }
+    };
 }
 
-function updateDriverActivity() {
-    console.log('Updating driver activity...');
+// Keep these helper functions
+function viewDriverDetails(driverId) {
+    console.log('Viewing driver details for ID:', driverId);
+    
+    // Fetch driver details from API
+    fetch(`../api/get_driver_details.php?id=${driverId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showDriverDetailsModal(data.driver);
+            } else {
+                showNotification('Error: ' + (data.error || 'Could not load driver details'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching driver details:', error);
+            showNotification('Error loading driver details', 'error');
+        });
+}
+
+function showDriverDetailsModal(driver) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('driverDetailsModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'driverDetailsModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-user"></i> Driver Details</h3>
+                    <button class="modal-close" onclick="closeDriverDetailsModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="driverDetailsBody">
+                    <!-- Content will be loaded here -->
+                </div>
+                <div class="modal-footer" style="padding: 15px; text-align: right; border-top: 1px solid #e9eef2;">
+                    <button class="btn btn-secondary" onclick="closeDriverDetailsModal()">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // Get initials for avatar
+    const initials = driver.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    
+    // Format dates
+    const joinDate = driver.join_date ? new Date(driver.join_date).toLocaleDateString() : 'N/A';
+    const lastLogin = driver.last_login ? new Date(driver.last_login).toLocaleString() : 'Never';
+    
+    // Fill modal content
+    document.getElementById('driverDetailsBody').innerHTML = `
+        <div style="text-align: center; margin-bottom: 20px;">
+            <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 32px; margin: 0 auto 15px;">
+                ${initials}
+            </div>
+            <h3 style="margin: 0 0 5px 0; font-size: 20px;">${driver.full_name}</h3>
+            <p style="margin: 0; color: #64748b;">${driver.employee_id}</p>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; color: #64748b;">Status</div>
+                <div style="font-weight: 600; color: ${driver.status === 'active' ? '#10b981' : '#ef4444'};">
+                    ${driver.status ? driver.status.toUpperCase() : 'ACTIVE'}
+                </div>
+            </div>
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; color: #64748b;">Department</div>
+                <div style="font-weight: 600;">${driver.department || 'N/A'}</div>
+            </div>
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; color: #64748b;">Phone</div>
+                <div style="font-weight: 600;">${driver.phone || 'N/A'}</div>
+            </div>
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; color: #64748b;">Email</div>
+                <div style="font-weight: 600; word-break: break-all;">${driver.email || 'N/A'}</div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 15px;">
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 5px;">
+                <div style="font-size: 11px; color: #64748b;">Join Date</div>
+                <div style="font-weight: 500;">${joinDate}</div>
+            </div>
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px;">
+                <div style="font-size: 11px; color: #64748b;">Last Login</div>
+                <div style="font-weight: 500;">${lastLogin}</div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: #3b82f6;">${driver.total_trips || 0}</div>
+                <div style="font-size: 11px; color: #64748b;">Total Trips</div>
+            </div>
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 700; color: #10b981;">${driver.completed_trips || 0}</div>
+                <div style="font-size: 11px; color: #64748b;">Completed</div>
+            </div>
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+}
+
+function closeDriverDetailsModal() {
+    const modal = document.getElementById('driverDetailsModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function contactDriver(driverId) {
+    console.log('Contacting driver:', driverId);
+    showNotification(`Contacting driver #${driverId}...`, 'info');
 }
 
 // ============================================
@@ -1486,25 +2025,114 @@ function updateDriverActivity() {
 // ============================================
 
 function loadTripHistory() {
-    const tripList = document.querySelector('.trip-list');
-    if (!tripList) return;
+    console.log('🔍 Loading trip history for admin/dispatcher...');
+    console.log('Current user role:', document.body.dataset.userRole);
     
+    // Check if we're in admin/dispatcher view (not driver)
+    const userRole = document.body.dataset.userRole;
+    if (userRole === 'driver') {
+        console.log('Driver view - skipping admin trip history');
+        return;
+    }
+    
+    // Check if overview tab is active
+    const activeTab = document.querySelector('.tab.active');
+    console.log('Active tab:', activeTab ? activeTab.dataset.tab : 'none');
+    
+    if (!activeTab || activeTab.dataset.tab !== 'overview') {
+        console.log('Overview tab not active, skipping trip history load');
+        return;
+    }
+    
+    // Try multiple selectors to find the trip list
+    let tripList = null;
+    const selectors = [
+        '#tab-overview .trip-list',
+        '.trip-list',
+        '.card-full .trip-list',
+        '.card-body .trip-list'
+    ];
+    
+    for (let selector of selectors) {
+        tripList = document.querySelector(selector);
+        if (tripList) {
+            console.log('✅ Found trip list with selector:', selector);
+            break;
+        }
+    }
+    
+    if (!tripList) {
+       
+        
+        // Try to find any element that might contain trip history
+        const possibleCards = document.querySelectorAll('.card');
+        for (let card of possibleCards) {
+            const header = card.querySelector('.card-header h2');
+            if (header && header.textContent.includes('Trip History')) {
+                const body = card.querySelector('.card-body');
+                if (body) {
+                    // Create the trip list if it doesn't exist
+                    tripList = document.createElement('div');
+                    tripList.className = 'trip-list';
+                    body.appendChild(tripList);
+                    console.log('✅ Created trip list element');
+                    break;
+                }
+            }
+        }
+        
+        if (!tripList) {
+            console.error('❌ Could not find or create trip list element');
+            return;
+        }
+    }
+    
+    // Show loading state
     tripList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading trip history...</div>';
     
-    fetch('../api/get_trip_history.php?limit=10')
-        .then(response => response.json())
+    // Get filter value
+    const filterSelect = document.querySelector('#tab-overview .filter-select, .filter-select');
+    let days = 30;
+    if (filterSelect) {
+        const filterText = filterSelect.value;
+        console.log('Filter selected:', filterText);
+        if (filterText.includes('7')) days = 7;
+        else if (filterText.includes('30')) days = 30;
+    }
+    
+    // Fetch data
+    const apiUrl = `../api/get_trip_history.php?limit=10&days=${days}&_=${new Date().getTime()}`;
+    console.log('Fetching from:', apiUrl);
+    
+    fetch(apiUrl)
+        .then(response => {
+            console.log('API response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.success && data.trips.length > 0) {
+            console.log('📊 Trip history data received:', data);
+            
+            if (data.success && data.trips && data.trips.length > 0) {
+                console.log(`Displaying ${data.trips.length} trips`);
                 displayTripHistory(data.trips);
             } else {
-                tripList.innerHTML = '<div class="empty-state">No trip history available</div>';
+                console.log('No trips data:', data);
+                if (data.error) {
+                    tripList.innerHTML = `<div class="error-state">Error: ${data.error}</div>`;
+                } else {
+                    tripList.innerHTML = '<div class="empty-state">No trip history available</div>';
+                }
             }
         })
         .catch(error => {
-            console.error('Error loading trip history:', error);
-            tripList.innerHTML = '<div class="error-state">Failed to load trip history</div>';
+            console.error('❌ Error loading trip history:', error);
+            tripList.innerHTML = '<div class="error-state">Failed to load trip history: ' + error.message + '</div>';
         });
 }
+
 
 function displayTripHistory(trips) {
     const tripList = document.querySelector('.trip-list');
@@ -1512,31 +2140,53 @@ function displayTripHistory(trips) {
     
     let html = '';
     trips.forEach(trip => {
+        let statusColor = '#6b7280';
+        let statusBg = '#6b728020';
+        let statusIcon = 'clock';
+        
+        if (trip.status === 'delivered' || trip.status === 'completed') {
+            statusColor = '#10b981';
+            statusBg = '#10b98120';
+            statusIcon = 'check-circle';
+        } else if (trip.status === 'in-transit' || trip.status === 'in_transit' || trip.status === 'in-progress') {
+            statusColor = '#f59e0b';
+            statusBg = '#f59e0b20';
+            statusIcon = 'truck';
+        }
+        
         html += `
-            <div class="trip-item">
-                <div class="trip-icon">
-                    <i class="fas fa-route"></i>
+            <div class="trip-item" style="display: flex; align-items: center; padding: 15px; border-bottom: 1px solid #f0f0f0;">
+                <div class="trip-icon" style="width: 50px; height: 50px; background-color: #e6f0ff; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
+                    <i class="fas fa-route" style="color: #2563eb; font-size: 20px;"></i>
                 </div>
-                <div class="trip-content">
-                    <div class="trip-route">${trip.from} → ${trip.to}</div>
-                    <div class="trip-meta">
-                        <span>${trip.id}</span>
-                        <span>${trip.driver}</span>
-                        <span>${trip.date}</span>
+                
+                <div class="trip-content" style="flex: 2;">
+                    <div class="trip-route" style="font-weight: 600; margin-bottom: 5px;">
+                        ${trip.from} → ${trip.to}
+                    </div>
+                    <div class="trip-meta" style="font-size: 13px; color: #64748b;">
+                        <span style="margin-right: 15px;"><i class="fas fa-hashtag"></i> ${trip.id}</span>
+                        <span style="margin-right: 15px;"><i class="fas fa-user"></i> ${trip.driver}</span>
+                        <span><i class="fas fa-calendar"></i> ${trip.date}</span>
                     </div>
                 </div>
-                <div class="trip-stats">
-                    <div class="trip-stat">
-                        <div class="value">${trip.distance}km</div>
-                        <div class="label">Distance</div>
+                
+                <div class="trip-stats" style="flex: 1; display: flex; gap: 20px;">
+                    <div class="trip-stat" style="text-align: center;">
+                        <div class="value" style="font-weight: 600;">${trip.distance}km</div>
+                        <div class="label" style="font-size: 12px; color: #64748b;">Distance</div>
                     </div>
-                    <div class="trip-stat">
-                        <div class="value">${trip.duration}h</div>
-                        <div class="label">Duration</div>
+                    <div class="trip-stat" style="text-align: center;">
+                        <div class="value" style="font-weight: 600;">${trip.duration}h</div>
+                        <div class="label" style="font-size: 12px; color: #64748b;">Duration</div>
                     </div>
                 </div>
-                <div class="trip-status ${trip.status}">
-                    ${trip.status.replace('-', ' ')}
+                
+                <div class="trip-status" style="min-width: 100px; text-align: right;">
+                    <span style="display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background-color: ${statusBg}; color: ${statusColor};">
+                        <i class="fas fa-${statusIcon}"></i>
+                        ${trip.status.toUpperCase()}
+                    </span>
                 </div>
             </div>
         `;
@@ -1544,6 +2194,7 @@ function displayTripHistory(trips) {
     
     tripList.innerHTML = html;
 }
+
 
 // ============================================
 // DISPATCH SCHEDULE FUNCTIONS
@@ -1768,6 +2419,337 @@ function debounce(func, wait) {
         timeout = setTimeout(() => func(...args), wait);
     };
 }
+// ============================================
+// MECHANIC TAB
+// ============================================
+// ============================================
+// MECHANIC FUNCTIONS
+// ============================================
+
+function loadMechanicTasks() {
+    console.log('🔧 Loading mechanic tasks...');
+    console.log('Current user role:', document.body.dataset.userRole);
+    
+    // Check if mechanic tab exists and is visible
+    const mechanicTab = document.getElementById('tab-mechanic');
+    console.log('Mechanic tab exists:', mechanicTab !== null);
+    if (mechanicTab) {
+        console.log('Mechanic tab display:', mechanicTab.style.display);
+    }
+    
+    const tasksList = document.getElementById('my-tasks-content');
+    console.log('Tasks list element found:', tasksList !== null);
+    
+    if (!tasksList) {
+        console.error('❌ Tasks list element not found - ID="my-tasks-content"');
+        console.log('Available elements with IDs:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+        return;
+    }
+    
+    const tasksCount = document.getElementById('tasks-count');
+    console.log('Tasks count element found:', tasksCount !== null);
+    
+    tasksList.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #3b82f6;"></i><p>Loading your tasks...</p></div>';
+    
+    fetch('../api/get_mechanic_tasks.php?_=' + new Date().getTime())
+        .then(response => {
+            console.log('API response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('API data received:', data);
+            
+            if (data.success) {
+                if (data.tasks && data.tasks.length > 0) {
+                    console.log(`Found ${data.tasks.length} tasks`);
+                    if (tasksCount) tasksCount.textContent = data.tasks.length + ' pending';
+                    displayMechanicTasks(data.tasks);
+                } else {
+                    console.log('No tasks found');
+                    if (tasksCount) tasksCount.textContent = '0 tasks';
+                    tasksList.innerHTML = `
+                        <div style="text-align: center; padding: 60px;">
+                            <i class="fas fa-check-circle" style="font-size: 64px; color: #10b981; margin-bottom: 20px;"></i>
+                            <h3 style="color: #1e293b; margin-bottom: 10px;">No Tasks Assigned</h3>
+                            <p style="color: #64748b;">You don't have any maintenance tasks at the moment.</p>
+                        </div>
+                    `;
+                }
+            } else {
+                console.error('API error:', data.error);
+                tasksList.innerHTML = '<div class="error-state">Error: ' + (data.error || 'Unknown error') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            tasksList.innerHTML = '<div class="error-state">Failed to load tasks: ' + error.message + '</div>';
+        });
+}
+// Add this at the end of your DOMContentLoaded event
+document.addEventListener('DOMContentLoaded', function() {
+    // ... existing code ...
+    
+    // Force load mechanic tasks if role is mechanic
+    if (document.body.dataset.userRole === 'mechanic') {
+        console.log('Mechanic detected - forcing task load');
+        setTimeout(() => {
+            loadMechanicTasks();
+        }, 1000);
+    }
+});
+
+function displayMechanicTasks(tasks) {
+    const tasksContent = document.getElementById('my-tasks-content');
+    if (!tasksContent) return;
+    
+    let html = '<div class="task-list">';
+    
+    tasks.forEach(task => {
+        // Determine priority color
+        let priorityColor = '#6b7280';
+        let priorityBg = '#f3f4f6';
+        
+        if (task.priority === 'high') {
+            priorityColor = '#ef4444';
+            priorityBg = '#fee2e2';
+        } else if (task.priority === 'medium') {
+            priorityColor = '#f59e0b';
+            priorityBg = '#fef3c7';
+        }
+        
+        // Determine status badge
+        let statusBadge = '';
+        if (task.status === 'pending') {
+            statusBadge = '<span style="background-color: #f59e0b20; color: #f59e0b; padding: 4px 12px; border-radius: 20px; font-size: 12px;"><i class="fas fa-clock"></i> Pending</span>';
+        } else if (task.status === 'in_progress') {
+            statusBadge = '<span style="background-color: #3b82f620; color: #3b82f6; padding: 4px 12px; border-radius: 20px; font-size: 12px;"><i class="fas fa-play"></i> In Progress</span>';
+        }
+        
+        html += `
+            <div class="task-item" style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #f0f0f0;">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <h4 style="margin: 0 0 10px 0; font-size: 18px;">${task.asset_name}</h4>
+                        <p style="margin: 0 0 15px 0; color: #475569;">${task.issue}</p>
+                        
+                        <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                            <span style="background-color: ${priorityBg}; color: ${priorityColor}; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+                                <i class="fas fa-flag"></i> ${task.priority} priority
+                            </span>
+                            <span style="background-color: #f1f5f9; color: #475569; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+                                <i class="fas fa-tag"></i> ${task.issue_type}
+                            </span>
+                            <span style="background-color: #f1f5f9; color: #475569; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+                                <i class="fas fa-calendar"></i> Due: ${task.due_date}
+                            </span>
+                            ${task.estimated_hours ? `
+                            <span style="background-color: #f1f5f9; color: #475569; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+                                <i class="fas fa-clock"></i> Est: ${task.estimated_hours}h
+                            </span>` : ''}
+                        </div>
+                    </div>
+                    ${statusBadge}
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 15px; border-top: 1px solid #f0f0f0; padding-top: 15px;">
+                    ${task.status === 'pending' ? `
+                        <button class="btn btn-primary" onclick="startMaintenance(${task.id})" style="flex: 1;">
+                            <i class="fas fa-play"></i> Start Work
+                        </button>
+                    ` : ''}
+                    ${task.status === 'in_progress' ? `
+                        <button class="btn btn-success" onclick="openCompleteMaintenanceModal(${task.id})" style="flex: 1;">
+                            <i class="fas fa-check"></i> Complete
+                        </button>
+                    ` : ''}
+                    <button class="btn btn-secondary" onclick="viewMaintenanceDetails(${task.id})" style="flex: 1;">
+                        <i class="fas fa-eye"></i> Details
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    tasksContent.innerHTML = html;
+}
+
+function updateMechanicStats(tasks) {
+    const statsDiv = document.getElementById('mechanic-stats');
+    if (!statsDiv) return;
+    
+    const completed = tasks.filter(t => t.status === 'completed').length;
+    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+    const total = tasks.length;
+    const efficiency = total > 0 ? Math.round((completed / total) * 100) : 0;
+    
+    statsDiv.innerHTML = `
+        <div class="stat-mini">
+            <div class="value">${completed}</div>
+            <div class="label">Completed</div>
+        </div>
+        <div class="stat-mini">
+            <div class="value">${inProgress}</div>
+            <div class="label">In Progress</div>
+        </div>
+        <div class="stat-mini">
+            <div class="value">${efficiency}%</div>
+            <div class="label">Efficiency</div>
+        </div>
+    `;
+}
+
+function refreshMechanicTasks() {
+    loadMechanicTasks();
+}
+
+function viewAllMaintenance() {
+    // Switch to maintenance tab
+    document.querySelector('.tab[data-tab="maintenance"]').click();
+}
+
+function viewMaintenanceDetails(id) {
+    console.log('Viewing maintenance details for ID:', id);
+    
+    // Fetch task details
+    fetch(`../api/get_maintenance_details.php?id=${id}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMaintenanceDetailsModal(data.data);
+            } else {
+                showNotification('Error: ' + (data.error || 'Could not load details'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching details:', error);
+            showNotification('Error loading details', 'error');
+        });
+}
+function startMaintenance(id) {
+    if (!confirm('Start this maintenance task?')) return;
+    
+    fetch('../api/start_maintenance.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Maintenance started', 'success');
+            loadMechanicTasks(); // Refresh the tasks list
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Error: ' + error.message, 'error');
+    });
+}
+function showMaintenanceDetailsModal(task) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('maintenanceDetailsModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'maintenanceDetailsModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-info-circle"></i> Maintenance Task Details</h3>
+                    <button class="modal-close" onclick="closeMaintenanceDetailsModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="maintenanceDetailsBody">
+                    <!-- Content will be loaded here -->
+                </div>
+                <div class="modal-footer" style="padding: 15px; text-align: right; border-top: 1px solid #e9eef2;">
+                    <button class="btn btn-secondary" onclick="closeMaintenanceDetailsModal()">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // Format dates
+    const created = new Date(task.created_at).toLocaleString();
+    const dueDate = new Date(task.due_date).toLocaleDateString();
+    const started = task.started_at ? new Date(task.started_at).toLocaleString() : 'Not started';
+    const completed = task.completed_date ? new Date(task.completed_date).toLocaleDateString() : 'Not completed';
+    
+    // Determine status color
+    let statusColor = '#6b7280';
+    if (task.status === 'completed') statusColor = '#10b981';
+    else if (task.status === 'in_progress') statusColor = '#3b82f6';
+    else if (task.status === 'pending') statusColor = '#f59e0b';
+    
+    // Fill modal content
+    document.getElementById('maintenanceDetailsBody').innerHTML = `
+        <div style="padding: 10px;">
+            <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: #1e293b;">${task.asset_name}</h4>
+                <p style="margin: 0; color: #475569;">${task.issue}</p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <div style="background: #f8fafc; padding: 10px; border-radius: 6px;">
+                    <div style="font-size: 11px; color: #64748b;">Priority</div>
+                    <div style="font-weight: 500; color: ${task.priority === 'high' ? '#ef4444' : task.priority === 'medium' ? '#f59e0b' : '#6b7280'};">
+                        ${task.priority.toUpperCase()}
+                    </div>
+                </div>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 6px;">
+                    <div style="font-size: 11px; color: #64748b;">Issue Type</div>
+                    <div style="font-weight: 500;">${task.issue_type}</div>
+                </div>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 6px;">
+                    <div style="font-size: 11px; color: #64748b;">Status</div>
+                    <div style="font-weight: 500; color: ${statusColor};">${task.status.replace('_', ' ')}</div>
+                </div>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 6px;">
+                    <div style="font-size: 11px; color: #64748b;">Est. Hours</div>
+                    <div style="font-weight: 500;">${task.estimated_hours || 'N/A'}</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-bottom: 5px;">
+                    <div style="font-size: 11px; color: #64748b;">Due Date</div>
+                    <div style="font-weight: 500;">${dueDate}</div>
+                </div>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-bottom: 5px;">
+                    <div style="font-size: 11px; color: #64748b;">Created</div>
+                    <div style="font-weight: 500;">${created}</div>
+                </div>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-bottom: 5px;">
+                    <div style="font-size: 11px; color: #64748b;">Started</div>
+                    <div style="font-weight: 500;">${started}</div>
+                </div>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 6px;">
+                    <div style="font-size: 11px; color: #64748b;">Completed</div>
+                    <div style="font-weight: 500;">${completed}</div>
+                </div>
+            </div>
+            
+            ${task.completed_notes ? `
+            <div style="background: #f8fafc; padding: 10px; border-radius: 6px;">
+                <div style="font-size: 11px; color: #64748b;">Completion Notes</div>
+                <div style="font-weight: 500;">${task.completed_notes}</div>
+            </div>
+            ` : ''}
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+}
+
+function closeMaintenanceDetailsModal() {
+    const modal = document.getElementById('maintenanceDetailsModal');
+    if (modal) modal.style.display = 'none';
+}
+
+
 
 // ============================================
 // STYLES
@@ -1805,3 +2787,16 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+// Force load mechanic tasks when role is mechanic
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.body.dataset.userRole === 'mechanic') {
+        console.log('Mechanic detected, loading tasks...');
+        setTimeout(function() {
+            if (typeof loadMechanicTasks === 'function') {
+                loadMechanicTasks();
+            } else {
+                console.error('loadMechanicTasks function not found!');
+            }
+        }, 1000);
+    }
+});

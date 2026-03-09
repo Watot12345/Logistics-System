@@ -8,7 +8,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 // Redirect fleet_manager and driver to fleet.php
-if (in_array($_SESSION['role'], ['fleet_manager', 'driver'])) {
+if (in_array($_SESSION['role'], ['driver', 'mechanic'])) {
     header("Location: modules/fleet.php");
     exit();
 }
