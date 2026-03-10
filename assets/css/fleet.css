@@ -1520,6 +1520,8 @@
     font-size: 12px;
     color: #64748b;
 }
+
+
 /* Trip Status Colors in Driver View */
 .trip-status.delivered {
     background: #d1fae5;

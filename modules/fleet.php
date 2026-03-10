@@ -1,5 +1,7 @@
 <?php
 session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../index.php");
@@ -9,60 +11,91 @@ require_once '../config/db.php';
 $user_role = $_SESSION['role'];
 $can_manage_maintenance = in_array($user_role, ['admin', 'fleet_manager']);
 $can_view_maintenance = in_array($user_role, ['admin', 'fleet_manager', 'dispatcher', 'employee']);
+$condition_stats = ['excellent' => 0, 'good' => 0, 'fair' => 0, 'poor' => 0];
+function isVehicleInUse($vehicle_id, $pdo) {
+    // Check shipments - any non-completed shipment
+    $shipment_check = $pdo->prepare("
+        SELECT COUNT(*) FROM shipments 
+        WHERE vehicle_id = ? 
+        AND shipment_status NOT IN ('completed', 'cancelled')
+    ");
+    $shipment_check->execute([$vehicle_id]);
+    if ($shipment_check->fetchColumn() > 0) {
+        return true;
+    }
+    
+    // Check dispatch_schedule - any non-completed dispatch
+    $dispatch_check = $pdo->prepare("
+        SELECT COUNT(*) FROM dispatch_schedule 
+        WHERE vehicle_id = ? 
+        AND status NOT IN ('completed', 'cancelled')
+    ");
+    $dispatch_check->execute([$vehicle_id]);
+    return $dispatch_check->fetchColumn() > 0;
+}
+
+
 // Get real statistics
 try {
     // Get active shipments for stats
-$stmt = $pdo->query("
-    SELECT COUNT(*) as total, 
-           SUM(CASE WHEN shipment_status = 'delivered' THEN 1 ELSE 0 END) as delivered
-    FROM shipments 
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-");
-$shipment_stats = $stmt->fetch();
-    // Total vehicles from assets table
-$stmt = $pdo->query("SELECT COUNT(*) as total FROM assets WHERE asset_type = 'vehicle'");
-$total_vehicles = $stmt->fetch()['total'] ?? 0;
-
-// Get vehicles added this month
-$stmt = $pdo->query("
-    SELECT COUNT(*) as total 
-    FROM assets 
-    WHERE asset_type = 'vehicle' 
-    AND MONTH(created_at) = MONTH(CURDATE()) 
-    AND YEAR(created_at) = YEAR(CURDATE())
-");
-$vehicles_this_month = $stmt->fetch()['total'] ?? 0;
-
-// Get vehicles added last month
-$stmt = $pdo->query("
-    SELECT COUNT(*) as total 
-    FROM assets 
-    WHERE asset_type = 'vehicle' 
-    AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
-    AND YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
-");
-$vehicles_last_month = $stmt->fetch()['total'] ?? 0;
+    $stmt = $pdo->query("
+        SELECT COUNT(*) as total, 
+               SUM(CASE WHEN shipment_status = 'delivered' THEN 1 ELSE 0 END) as delivered
+        FROM shipments 
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    ");
+    $shipment_stats = $stmt->fetch();
+    
     // Total vehicles from assets table
     $stmt = $pdo->query("SELECT COUNT(*) as total FROM assets WHERE asset_type = 'vehicle'");
     $total_vehicles = $stmt->fetch()['total'] ?? 0;
-    
-    // Get vehicles for availability (MUST COME BEFORE YOUR CALCULATION)
+
+    // Get vehicles added this month
     $stmt = $pdo->query("
-        SELECT a.*, 
-               u.full_name as current_driver,
-               s.shipment_status
-        FROM assets a
-        LEFT JOIN shipments s ON a.id = s.vehicle_id AND s.shipment_status IN ('in_transit', 'pending')
-        LEFT JOIN users u ON s.driver_id = u.id
-        WHERE a.asset_type = 'vehicle'
-        ORDER BY a.created_at DESC
+        SELECT COUNT(*) as total 
+        FROM assets 
+        WHERE asset_type = 'vehicle' 
+        AND MONTH(created_at) = MONTH(CURDATE()) 
+        AND YEAR(created_at) = YEAR(CURDATE())
     ");
-    $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $vehicles_this_month = $stmt->fetch()['total'] ?? 0;
+
+    // Get vehicles added last month
+    $stmt = $pdo->query("
+        SELECT COUNT(*) as total 
+        FROM assets 
+        WHERE asset_type = 'vehicle' 
+        AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+        AND YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    ");
+    $vehicles_last_month = $stmt->fetch()['total'] ?? 0;
+    $stmt = $pdo->query("
+    SELECT a.*, 
+           u.full_name as current_driver,
+           s.shipment_status,
+           ds.status as dispatch_status,
+           ds.driver_id as dispatch_driver_id,
+           -- Calculate is_in_use including delivered and awaiting_verification
+           CASE 
+               WHEN s.shipment_id IS NOT NULL AND s.shipment_status IN ('in_transit', 'pending') THEN 1
+               WHEN ds.id IS NOT NULL AND ds.status IN ('in-progress', 'scheduled', 'delivered', 'awaiting_verification') THEN 1
+               ELSE 0
+           END as is_in_use
+    FROM assets a
+    LEFT JOIN shipments s ON a.id = s.vehicle_id AND s.shipment_status IN ('in_transit', 'pending')
+    LEFT JOIN dispatch_schedule ds ON a.id = ds.vehicle_id 
+        AND ds.status IN ('in-progress', 'scheduled', 'delivered', 'awaiting_verification')
+    LEFT JOIN users u ON COALESCE(s.driver_id, ds.driver_id) = u.id
+    WHERE a.asset_type = 'vehicle'
+    GROUP BY a.id
+    ORDER BY a.created_at DESC
+");
+$vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Get maintenance alerts (MUST COME BEFORE YOUR CALCULATION)
+    // Get maintenance alerts - INCLUDES BOTH PENDING AND IN_PROGRESS
     $stmt = $pdo->query("
         SELECT * FROM maintenance_alerts 
-        WHERE status = 'pending' 
+        WHERE status IN ('pending', 'in_progress')
         ORDER BY 
             CASE priority 
                 WHEN 'high' THEN 1
@@ -72,44 +105,68 @@ $vehicles_last_month = $stmt->fetch()['total'] ?? 0;
             due_date ASC
     ");
     $maintenance_alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // NOW do your calculation (AFTER $vehicles and $maintenance_alerts are defined)
-    $real_available_count = 0;
-    $real_maintenance_count = 0;
-    $real_in_use_count = 0;
 
-    foreach ($vehicles as $vehicle) {
-        $is_maintenance = false;
-        $is_in_use = false;
-        
-        // Check for pending maintenance alerts
-        foreach ($maintenance_alerts as $alert) {
-            if ($alert['asset_name'] == $vehicle['asset_name']) {
-                $is_maintenance = true;
-                break;
-            }
-        }
-        
-        // Check if vehicle is in use (has active shipment)
-        if ($vehicle['shipment_status'] == 'in_transit' || $vehicle['shipment_status'] == 'pending') {
-            $is_in_use = true;
-        }
-        
-        // Count based on status (maintenance takes priority)
-        if ($is_maintenance) {
-            $real_maintenance_count++;
-        } else if ($is_in_use) {
-            $real_in_use_count++;
-        } else {
-            $real_available_count++;
-        }
+    // DEBUG: Check what maintenance alerts were found
+    echo "<!-- MAINTENANCE ALERTS FOUND: " . count($maintenance_alerts) . " -->\n";
+    foreach ($maintenance_alerts as $alert) {
+        echo "<!-- Alert: Vehicle='{$alert['asset_name']}', Status='{$alert['status']}', Priority='{$alert['priority']}' -->\n";
     }
 
-    $available_count = $real_available_count;
-    $maintenance_count = $real_maintenance_count;
-    $in_use_count = $real_in_use_count;
+   // Calculate vehicle counts
+$real_available_count = 0;
+$real_maintenance_count = 0;
+$real_in_use_count = 0;
+
+foreach ($vehicles as $vehicle) {
+    $is_maintenance = false;
+    $is_in_use = false;
     
-    // Rest of your queries...
+    // Check for ANY active maintenance alerts (pending OR in_progress)
+    foreach ($maintenance_alerts as $alert) {
+        if ($alert['asset_name'] == $vehicle['asset_name']) {
+            $is_maintenance = true;
+            break;
+        }
+    }
+    
+    // Check if vehicle is in use - FIX THIS PART
+    // Query directly to check actual status
+   // Check if vehicle is in use - count any non-completed dispatch
+$check_dispatch = $pdo->prepare("
+    SELECT COUNT(*) FROM dispatch_schedule 
+    WHERE vehicle_id = ? 
+    AND status NOT IN ('completed', 'cancelled')
+");
+$check_dispatch->execute([$vehicle['id']]);
+$dispatch_active = $check_dispatch->fetchColumn() > 0;
+
+// Check shipments similarly
+$check_shipment = $pdo->prepare("
+    SELECT COUNT(*) FROM shipments 
+    WHERE vehicle_id = ? 
+    AND shipment_status NOT IN ('delivered', 'cancelled')
+");
+$check_shipment->execute([$vehicle['id']]);
+$shipment_active = $check_shipment->fetchColumn() > 0;
+
+$is_in_use = ($dispatch_active || $shipment_active);
+    // Count based on status
+    if ($is_maintenance) {
+        $real_maintenance_count++;
+    } else if ($is_in_use) {
+        $real_in_use_count++;
+    } else {
+        $real_available_count++;
+    }
+}
+
+$available_count = $real_available_count;
+$maintenance_count = $real_maintenance_count;
+$in_use_count = $real_in_use_count;
+    // FINAL DEBUG
+    echo "<!-- FINAL COUNTS - Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count -->\n";
+    
+    // Get drivers
     $stmt = $pdo->query("
         SELECT id, full_name, employee_id, status 
         FROM users 
@@ -118,19 +175,25 @@ $vehicles_last_month = $stmt->fetch()['total'] ?? 0;
     ");
     $drivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    echo "<!-- DEBUG START -->\n";
-foreach ($vehicles as $v) {
-    $has_maintenance = false;
-    foreach ($maintenance_alerts as $alert) {
-        if ($alert['asset_name'] == $v['asset_name']) {
-            $has_maintenance = true;
-            break;
+    // Detailed debug for vehicles
+    echo "<!-- ===== DETAILED DEBUG ===== -->\n";
+    foreach ($vehicles as $v) {
+        $has_maintenance = false;
+        foreach ($maintenance_alerts as $alert) {
+            if ($alert['asset_name'] == $v['asset_name']) {
+                $has_maintenance = true;
+                break;
+            }
         }
+        echo "<!-- Vehicle: {$v['asset_name']} -->\n";
+        echo "<!--   - Status: {$v['status']} -->\n";
+        echo "<!--   - Shipment Status: " . ($v['shipment_status'] ?? 'NULL') . " -->\n";
+        echo "<!--   - Dispatch Status: " . ($v['dispatch_status'] ?? 'NULL') . " -->\n";
+        echo "<!--   - is_in_use: " . ($v['is_in_use'] ?? 0) . " -->\n";
+        echo "<!--   - Has Maintenance: " . ($has_maintenance ? 'Yes' : 'No') . " -->\n";
     }
-    echo "<!-- Vehicle: {$v['asset_name']}, Status: {$v['status']}, Shipment: {$v['shipment_status']}, Has Maintenance: " . ($has_maintenance ? 'Yes' : 'No') . " -->\n";
-}
-echo "<!-- Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count -->\n";
-echo "<!-- DEBUG END -->\n";
+    echo "<!-- Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count -->\n";
+    echo "<!-- ===== END DEBUG ===== -->\n";
     
 } catch (PDOException $e) {
     error_log("Fleet page error: " . $e->getMessage());
@@ -144,6 +207,7 @@ echo "<!-- DEBUG END -->\n";
     $recent_trips = [];
     $condition_stats = ['excellent' => 0, 'good' => 0, 'fair' => 0, 'poor' => 0];
 }
+
 $page_title = 'Fleet Management | Logistics System';
 $page_css = ['../assets/css/style.css', '../assets/css/fleet.css'];
 include '../includes/header.php';
@@ -303,7 +367,28 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
         <p class="stat-label">In Maintenance</p>
         <p class="stat-value"><?php echo $maintenance_count; ?></p>
         <div class="stat-trend down">
-            <i class="fas fa-arrow-down"></i> <?php echo count($maintenance_alerts); ?> pending alerts
+           <?php
+// Count by status
+$pending_count = 0;
+$in_progress_count = 0;
+foreach ($maintenance_alerts as $alert) {
+    if ($alert['status'] == 'pending') $pending_count++;
+    if ($alert['status'] == 'in_progress') $in_progress_count++;
+}
+
+// Determine what to show
+if ($in_progress_count > 0 && $pending_count > 0) {
+    $status_text = $pending_count . ' pending, ' . $in_progress_count . ' in progress';
+    $icon = 'fa-tasks';
+} elseif ($in_progress_count > 0) {
+    $status_text = $in_progress_count . ' in progress';
+    $icon = 'fa-spinner fa-spin';
+} else {
+    $status_text = $pending_count . ' pending';
+    $icon = 'fa-clock';
+}
+?>
+<i class="fas <?php echo $icon; ?>"></i> <?php echo $status_text; ?>
         </div>
     </div>
     
@@ -477,39 +562,36 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
             </div>
         </div>
          <div class="vehicle-list" id="vehicleList">
-            <?php foreach ($vehicles as $vehicle): 
-        // Determine correct availability based on real data
-        $is_in_use = ($vehicle['shipment_status'] == 'in_transit' || $vehicle['shipment_status'] == 'pending');
-        
-        // Check if has maintenance
-        $has_maintenance = false;
-        foreach ($maintenance_alerts as $alert) {
-            if ($alert['asset_name'] == $vehicle['asset_name']) {
-                $has_maintenance = true;
-                break;
-            }
-        }
-        
-        // Set availability status
-        if ($has_maintenance) {
-            $availability = 'maintenance';
-            $status_text = 'MAINTENANCE';
-            $icon = 'wrench';
-        } else if ($is_in_use) {
-            $availability = 'in-use';
-            $status_text = 'IN USE';
-            $icon = 'play-circle';
-        } else {
-            $availability = 'available';
-            $status_text = 'AVAILABLE';
-            $icon = 'check-circle';
-        }
-        
-        $fuel = rand(30, 100);
-        
-        // DEBUG - Remove after fixing
-        echo "<!-- Vehicle: {$vehicle['asset_name']}, is_in_use: " . ($is_in_use ? 'true' : 'false') . ", has_maintenance: " . ($has_maintenance ? 'true' : 'false') . ", status_text: {$status_text} -->\n";
-    ?>
+<?php foreach ($vehicles as $vehicle): 
+    // Determine correct availability based on real data
+    $is_in_use = ($vehicle['shipment_status'] == 'in_transit' || $vehicle['shipment_status'] == 'pending');
+    
+    // Check if has ACTIVE maintenance (pending OR in_progress)
+    $has_maintenance = false;
+foreach ($maintenance_alerts as $alert) {
+    if ($alert['asset_name'] == $vehicle['asset_name'] && in_array($alert['status'], ['pending', 'in_progress'])) {
+        $has_maintenance = true;
+        break;
+    }
+}
+    
+    // Set availability status - MAINTENANCE TAKES PRIORITY
+    if ($has_maintenance) {
+        $availability = 'maintenance';
+        $status_text = 'MAINTENANCE';
+        $icon = 'wrench';
+    } else if ($is_in_use) { 
+        $availability = 'in-use';
+        $status_text = 'IN USE';
+        $icon = 'play-circle';
+    } else {
+        $availability = 'available';
+        $status_text = 'AVAILABLE';
+        $icon = 'check-circle';
+    }
+    
+    $fuel = rand(30, 100);
+?>
     <div class="vehicle-item" data-type="<?php echo $vehicle['asset_type']; ?>" data-status="<?php echo $vehicle['status']; ?>">
         <div class="vehicle-info">
             <div class="vehicle-icon">
@@ -578,6 +660,7 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
             </div>
         </div>
     </div>
+    
     <!-- Driver Performance Dashboard -->
        <div class="dashboard-grid">
         <div class="card">
@@ -603,6 +686,12 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
                     <button class="btn btn-success" onclick="updateStatus('delivered')" style="width: 100%; margin-bottom: 10px;">
                         <i class="fas fa-check"></i> Mark Delivered
                     </button>
+                      <button class="btn btn-warning" onclick="reportDelay()" style="width: 100%; margin-bottom: 10px;">
+                <i class="fas fa-exclamation-triangle"></i> Report Delay
+            </button>
+            <button class="btn btn-info" onclick="updateStatus('returned')" style="width: 100%; margin-bottom: 10px;">
+    <i class="fas fa-warehouse"></i> Returned to Dispatch Center
+</button>
                     <button class="btn btn-warning" onclick="updateLocation()" style="width: 100%;">
                         <i class="fas fa-map-marker-alt"></i> Update Location
                     </button>
@@ -732,18 +821,35 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
                         </div>
                     </div>
                     
-                    <!-- Dispatch Schedule -->
-                    <div class="card card-full">
-                        <div class="card-header">
-                            <h2><i class="fas fa-clock"></i> Dispatch Schedule</h2>
-                            <span class="card-badge">Today</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="schedule-list">
-                                <!-- Dynamic content loaded via JS -->
-                            </div>
-                        </div>
-                    </div>
+                   <!-- Dispatch Schedule -->
+<div class="card card-full">
+    <div class="card-header">
+        <h2><i class="fas fa-clock"></i> Dispatch Schedule</h2>
+        <span class="card-badge">Today</span>
+    </div>
+    <div class="card-body">
+        <div class="schedule-list">
+            <!-- Dynamic content loaded via JS -->
+        </div>
+    </div>
+</div>
+
+<!-- Pending Verification Section -->
+     <div class="card card-full">
+    <div class="card-header">
+        <h2><i class="fas fa-clipboard-check"></i> Pending Verification</h2>
+        <span class="card-badge">Vehicles awaiting return confirmation</span>
+    </div>
+    <div class="card-body">
+        <div id="verification-list" class="verification-list">
+            <div style="text-align: center; padding: 30px; color: #94a3b8;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 40px; margin-bottom: 10px;"></i>
+                <p>Loading verification data...</p>
+            </div>
+        </div>
+    </div>
+</div>
+                    
                     
                     <!-- Approved and Rejected Reservations -->
                     <div class="dashboard-grid">
@@ -783,7 +889,7 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
         <div class="modal-body">
             <form id="reservationForm" onsubmit="submitReservation(event)">
                 <div class="form-group">
-                    <label for="vehicleSelect">Select Vehicle *</label>
+                    <label for="vehicleSelect">Select available Vehicle *</label>
                     <select id="vehicleSelect" class="form-control" required>
                         <option value="">Loading vehicles...</option>
                     </select>
@@ -851,7 +957,7 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
                 </div>
                 
                 <div class="form-group">
-                    <label>Route</label>
+                    <label>Purpose</label>
                     <div id="assignRoute" style="padding: 10px; background-color: #f8f9fa; border-radius: 4px;"></div>
                 </div>
                 
@@ -881,11 +987,38 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
     <div class="card-header">
         <h2><i class="fas fa-wrench"></i> Maintenance Report</h2>
         <div style="display: flex; gap: 10px;">
-            <span class="card-badge"><?php echo count($maintenance_alerts); ?> pending</span>
+            <?php
+// Count by status (you can reuse the same counts from above)
+if (!isset($pending_count)) {
+    $pending_count = 0;
+    $in_progress_count = 0;
+    foreach ($maintenance_alerts as $alert) {
+        if ($alert['status'] == 'pending') $pending_count++;
+        if ($alert['status'] == 'in_progress') $in_progress_count++;
+    }
+}
+
+// Show appropriate badge
+if ($in_progress_count > 0 && $pending_count > 0): ?>
+    <span class="card-badge" >
+        <i class="fas fa-clock"></i> <?php echo $pending_count; ?> pending
+    </span>
+    <span class="card-badge">
+        <i class="fas fa-spinner fa-spin"></i> <?php echo $in_progress_count; ?> in progress
+    </span>
+<?php elseif ($in_progress_count > 0): ?>
+    <span class="card-badge" >
+        <i class="fas fa-spinner fa-spin"></i> <?php echo $in_progress_count; ?> in progress
+    </span>
+<?php else: ?>
+    <span class="card-badge" >
+        <i class="fas fa-clock"></i> <?php echo $pending_count; ?> pending
+    </span>
+<?php endif; ?>
             <?php if ($can_manage_maintenance): ?>
-                <button class="btn btn-sm btn-primary" onclick="openCreateMaintenanceModal()">
-                    <i class="fas fa-plus"></i> New Task
-                </button>
+                <button class="btn btn-sm btn-primary" onclick="openCreateMaintenanceModal('<?php echo $vehicle['asset_name']; ?>')" title="Assign Maintenance">
+    <i class="fas fa-wrench"></i> New Task
+</button>
             <?php endif; ?>
         </div>
     </div>
@@ -1302,63 +1435,6 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
         <?php endif; ?>
     </div>
 </div>
-                    
-                   
-                   <!-- Fleet Condition Summary -->
-<div class="card card-full">
-    <div class="card-header">
-        <h2><i class="fas fa-heartbeat"></i> Fleet Condition Summary</h2>
-        <span class="card-badge">Detailed view</span>
-    </div>
-    <div class="card-body">
-        <div class="condition-grid" style="grid-template-columns: repeat(4, 1fr);">
-            <div class="condition-item">
-                <div class="condition-icon">
-                    <i class="fas fa-star"></i>
-                </div>
-                <h3>Excellent</h3>
-                <div class="condition-value"><?php echo $condition_stats['excellent'] ?? 0; ?></div>
-                <div class="condition-bar">
-                    <div class="condition-fill good" style="width: <?php echo $total_vehicles > 0 ? round(($condition_stats['excellent']/$total_vehicles)*100) : 0; ?>%"></div>
-                </div>
-                <div class="condition-label"><?php echo $total_vehicles > 0 ? round(($condition_stats['excellent']/$total_vehicles)*100) : 0; ?>% of fleet</div>
-            </div>
-            <div class="condition-item">
-                <div class="condition-icon">
-                    <i class="fas fa-thumbs-up"></i>
-                </div>
-                <h3>Good</h3>
-                <div class="condition-value"><?php echo $condition_stats['good'] ?? 0; ?></div>
-                <div class="condition-bar">
-                    <div class="condition-fill good" style="width: <?php echo $total_vehicles > 0 ? round(($condition_stats['good']/$total_vehicles)*100) : 0; ?>%"></div>
-                </div>
-                <div class="condition-label"><?php echo $total_vehicles > 0 ? round(($condition_stats['good']/$total_vehicles)*100) : 0; ?>% of fleet</div>
-            </div>
-            <div class="condition-item">
-                <div class="condition-icon">
-                    <i class="fas fa-exclamation"></i>
-                </div>
-                <h3>Fair</h3>
-                <div class="condition-value"><?php echo $condition_stats['fair'] ?? 0; ?></div>
-                <div class="condition-bar">
-                    <div class="condition-fill warning" style="width: <?php echo $total_vehicles > 0 ? round(($condition_stats['fair']/$total_vehicles)*100) : 0; ?>%"></div>
-                </div>
-                <div class="condition-label"><?php echo $total_vehicles > 0 ? round(($condition_stats['fair']/$total_vehicles)*100) : 0; ?>% of fleet</div>
-            </div>
-            <div class="condition-item">
-                <div class="condition-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <h3>Poor</h3>
-                <div class="condition-value"><?php echo $condition_stats['poor'] ?? 0; ?></div>
-                <div class="condition-bar">
-                    <div class="condition-fill critical" style="width: <?php echo $total_vehicles > 0 ? round(($condition_stats['poor']/$total_vehicles)*100) : 0; ?>%"></div>
-                </div>
-                <div class="condition-label"><?php echo $total_vehicles > 0 ? round(($condition_stats['poor']/$total_vehicles)*100) : 0; ?>% of fleet</div>
-            </div>
-        </div>
-    </div>
-</div>
                 </div>
             </div>
         </main>
@@ -1367,4 +1443,5 @@ $badge_color = $available_count > 0 ? 'green' : 'amber';
 document.body.dataset.userRole = '<?php echo $_SESSION['role']; ?>';
 </script>
     <script src="../assets/js/pages/fleet.js"></script>
+    
 </body>

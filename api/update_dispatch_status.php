@@ -21,13 +21,12 @@ if (!$input || !isset($input['schedule_id']) || !isset($input['status'])) {
 $schedule_id = $input['schedule_id'];
 $status = $input['status'];
 $current_location = $input['current_location'] ?? '';
-$new_status = $input['new_status'] ?? '';
 
 try {
     // Verify this schedule belongs to the logged-in driver
     $check = $pdo->prepare("
-        SELECT ds.*, vr.vehicle_id, vr.start_date, vr.end_date, vr.customer_name, vr.delivery_address,
-               vr.id as reservation_id
+        SELECT ds.*, vr.vehicle_id, vr.id as reservation_id,
+               vr.customer_name, vr.delivery_address
         FROM dispatch_schedule ds
         LEFT JOIN vehicle_reservations vr ON ds.reservation_id = vr.id
         WHERE ds.id = ? AND ds.driver_id = ?
@@ -58,94 +57,71 @@ try {
     
     $update->execute([$status, $action_text, $current_location, $schedule_id]);
     
-    // ===== IMPORTANT: Update reservation to 'completed' when trip is done =====
-    if ($status === 'completed' || $new_status === 'delivered') {
-        // Update the corresponding reservation to 'completed'
-        if (!empty($schedule['reservation_id'])) {
-            $update_reservation = $pdo->prepare("
-                UPDATE vehicle_reservations 
-                SET status = 'completed',
-                    notes = CONCAT(COALESCE(notes, ''), '\nTrip completed on ', NOW())
-                WHERE id = ?
-            ");
-            $update_reservation->execute([$schedule['reservation_id']]);
-        }
-    }
-    
-    // Also update the corresponding shipment if it exists
-    $shipment_updated = false;
-    
-    // Try to find and update the shipment
+    // Update the corresponding shipment based on status
     if ($schedule['vehicle_id']) {
-        // First, try to find shipment by vehicle_id that's in progress
+        // Find the shipment linked to this reservation
         $find_shipment = $pdo->prepare("
             SELECT shipment_id FROM shipments 
-            WHERE vehicle_id = ? 
-            AND shipment_status IN ('pending', 'in_transit')
-            ORDER BY created_at DESC
-            LIMIT 1
+            WHERE order_id = ? OR vehicle_id = ?
+            ORDER BY created_at DESC LIMIT 1
         ");
-        $find_shipment->execute([$schedule['vehicle_id']]);
+        $find_shipment->execute([$schedule['reservation_id'], $schedule['vehicle_id']]);
         $shipment = $find_shipment->fetch(PDO::FETCH_ASSOC);
         
         if ($shipment) {
-            // Update existing shipment
+            // Map dispatch status to shipment status
             $shipment_status = 'pending';
-            if ($new_status === 'in_transit' || $status === 'in-progress') {
+            $update_fields = [];
+            
+            if ($status === 'in-progress') {
                 $shipment_status = 'in_transit';
-            } else if ($new_status === 'delivered' || $status === 'completed') {
+                $update_shipment = $pdo->prepare("
+                    UPDATE shipments 
+                    SET shipment_status = ?,
+                        departure_time = COALESCE(departure_time, NOW()),
+                        current_location = ?
+                    WHERE shipment_id = ?
+                ");
+                $update_shipment->execute([$shipment_status, $current_location, $shipment['shipment_id']]);
+                
+            } else if ($status === 'delivered') {
                 $shipment_status = 'delivered';
+                $update_shipment = $pdo->prepare("
+                    UPDATE shipments 
+                    SET shipment_status = ?,
+                        current_location = ?
+                    WHERE shipment_id = ?
+                ");
+                $update_shipment->execute([$shipment_status, $current_location, $shipment['shipment_id']]);
+                
+            } else if ($status === 'awaiting_verification') {
+                $shipment_status = 'delivered';
+                $update_shipment = $pdo->prepare("
+                    UPDATE shipments 
+                    SET shipment_status = ?,
+                        current_location = ?
+                    WHERE shipment_id = ?
+                ");
+                $update_shipment->execute([$shipment_status, $current_location, $shipment['shipment_id']]);
+                
+            } else if ($status === 'completed') {
+                $shipment_status = 'delivered';
+                $update_shipment = $pdo->prepare("
+                    UPDATE shipments 
+                    SET shipment_status = ?,
+                        actual_arrival = NOW()
+                    WHERE shipment_id = ?
+                ");
+                $update_shipment->execute([$shipment_status, $shipment['shipment_id']]);
             }
-            
-            $update_shipment = $pdo->prepare("
-                UPDATE shipments 
-                SET shipment_status = ?,
-                    current_location = ?,
-                    departure_time = CASE 
-                        WHEN ? = 'in_transit' AND departure_time IS NULL THEN NOW() 
-                        ELSE departure_time 
-                    END,
-                    actual_arrival = CASE 
-                        WHEN ? = 'delivered' THEN NOW() 
-                        ELSE actual_arrival 
-                    END
-                WHERE shipment_id = ?
-            ");
-            
-            $update_shipment->execute([
-                $shipment_status, 
-                $current_location,
-                $shipment_status,
-                $shipment_status,
-                $shipment['shipment_id']
-            ]);
-            
-            $shipment_updated = true;
         }
-    }
-    
-    // If no shipment found but we're marking as delivered, create a completion record
-    if (!$shipment_updated && ($new_status === 'delivered' || $status === 'completed')) {
-        // Insert into trip history or create a completion record
-        $complete_trip = $pdo->prepare("
-            INSERT INTO shipment_tracking (
-                shipment_id, 
-                location, 
-                status_update, 
-                updated_at
-            ) VALUES (NULL, ?, 'Trip completed from dispatch schedule', NOW())
-        ");
-        $complete_trip->execute([$current_location ?: 'Delivery location']);
     }
     
     $pdo->commit();
     
     echo json_encode([
         'success' => true,
-        'message' => 'Status updated successfully',
-        'new_status' => $status,
-        'shipment_updated' => $shipment_updated,
-        'reservation_updated' => !empty($schedule['reservation_id']) // Add this for debugging
+        'message' => 'Status updated successfully'
     ]);
     
 } catch (PDOException $e) {
