@@ -17,7 +17,21 @@ if (!in_array($_SESSION['role'], ['admin', 'fleet_manager'])) {
     echo json_encode(['success' => false, 'error' => 'Forbidden']);
     exit();
 }
+// Before inserting maintenance, check if vehicle is in use
+$vehicle_name = $input['asset_name'];
 
+// Get vehicle ID from name
+$vehicle_stmt = $pdo->prepare("SELECT id FROM assets WHERE asset_name = ?");
+$vehicle_stmt->execute([$vehicle_name]);
+$vehicle = $vehicle_stmt->fetch();
+
+if ($vehicle && isVehicleInUse($vehicle['id'], $pdo)) {
+    echo json_encode([
+        'success' => false, 
+        'error' => 'Cannot assign maintenance: Vehicle is currently in use'
+    ]);
+    exit();
+}
 $input = json_decode(file_get_contents('php://input'), true);
 
 if (!$input || !isset($input['id'])) {

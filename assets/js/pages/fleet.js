@@ -4,8 +4,14 @@
 // INITIALIZATION
 // ============================================
 // Add this at the very beginning of your fleet.js
+// ============================================
+// MAINTENANCE COMPLETE FUNCTIONS - MUST BE AT TOP
+// ============================================
+// Force the complete button to work with better debugging
+// Add this after your existing code
+// Replace the code at line 490-493 with this:
 
-
+// Move this INSIDE the DOMContentLoaded event (around line 30-40)
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Fleet dashboard loaded');
     
@@ -34,6 +40,24 @@ document.addEventListener('DOMContentLoaded', function() {
     if (userRole !== 'driver' && activeTab && activeTab.dataset.tab === 'overview') {
         console.log('Overview tab active on load, loading trip history...');
         setTimeout(loadTripHistory, 1000);
+    }
+    
+    // ADD THIS SECTION HERE - Move the reservations tab listener inside DOMContentLoaded
+    const reservationsTab = document.querySelector('.tab[data-tab="reservations"]');
+    if (reservationsTab) {
+        reservationsTab.addEventListener('click', function() {
+            console.log('Reservations tab clicked - loading verifications');
+            setTimeout(loadVehicleReservations, 100);
+            setTimeout(loadPendingVerifications, 200);
+        });
+    } else {
+        console.log('Reservations tab not found - user is likely driver or mechanic');
+    }
+    
+    // Check if reservations tab is active on page load
+    if (activeTab && activeTab.dataset.tab === 'reservations' && reservationsTab) {
+        console.log('Reservations tab active on load');
+        setTimeout(loadPendingVerifications, 500);
     }
 });
 
@@ -228,9 +252,25 @@ function loadDriverAssignment() {
             if (data.success) {
                 if (data.has_assignment) {
                     const a = data.assignment;
-                    statusBadge.textContent = a.shipment_status.toUpperCase();
-                    statusBadge.className = 'card-badge ' + 
-                        (a.shipment_status === 'in_transit' ? 'status-warning' : 'status-info');
+                    
+                    // Determine badge class and text based on status
+                    let badgeClass = 'card-badge ';
+                    let statusText = a.shipment_status.toUpperCase();
+                    
+                    if (a.shipment_status === 'in_transit' || a.shipment_status === 'in-progress') {
+                        badgeClass += 'status-warning';
+                    } else if (a.shipment_status === 'delivered') {
+                        badgeClass += 'status-info';
+                        statusText = 'DELIVERED (AWAITING RETURN)';
+                    } else if (a.shipment_status === 'completed') {
+                        badgeClass += 'status-success';
+                        statusText = 'COMPLETED';
+                    } else {
+                        badgeClass += 'status-info';
+                    }
+                    
+                    statusBadge.textContent = statusText;
+                    statusBadge.className = badgeClass;
                     
                     content.innerHTML = `
                         <div class="assignment-details">
@@ -271,7 +311,6 @@ function loadDriverAssignment() {
             console.error('Error loading assignment:', error);
         });
 }
-
 function loadDriverTrips() {
     const tripHistory = document.getElementById('trip-history');
     if (!tripHistory) {
@@ -287,11 +326,6 @@ function loadDriverTrips() {
         .then(data => {
             console.log('Trips data received:', data);
             
-            // Log debug info to console
-            if (data.debug) {
-                console.log('Debug info:', data.debug);
-            }
-            
             if (data.success) {
                 if (data.trips && data.trips.length > 0) {
                     let html = '';
@@ -299,15 +333,32 @@ function loadDriverTrips() {
                         let statusColor = '#6b7280';
                         let statusBg = '#6b728020';
                         let icon = 'truck';
-                        
-                        if (trip.shipment_status === 'delivered' || trip.shipment_status === 'completed') {
-                            statusColor = '#10b981';
+                        let displayStatus = trip.shipment_status;
+
+                        // FIXED STATUS MAPPING
+                        if (trip.shipment_status === 'completed') {
+                            statusColor = '#10b981'; // Green
                             statusBg = '#10b98120';
                             icon = 'check-circle';
-                        } else if (trip.shipment_status === 'in_transit' || trip.shipment_status === 'in-progress') {
-                            statusColor = '#f59e0b';
+                            displayStatus = 'Completed';
+                        }
+                        else if (trip.shipment_status === 'delivered') {
+                            statusColor = '#3b82f6'; // Blue
+                            statusBg = '#3b82f620';
+                            icon = 'check-circle';
+                            displayStatus = 'Delivered (Returning)';
+                        } 
+                        else if (trip.shipment_status === 'awaiting_verification') {
+                            statusColor = '#f59e0b'; // Orange
+                            statusBg = '#f59e0b20';
+                            icon = 'clock';
+                            displayStatus = 'Awaiting Verification';
+                        } 
+                        else if (trip.shipment_status === 'in_transit' || trip.shipment_status === 'in-progress') {
+                            statusColor = '#f59e0b'; // Orange
                             statusBg = '#f59e0b20';
                             icon = 'play-circle';
+                            displayStatus = 'In Transit';
                         }
                         
                         html += `
@@ -324,7 +375,7 @@ function loadDriverTrips() {
                                 </div>
                                 <div>
                                     <span style="padding: 4px 12px; border-radius: 20px; font-size: 12px; background-color: ${statusBg}; color: ${statusColor};">
-                                        ${trip.shipment_status || 'pending'}
+                                        ${displayStatus}
                                     </span>
                                 </div>
                             </div>
@@ -332,30 +383,19 @@ function loadDriverTrips() {
                     });
                     tripHistory.innerHTML = html;
                 } else {
-                    // Show more detailed message if debug info is available
-                    let debugMessage = '';
-                    if (data.debug) {
-                        debugMessage = `<p style="font-size: 12px; color: #999; margin-top: 10px;">
-                            Debug: Driver ID ${data.debug.driver_id}, Records: ${data.debug.total_records || 0}
-                        </p>`;
-                    }
-                    
                     tripHistory.innerHTML = `
                         <div style="text-align: center; padding: 40px; background-color: #f8f9fa; border-radius: 8px;">
                             <i class="fas fa-info-circle" style="font-size: 48px; color: #17a2b8; margin-bottom: 16px;"></i>
                             <h3 style="color: #17a2b8; margin-bottom: 10px;">No Trip History</h3>
                             <p style="color: #6c757d;">You don't have any trip history yet.</p>
-                            ${debugMessage}
                         </div>
                     `;
                 }
-            } else {
-                tripHistory.innerHTML = '<div class="error-state">Error: ' + (data.error || 'Unknown error') + '</div>';
             }
         })
         .catch(error => {
             console.error('Error loading trips:', error);
-            tripHistory.innerHTML = '<div class="error-state">Failed to load trips: ' + error.message + '</div>';
+            tripHistory.innerHTML = '<div class="error-state">Failed to load trips</div>';
         });
 }
 
@@ -386,78 +426,266 @@ function loadDriverStats() {
         });
 }
 
-function updateStatus(newStatus) {
-    // First, get the current assignment to get the dispatch_schedule ID
-    fetch('../api/get_driver_assignment.php')
+// ============================================
+// VEHICLE RETURN VERIFICATION FUNCTIONS
+// ============================================
+function loadPendingVerifications() {
+    console.log('🔄 Loading pending verifications...');
+    
+    const container = document.getElementById('verification-list') || 
+                      document.querySelector('.verification-list');
+    
+    if (!container) {
+        console.error('❌ Verification container not found');
+        return;
+    }
+    
+    container.innerHTML = '<div style="text-align: center; padding: 30px;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+    
+    fetch('../api/get_pending_verifications.php?_=' + new Date().getTime())
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.has_assignment) {
-                const assignment = data.assignment;
-                const assignmentId = assignment.id; // This is the dispatch_schedule ID
-                
-                // Ask for current location if starting trip or delivering
-                let currentLocation = '';
-                if (newStatus === 'in_transit' || newStatus === 'delivered') {
-                    currentLocation = prompt('Enter current location:');
-                    if (!currentLocation) return;
+            console.log('📦 API Data received:', data);
+            
+            if (data.success) {
+                if (data.verifications && data.verifications.length > 0) {
+                    let html = '';
+                    data.verifications.forEach(v => {
+                        html += `
+                            <div class="verification-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #f0f0f0;">
+                                <div>
+                                    <strong>${v.asset_name}</strong> - Driver: ${v.driver_name}
+                                    <div style="font-size: 12px; color: #64748b;">Requested: ${v.requested_time}</div>
+                                </div>
+                                <div>
+                                    <button onclick="verifyReturn(${v.id}, true)" style="background-color: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 4px; margin-right: 5px; cursor: pointer;">
+                                        <i class="fas fa-check"></i> Verify
+                                    </button>
+                                    <button onclick="verifyReturn(${v.id}, false)" style="background-color: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 30px; color: #94a3b8;">
+                            <i class="fas fa-check-circle" style="font-size: 40px; margin-bottom: 10px;"></i>
+                            <p>No vehicles pending verification</p>
+                        </div>
+                    `;
                 }
-                
-                // Map status for dispatch_schedule
-                let dispatchStatus = 'scheduled';
-                if (newStatus === 'in_transit') {
-                    dispatchStatus = 'in-progress';
-                } else if (newStatus === 'delivered') {
-                    dispatchStatus = 'completed';
-                }
-                
-                // Show loading notification
-                showNotification('Updating status...', 'info');
-                
-                // Update the dispatch schedule status
-                fetch('../api/update_dispatch_status.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        schedule_id: assignmentId,
-                        status: dispatchStatus,
-                        current_location: currentLocation,
-                        new_status: newStatus // Pass the original status for shipment update
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        let message = '';
-                        if (newStatus === 'in_transit') {
-                            message = 'Trip started successfully!';
-                        } else if (newStatus === 'delivered') {
-                            message = 'Delivery completed successfully!';
-                        }
-                        
-                        showNotification(message, 'success');
-                        
-                        // Refresh the assignment display
-                        setTimeout(() => {
-                            loadDriverAssignment();
-                            loadDriverTrips();
-                        }, 500);
-                    } else {
-                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Fetch error:', error);
-                    showNotification('Error: ' + error.message, 'error');
-                });
             } else {
-                showNotification('No active assignment found', 'error');
+                // Show the actual error from the API
+                container.innerHTML = `
+                    <div style="color: #ef4444; padding: 15px; background: #fee2e2; border-radius: 8px;">
+                        <strong>Error:</strong> ${data.error || 'Unknown error'}<br>
+                        <small style="color: #666;">Check console for details</small>
+                    </div>
+                `;
             }
         })
         .catch(error => {
-            console.error('Error getting assignment:', error);
+            console.error('❌ Error loading verifications:', error);
+            container.innerHTML = '<div style="color: #ef4444; padding: 15px;">Error: ' + error.message + '</div>';
+        });
+}
+
+function verifyReturn(scheduleId, approved) {
+    console.log('Verifying return:', scheduleId, approved ? 'APPROVE' : 'REJECT');
+    
+    let message = approved ? 
+        'Confirm vehicle return? This will mark the vehicle as available.' : 
+        'Reject return request? Please provide a reason.';
+    
+    if (!approved) {
+        const reason = prompt('Reason for rejection:');
+        if (reason === null) return;
+        
+        fetch('../api/verify_vehicle_return.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                schedule_id: scheduleId,
+                approved: false,
+                reason: reason
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('✅ Response data:', data); // ADD THIS LINE
+            if (data.success) {
+                showNotification('Return request rejected', 'info');
+                loadPendingVerifications();
+                loadVehicleAvailability();
+            } else {
+                showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Error processing request', 'error');
+        });
+    } else {
+        if (!confirm(message)) return;
+        
+        fetch('../api/verify_vehicle_return.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                schedule_id: scheduleId,
+                approved: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('✅ Response data:', data); // ADD THIS LINE
+            if (data.success) {
+                showNotification('Vehicle return verified! Vehicle is now available.', 'success');
+                loadPendingVerifications();
+                loadVehicleAvailability();
+            } else {
+                showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Error processing request', 'error');
+        });
+    }
+}
+function updateStatus(newStatus) {
+    console.log('🔵 updateStatus called with:', newStatus);
+    
+    // Get the button that was clicked
+    const clickedButton = event?.target;
+    const originalText = clickedButton ? clickedButton.innerHTML : '';
+    
+    // Disable the button immediately to prevent double-clicking
+    if (clickedButton) {
+        clickedButton.disabled = true;
+        clickedButton.style.opacity = '0.5';
+        clickedButton.style.cursor = 'not-allowed';
+    }
+    
+    // First, check what assignments exist for this driver
+    fetch('../api/get_driver_assignment.php?_=' + new Date().getTime())
+        .then(response => {
+            console.log('📡 Response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('📦 Full assignment data:', data);
+            
+            if (data.success) {
+                if (data.has_assignment) {
+                    const assignment = data.assignment;
+                    console.log('✅ Assignment found:', assignment);
+                    console.log('Assignment ID:', assignment.id);
+                    console.log('Current status:', assignment.shipment_status);
+                    
+                    // Continue with the update...
+                    let currentLocation = prompt('Enter current location:');
+                    if (!currentLocation) {
+                        // Re-enable button if user cancels prompt
+                        if (clickedButton) {
+                            clickedButton.disabled = false;
+                            clickedButton.style.opacity = '1';
+                            clickedButton.style.cursor = 'pointer';
+                        }
+                        return;
+                    }
+                    
+                    let dispatchStatus = '';
+                    let message = '';
+                    
+                    if (newStatus === 'in_transit') {
+                        dispatchStatus = 'in-progress';
+                        message = 'Trip started!';
+                    } 
+                    else if (newStatus === 'delivered') {
+                        dispatchStatus = 'delivered';
+                        message = 'Goods delivered! Return to dispatch center.';
+                    }
+                    else if (newStatus === 'returned') {
+                        dispatchStatus = 'awaiting_verification';
+                        message = 'Return requested. Waiting for dispatcher verification.';
+                    }
+                    
+                    console.log('📤 Sending to API:', {
+                        schedule_id: assignment.id,
+                        status: dispatchStatus,
+                        current_location: currentLocation
+                    });
+                    
+                    fetch('../api/update_dispatch_status.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            schedule_id: assignment.id,
+                            status: dispatchStatus,
+                            current_location: currentLocation
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('📥 Update API Response:', data);
+                        if (data.success) {
+                            showNotification(message, 'success');
+                            loadDriverAssignment();
+                            loadDriverTrips();
+                        } else {
+                            showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                            // Re-enable button on error
+                            if (clickedButton) {
+                                clickedButton.disabled = false;
+                                clickedButton.style.opacity = '1';
+                                clickedButton.style.cursor = 'pointer';
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ Fetch error:', error);
+                        showNotification('Error: ' + error.message, 'error');
+                        // Re-enable button on error
+                        if (clickedButton) {
+                            clickedButton.disabled = false;
+                            clickedButton.style.opacity = '1';
+                            clickedButton.style.cursor = 'pointer';
+                        }
+                    });
+                } else {
+                    console.log('❌ No active assignment found:', data);
+                    showNotification('No active assignment found', 'error');
+                    // Re-enable button
+                    if (clickedButton) {
+                        clickedButton.disabled = false;
+                        clickedButton.style.opacity = '1';
+                        clickedButton.style.cursor = 'pointer';
+                    }
+                }
+            } else {
+                console.log('❌ API returned error:', data.error);
+                showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                // Re-enable button
+                if (clickedButton) {
+                    clickedButton.disabled = false;
+                    clickedButton.style.opacity = '1';
+                    clickedButton.style.cursor = 'pointer';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error getting assignment:', error);
             showNotification('Error: ' + error.message, 'error');
+            // Re-enable button
+            if (clickedButton) {
+                clickedButton.disabled = false;
+                clickedButton.style.opacity = '1';
+                clickedButton.style.cursor = 'pointer';
+            }
         });
 }
 
@@ -1096,6 +1324,7 @@ function loadAvailableVehicles() {
         });
 }
 
+
 // Update the openReservationModal function
 function loadVehicleAvailability() {
     const vehicleList = document.querySelector('.vehicle-list');
@@ -1357,11 +1586,20 @@ function assignMechanic(event) {
 // ============================================
 // MAINTENANCE MODAL FUNCTIONS
 // ============================================
-function closeCreateMaintenanceModal() {
-    document.getElementById('createMaintenanceModal').style.display = 'none';
-}
-function openCreateMaintenanceModal() {
-    console.log('Opening create maintenance modal');
+function openCreateMaintenanceModal(vehicleName) {
+    console.log('Opening create maintenance modal for:', vehicleName);
+    
+    // Set the vehicle name in the modal
+    const assetSelect = document.getElementById('createAssetName');
+    if (assetSelect) {
+        // Find and select the vehicle in the dropdown
+        for (let i = 0; i < assetSelect.options.length; i++) {
+            if (assetSelect.options[i].value === vehicleName) {
+                assetSelect.selectedIndex = i;
+                break;
+            }
+        }
+    }
     
     // Set default due date (7 days from now)
     const dueDate = new Date();
@@ -1372,9 +1610,9 @@ function openCreateMaintenanceModal() {
     }
     
     // Show the modal
-    const modal = document.getElementById('createMaintenanceModal');
-    if (modal) {
-        modal.style.display = 'flex';
+    const modalElement = document.getElementById('createMaintenanceModal');
+    if (modalElement) {
+        modalElement.style.display = 'flex';
     } else {
         console.error('Create maintenance modal not found');
         alert('Maintenance modal not found. Please refresh the page.');
@@ -1382,11 +1620,13 @@ function openCreateMaintenanceModal() {
 }
 
 function closeCreateMaintenanceModal() {
-    const modal = document.getElementById('createMaintenanceModal');
-    if (modal) {
-        modal.style.display = 'none';
+    const modalElement = document.getElementById('createMaintenanceModal');
+    if (modalElement) {
+        modalElement.style.display = 'none';
     }
 }
+
+// Remove the duplicate closeCreateMaintenanceModal function above this line!
 
 function createMaintenance(event) {
     event.preventDefault();
@@ -1445,78 +1685,132 @@ function updateDriverActivity() {
     // You can add logic here to refresh driver activity data
     loadDriverActivity(); // This will refresh the driver activity display
 }
-// Also make sure you have these other maintenance functions if needed
-function startMaintenance(id) {
-    if (!confirm('Start this maintenance task?')) return;
-    
-    fetch('../api/start_maintenance.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: id })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showNotification('Maintenance started', 'success');
-            loadMaintenanceReport();
-        } else {
-            showNotification('Error: ' + data.error, 'error');
-        }
-    });
-}
 
-function completeMaintenance(id) {
-    const notes = prompt('Enter completion notes:');
-    
-    fetch('../api/complete_maintenance.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: id, notes: notes })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showNotification('Maintenance completed', 'success');
-            loadMaintenanceReport();
-        } else {
-            showNotification('Error: ' + data.error, 'error');
-        }
-    });
-}
+
+
 function openCompleteMaintenanceModal(id) {
-    document.getElementById('completeMaintenanceId').value = id;
-    document.getElementById('completeMaintenanceModal').style.display = 'flex';
+    console.log('🔵 openCompleteMaintenanceModal called with ID:', id);
+    
+    // Check if modal exists
+    const modal = document.getElementById('completeMaintenanceModal');
+    console.log('Modal element:', modal);
+    
+    if (!modal) {
+        console.error('❌ Modal not found! Check HTML for id="completeMaintenanceModal"');
+        alert('Error: Complete maintenance modal not found in the page');
+        return;
+    }
+    
+    // Check if ID input exists
+    const idInput = document.getElementById('completeMaintenanceId');
+    console.log('ID input element:', idInput);
+    
+    if (!idInput) {
+        console.error('❌ ID input not found! Check for id="completeMaintenanceId"');
+        alert('Error: Maintenance ID input not found');
+        return;
+    }
+    
+    // Set the ID
+    idInput.value = id;
+    console.log('✅ Set ID to:', idInput.value);
+    
+    // Show modal
+    modal.style.display = 'flex';
+    console.log('✅ Modal display set to flex');
 }
 
 function closeCompleteMaintenanceModal() {
-    document.getElementById('completeMaintenanceModal').style.display = 'none';
+    console.log('Closing complete maintenance modal');
+    const modal = document.getElementById('completeMaintenanceModal');
+    if (modal) {
+        modal.style.display = 'none';
+        // Clear the form
+        document.getElementById('completionNotes').value = '';
+    }
 }
-
+// Make sure completeMaintenance is available globally
+window.completeMaintenance = function(event) {
+    // The function body will be replaced by the one above
+};
 function completeMaintenance(event) {
     event.preventDefault();
+    event.stopPropagation(); // Add this to stop event bubbling
+    console.log('✅ completeMaintenance function called');
     
-    const data = {
-        id: document.getElementById('completeMaintenanceId').value,
-        notes: document.getElementById('completionNotes').value
+    const id = document.getElementById('completeMaintenanceId').value;
+    const notes = document.getElementById('completionNotes').value;
+    
+    console.log('ID:', id);
+    console.log('Notes:', notes);
+    
+    if (!id) {
+        alert('Error: No maintenance ID found');
+        return;
+    }
+    
+    // Show loading on button
+    const btn = event.target.querySelector('button[type="submit"]') || 
+                document.querySelector('#completeMaintenanceModal .btn-success');
+    const originalText = btn ? btn.innerHTML : 'Complete';
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        btn.disabled = true;
+    }
+    
+    // Make sure we have valid data
+    const data = { 
+        id: parseInt(id), // Ensure ID is a number
+        notes: notes || '' 
     };
+    
+    console.log('Sending data:', data);
     
     fetch('../api/complete_maintenance.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
         body: JSON.stringify(data)
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response status:', response.status);
+        return response.json();
+    })
     .then(data => {
+        console.log('API Response:', data);
         if (data.success) {
-            showNotification('Maintenance completed', 'success');
+            alert('Maintenance completed successfully!');
             closeCompleteMaintenanceModal();
-            loadMaintenanceReport();
+            // Reload both views
+            if (typeof loadMechanicTasks === 'function') {
+                loadMechanicTasks();
+            }
+            if (typeof loadMaintenanceReport === 'function') {
+                loadMaintenanceReport();
+            }
+            // Also reload the page to be safe
+            setTimeout(() => location.reload(), 500);
         } else {
-            showNotification('Error: ' + data.error, 'error');
+            alert('Error: ' + (data.error || 'Unknown error'));
+            if (btn) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Fetch Error:', error);
+        alert('Error: ' + error.message);
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
     });
-}
 
+    return false; // Prevent form submission
+}
 function loadFleetCondition() {
     const conditionGrid = document.querySelector('.condition-grid');
     if (!conditionGrid) return;
@@ -1629,7 +1923,71 @@ function displayEfficiency(efficiency) {
 // ============================================
 // DELAY ANALYSIS FUNCTIONS
 // ============================================
-
+function reportDelay() {
+    console.log('Opening delay report...');
+    
+    // First, get current assignment
+    fetch('../api/get_driver_assignment.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.has_assignment) {
+                const assignment = data.assignment;
+                const shipmentId = assignment.id;
+                
+                // Show reason prompt with suggestions
+                const reason = prompt(
+                    'Reason for delay (examples: traffic, weather, mechanical issue, loading problem, accident):'
+                );
+                if (!reason) return;
+                
+                // Ask for duration with unit
+                let duration = prompt(
+                    'How long is the delay?\n\n' +
+                    'Examples:\n' +
+                    '- "30 minutes"\n' +
+                    '- "2 hours"\n' +
+                    '- "1 day"\n' +
+                    '- "until tomorrow"\n\n' +
+                    'Enter duration:'
+                );
+                if (!duration) return;
+                
+                // Show loading notification
+                showNotification('Reporting delay...', 'info');
+                
+                // Submit to API
+                fetch('../api/report_delay.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        shipment_id: shipmentId,
+                        reason: reason,
+                        duration: duration, // Now stores as text like "2 hours"
+                        route: assignment.route || assignment.delivery_address || 'Unknown route'
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('Delay reported successfully!', 'success');
+                    } else {
+                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification('Failed to report delay', 'error');
+                });
+                
+            } else {
+                showNotification('No active assignment found', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error getting assignment:', error);
+            showNotification('Error getting assignment', 'error');
+        });
+}
 function loadDelayAnalysis() {
     const delayList = document.querySelector('.delay-list');
     if (!delayList) return;
@@ -1670,7 +2028,7 @@ function displayDelays(delays) {
                     </div>
                 </div>
                 <div class="delay-duration">
-                    ${delay.duration} min
+                    ${delay.duration}
                 </div>
                 <div class="delay-type">
                     ${delay.type}
@@ -2426,65 +2784,6 @@ function debounce(func, wait) {
 // MECHANIC FUNCTIONS
 // ============================================
 
-function loadMechanicTasks() {
-    console.log('🔧 Loading mechanic tasks...');
-    console.log('Current user role:', document.body.dataset.userRole);
-    
-    // Check if mechanic tab exists and is visible
-    const mechanicTab = document.getElementById('tab-mechanic');
-    console.log('Mechanic tab exists:', mechanicTab !== null);
-    if (mechanicTab) {
-        console.log('Mechanic tab display:', mechanicTab.style.display);
-    }
-    
-    const tasksList = document.getElementById('my-tasks-content');
-    console.log('Tasks list element found:', tasksList !== null);
-    
-    if (!tasksList) {
-        console.error('❌ Tasks list element not found - ID="my-tasks-content"');
-        console.log('Available elements with IDs:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
-        return;
-    }
-    
-    const tasksCount = document.getElementById('tasks-count');
-    console.log('Tasks count element found:', tasksCount !== null);
-    
-    tasksList.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #3b82f6;"></i><p>Loading your tasks...</p></div>';
-    
-    fetch('../api/get_mechanic_tasks.php?_=' + new Date().getTime())
-        .then(response => {
-            console.log('API response status:', response.status);
-            return response.json();
-        })
-        .then(data => {
-            console.log('API data received:', data);
-            
-            if (data.success) {
-                if (data.tasks && data.tasks.length > 0) {
-                    console.log(`Found ${data.tasks.length} tasks`);
-                    if (tasksCount) tasksCount.textContent = data.tasks.length + ' pending';
-                    displayMechanicTasks(data.tasks);
-                } else {
-                    console.log('No tasks found');
-                    if (tasksCount) tasksCount.textContent = '0 tasks';
-                    tasksList.innerHTML = `
-                        <div style="text-align: center; padding: 60px;">
-                            <i class="fas fa-check-circle" style="font-size: 64px; color: #10b981; margin-bottom: 20px;"></i>
-                            <h3 style="color: #1e293b; margin-bottom: 10px;">No Tasks Assigned</h3>
-                            <p style="color: #64748b;">You don't have any maintenance tasks at the moment.</p>
-                        </div>
-                    `;
-                }
-            } else {
-                console.error('API error:', data.error);
-                tasksList.innerHTML = '<div class="error-state">Error: ' + (data.error || 'Unknown error') + '</div>';
-            }
-        })
-        .catch(error => {
-            console.error('Fetch error:', error);
-            tasksList.innerHTML = '<div class="error-state">Failed to load tasks: ' + error.message + '</div>';
-        });
-}
 // Add this at the end of your DOMContentLoaded event
 document.addEventListener('DOMContentLoaded', function() {
     // ... existing code ...
@@ -2558,10 +2857,10 @@ function displayMechanicTasks(tasks) {
                         </button>
                     ` : ''}
                     ${task.status === 'in_progress' ? `
-                        <button class="btn btn-success" onclick="openCompleteMaintenanceModal(${task.id})" style="flex: 1;">
-                            <i class="fas fa-check"></i> Complete
-                        </button>
-                    ` : ''}
+    <button class="btn btn-success" onclick="completeTask(${task.id}, '${task.asset_name}')" style="flex: 1;">
+        <i class="fas fa-check"></i> Complete
+    </button>
+` : ''}
                     <button class="btn btn-secondary" onclick="viewMaintenanceDetails(${task.id})" style="flex: 1;">
                         <i class="fas fa-eye"></i> Details
                     </button>
@@ -2572,6 +2871,201 @@ function displayMechanicTasks(tasks) {
     
     html += '</div>';
     tasksContent.innerHTML = html;
+}
+
+function loadMechanicTasks() {
+    console.log('🔧 Loading mechanic tasks...');
+    console.log('Current user role:', document.body.dataset.userRole);
+    
+    // Check if mechanic tab exists and is visible
+    const mechanicTab = document.getElementById('tab-mechanic');
+    console.log('Mechanic tab exists:', mechanicTab !== null);
+    if (mechanicTab) {
+        console.log('Mechanic tab display:', mechanicTab.style.display);
+    }
+    
+    const tasksList = document.getElementById('my-tasks-content');
+    console.log('Tasks list element found:', tasksList !== null);
+    
+    if (!tasksList) {
+        console.error('❌ Tasks list element not found - ID="my-tasks-content"');
+        console.log('Available elements with IDs:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+        return;
+    }
+    
+    const tasksCount = document.getElementById('tasks-count');
+    console.log('Tasks count element found:', tasksCount !== null);
+    
+    tasksList.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #3b82f6;"></i><p>Loading your tasks...</p></div>';
+    
+    // Load stats and activity in parallel
+    loadMechanicStats();
+    loadMechanicActivity();
+    
+    fetch('../api/get_mechanic_tasks.php?_=' + new Date().getTime())
+        .then(response => {
+            console.log('API response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('API data received:', data);
+            
+            if (data.success) {
+                if (data.tasks && data.tasks.length > 0) {
+                    console.log(`Found ${data.tasks.length} tasks`);
+                    if (tasksCount) tasksCount.textContent = data.tasks.length + ' pending';
+                    displayMechanicTasks(data.tasks);
+                    // Update stats using the tasks data
+                    updateMechanicStats(data.tasks);
+                } else {
+                    console.log('No tasks found');
+                    if (tasksCount) tasksCount.textContent = '0 tasks';
+                    tasksList.innerHTML = `
+                        <div style="text-align: center; padding: 60px;">
+                            <i class="fas fa-check-circle" style="font-size: 64px; color: #10b981; margin-bottom: 20px;"></i>
+                            <h3 style="color: #1e293b; margin-bottom: 10px;">No Tasks Assigned</h3>
+                            <p style="color: #64748b;">You don't have any maintenance tasks at the moment.</p>
+                        </div>
+                    `;
+                    // Update stats with zeros
+                    updateMechanicStats([]);
+                }
+            } else {
+                console.error('API error:', data.error);
+                tasksList.innerHTML = '<div class="error-state">Error: ' + (data.error || 'Unknown error') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            tasksList.innerHTML = '<div class="error-state">Failed to load tasks: ' + error.message + '</div>';
+        });
+}
+
+// Add these new functions
+function loadMechanicStats() {
+    console.log('Loading mechanic stats...');
+    
+    fetch('../api/get_mechanic_stats.php')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Mechanic stats:', data);
+            
+            if (data.success) {
+                const statsDiv = document.getElementById('mechanic-stats');
+                if (statsDiv) {
+                    statsDiv.innerHTML = `
+                        <div class="stat-mini">
+                            <div class="value" style="color: #10b981;">${data.stats.completed}</div>
+                            <div class="label">Completed</div>
+                        </div>
+                        <div class="stat-mini">
+                            <div class="value" style="color: #f59e0b;">${data.stats.in_progress}</div>
+                            <div class="label">In Progress</div>
+                        </div>
+                        <div class="stat-mini">
+                            <div class="value" style="color: #8b5cf6;">${data.stats.efficiency}%</div>
+                            <div class="label">Efficiency</div>
+                        </div>
+                    `;
+                }
+            }
+        })
+        .catch(error => console.error('Error loading mechanic stats:', error));
+}
+
+function loadMechanicActivity() {
+    console.log('Loading mechanic activity...');
+    const activityList = document.getElementById('mechanic-activity');
+    
+    if (!activityList) return;
+    
+    fetch('../api/get_mechanic_activity.php')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Mechanic activity:', data);
+            
+            if (data.success && data.activity.length > 0) {
+                let html = '';
+                data.activity.forEach(act => {
+                    html += `
+                        <div style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0;">
+                            <div style="width: 40px; height: 40px; background: #10b98120; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-right: 12px;">
+                                <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 500;">${act.asset_name}</div>
+                                <div style="font-size: 12px; color: #64748b;">${act.issue}</div>
+                                ${act.completed_notes ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">${act.completed_notes.substring(0, 50)}${act.completed_notes.length > 50 ? '...' : ''}</div>` : ''}
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 12px; font-weight: 500; color: #10b981;">Completed</div>
+                                <div style="font-size: 11px; color: #64748b;">${act.formatted_date}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                activityList.innerHTML = html;
+            } else {
+                activityList.innerHTML = `
+                    <div style="text-align: center; padding: 30px; color: #94a3b8;">
+                        <i class="fas fa-check-circle" style="font-size: 40px; margin-bottom: 10px;"></i>
+                        <p>No completed tasks in the last 7 days</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading mechanic activity:', error);
+            activityList.innerHTML = '<div class="error-state">Failed to load activity</div>';
+        });
+}
+// SUPER SIMPLE COMPLETE FUNCTION - Just like Details button
+function completeTask(id, assetName) {
+    console.log('Completing task:', id, 'for vehicle:', assetName);
+    
+    // Simple prompt for notes with vehicle name included
+    const notes = prompt(`Enter Completion Report for ${assetName} (Task #${id}):`);
+    if (notes === null) return; // User clicked Cancel
+    
+    // Show loading on the button
+    const btn = event?.target;
+    const originalText = btn ? btn.innerHTML : 'Complete';
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        btn.disabled = true;
+    }
+    
+    // Call API - still only need to send the ID
+    fetch('../api/complete_maintenance.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            id: id, 
+            notes: notes 
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Response:', data);
+        if (data.success) {
+            alert(`Task #${id} for ${assetName} completed!`);
+            location.reload(); // Simple reload to refresh everything
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+            if (btn) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error: ' + error.message);
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
 }
 
 function updateMechanicStats(tasks) {

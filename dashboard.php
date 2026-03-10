@@ -13,6 +13,7 @@ if (in_array($_SESSION['role'], ['driver', 'mechanic'])) {
     exit();
 }
 
+
 require 'config/db.php';
 $page_title = 'Dashboard | Logistics System';
 $page_css = 'assets/css/style.css';
@@ -173,7 +174,18 @@ try {
 }
 
 try {
-    $stmt = $pdo->query("SELECT * FROM maintenance_alerts ORDER BY due_date ASC");
+    // Get ALL active maintenance (pending AND in_progress)
+    $stmt = $pdo->query("
+        SELECT * FROM maintenance_alerts 
+        WHERE status IN ('pending', 'in_progress')
+        ORDER BY 
+            CASE priority 
+                WHEN 'high' THEN 1
+                WHEN 'medium' THEN 2
+                WHEN 'low' THEN 3
+            END,
+            due_date ASC
+    ");
     $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $alerts = [];
@@ -831,112 +843,200 @@ if ($user_role === 'admin') {
                 </div>
             </div>
         
-            <div class="card">
-                <div class="card-header">
-                    <h2><i class="fas fa-exclamation-triangle"></i> Maintenance Alerts</h2>
-                    <span class="card-badge"><?php echo count($alerts); ?> due soon</span>
-                </div>
-                <div class="card-body">
-                    <div class="alert-list">
-                        <?php if (!empty($alerts)): ?>
-                            <?php foreach ($alerts as $alert): 
-                                $priority_class = '';
-                                switch ($alert['priority']) {
-                                    case 'high':
-                                    case 'urgent':
-                                        $priority_class = 'urgent';
-                                        break;
-                                    case 'medium':
-                                    case 'warning':
-                                        $priority_class = 'warning';
-                                        break;
-                                    case 'low':
-                                    case 'normal':
-                                        $priority_class = 'normal';
-                                        break;
-                                    default:
-                                        $priority_class = 'normal';
-                                }
-
-                                $due_date = strtotime($alert['due_date']);
-                                $today = strtotime(date('Y-m-d'));
-                                $days_remaining = ceil(($due_date - $today) / (60 * 60 * 24));
-                            ?>
-                                <div class="alert-item <?php echo $priority_class; ?>">
-                                    <div class="alert-icon <?php echo $priority_class; ?>">
-                                        <i class="fas fa-exclamation"></i>
-                                    </div>
-                                    <div class="alert-content">
-                                        <div class="alert-title"><?php echo htmlspecialchars($alert['issue']); ?></div>
-                                        <div class="alert-meta"><?php echo htmlspecialchars($alert['asset_name']); ?></div>
-                                        <div class="alert-time">Due in <?php echo $days_remaining; ?> days</div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <p>No alerts available</p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
+   <!-- Maintenance Section -->
+<div class="card">
+    <div class="card-header">
+        <h2><i class="fas fa-exclamation-triangle"></i> Maintenance Alerts</h2>
+        <span class="card-badge">
+            <?php 
+            $pending_count = 0;
+            $in_progress_count = 0;
+            foreach ($alerts as $a) {
+                if ($a['status'] == 'pending') $pending_count++;
+                if ($a['status'] == 'in_progress') $in_progress_count++;
+            }
             
-            <!-- Maintenance History -->
-            <div class="card">
-                <div class="card-header">
-                    <h2><i class="fas fa-history"></i> Maintenance History</h2>
-                    <span class="card-badge">Last 30 days</span>
-                </div>
-                <div class="card-body">
-                    <div class="timeline">
-                        <?php
-                        $stmt = $pdo->prepare("
-                            SELECT * 
-                            FROM maintenance_alerts 
-                            WHERE (status = 'done' AND completed_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY))
-                               OR (status = 'pending' AND due_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY))
-                            ORDER BY COALESCE(completed_date, due_date) DESC
-                        ");
-                        $stmt->execute();
-                        $maintenance_history = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                        ?>
-
-                        <?php if (!empty($maintenance_history)): ?>
-                            <?php foreach ($maintenance_history as $record): ?>
-                                <?php 
-                                    $type = 'blue';
-                                    if ($record['status'] === 'done') $type = 'emerald';
-                                    else {
-                                        $dueDate = new DateTime($record['due_date']);
-                                        $now = new DateTime();
-                                        $type = ($dueDate < $now) ? 'amber' : 'blue';
-                                    }
-
-                                    $datetime1 = !empty($record['completed_date']) ? new DateTime($record['completed_date']) : new DateTime($record['due_date']);
-                                    $datetime2 = new DateTime();
-                                    $interval = $datetime1->diff($datetime2);
-
-                                    if ($interval->y > 0) $timeAgo = $interval->y . ' year(s) ago';
-                                    elseif ($interval->m > 0) $timeAgo = $interval->m . ' month(s) ago';
-                                    elseif ($interval->d >= 7) $timeAgo = floor($interval->d / 7) . ' week(s) ago';
-                                    elseif ($interval->d > 0) $timeAgo = $interval->d . ' day(s) ago';
-                                    elseif ($interval->h > 0) $timeAgo = $interval->h . ' hour(s) ago';
-                                    else $timeAgo = 'just now';
-                                ?>
-                                <div class="timeline-item">
-                                    <div class="timeline-dot <?php echo $type; ?>"></div>
-                                    <div class="timeline-content">
-                                        <p><?php echo htmlspecialchars($record['asset_name'] . ' - ' . $record['issue']); ?></p>
-                                        <div class="time"><?php echo $timeAgo; ?></div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <p>No maintenance history found in the last 30 days.</p>
+            if ($in_progress_count > 0 && $pending_count > 0) {
+                echo $pending_count . ' pending, ' . $in_progress_count . ' in progress';
+            } elseif ($in_progress_count > 0) {
+                echo $in_progress_count . ' in progress';
+            } else {
+                echo $pending_count . ' due soon';
+            }
+            ?>
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="alert-list">
+            <?php if (!empty($alerts)): ?>
+                <?php foreach ($alerts as $alert): 
+                    $priority_class = '';
+                    switch ($alert['priority']) {
+                        case 'high':
+                            $priority_class = 'urgent';
+                            break;
+                        case 'medium':
+                            $priority_class = 'warning';
+                            break;
+                        default:
+                            $priority_class = 'normal';
+                    }
+                    
+                    $due_date = strtotime($alert['due_date']);
+                    $today = strtotime(date('Y-m-d'));
+                    $days_remaining = ceil(($due_date - $today) / (60 * 60 * 24));
+                ?>
+                <div class="alert-item <?php echo $priority_class; ?>"> 
+                    <div class="alert-icon <?php echo $priority_class; ?>">
+                        <i class="fas fa-exclamation"></i>
+                    </div>
+                    <div class="alert-content">
+                        <div class="alert-title"><?php echo htmlspecialchars($alert['issue']); ?></div>
+                        <div class="alert-meta"><?php echo htmlspecialchars($alert['asset_name']); ?></div>
+                        <div class="alert-time">Due in <?php echo $days_remaining; ?> days</div>
+                        <?php if ($alert['status'] == 'in_progress'): ?>
+                            <div style="font-size: 11px; color: #f59e0b; margin-top: 4px;">
+                                <i class="fas fa-spinner fa-spin"></i> In Progress
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>
-            </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p style="text-align: center; padding: 20px; color: #94a3b8;">No active maintenance alerts</p>
+            <?php endif; ?>
         </div>
+    </div>
+</div>
+
+<!-- Get data for sections -->
+<?php
+// Get in-progress maintenance
+$in_progress = $pdo->query("
+    SELECT m.*, u.full_name as mechanic_name
+    FROM maintenance_alerts m
+    LEFT JOIN users u ON m.assigned_mechanic = u.id
+    WHERE m.status = 'in_progress'
+    ORDER BY m.due_date ASC
+")->fetchAll();
+
+// Get upcoming maintenance (pending)
+$upcoming = $pdo->query("
+    SELECT m.*
+    FROM maintenance_alerts m
+    WHERE m.status = 'pending'
+    ORDER BY m.due_date ASC
+    LIMIT 5
+")->fetchAll();
+
+// Get completed maintenance from last 30 days
+$completed_maintenance = $pdo->query("
+    SELECT 
+        m.*,
+        u.full_name as mechanic_name,
+        DATEDIFF(m.completed_date, m.due_date) as days_diff
+    FROM maintenance_alerts m
+    LEFT JOIN users u ON m.assigned_mechanic = u.id
+    WHERE m.status = 'completed'
+    AND m.completed_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+    ORDER BY m.completed_date DESC
+    LIMIT 10
+")->fetchAll();
+?>
+
+<!-- Maintenance Details Section -->
+<div class="card">
+    <div class="card-header">
+        <h2><i class="fas fa-history"></i> Maintenance Details</h2>
+        <span class="card-badge">Active & Recent</span>
+    </div>
+    <div class="card-body">
+        <!-- Show In Progress first -->
+        <?php if (!empty($in_progress)): ?>
+            <h4 style="margin: 0 0 15px 0; color: #f59e0b;">
+                <i class="fas fa-spinner fa-spin"></i> In Progress
+            </h4>
+            <?php foreach ($in_progress as $task): ?>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0; background: #fef3c7; margin-bottom: 8px; border-radius: 8px;">
+                    <div>
+                        <div style="font-weight: 600;"><?php echo htmlspecialchars($task['asset_name']); ?></div>
+                        <div style="font-size: 13px; color: #666;"><?php echo htmlspecialchars($task['issue']); ?></div>
+                        <div style="font-size: 12px; color: #f59e0b;">
+                            <i class="fas fa-user-cog"></i> <?php echo htmlspecialchars($task['mechanic_name'] ?? 'Assigned'); ?>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+                            In Progress
+                        </span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+        
+        <!-- Show Upcoming (pending) -->
+        <?php if (!empty($upcoming)): ?>
+            <h4 style="margin: 20px 0 15px 0; color: #3b82f6;">
+                <i class="fas fa-clock"></i> Upcoming
+            </h4>
+            <?php foreach ($upcoming as $task): ?>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0;">
+                    <div>
+                        <div style="font-weight: 600;"><?php echo htmlspecialchars($task['asset_name']); ?></div>
+                        <div style="font-size: 13px; color: #666;"><?php echo htmlspecialchars($task['issue']); ?></div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="background: #e6f0ff; color: #3b82f6; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+                            Due <?php echo date('M d', strtotime($task['due_date'])); ?>
+                        </span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+        
+        <!-- Show Completed History -->
+        <h4 style="margin: 20px 0 15px 0; color: #10b981;">
+            <i class="fas fa-check-circle"></i> Recently Completed
+        </h4>
+        
+        <?php if (!empty($completed_maintenance)): ?>
+            <?php foreach ($completed_maintenance as $task): 
+                $completion_status = ($task['days_diff'] <= 0) ? 'On Time' : 'Late by ' . $task['days_diff'] . ' days';
+                $status_color = ($task['days_diff'] <= 0) ? '#10b981' : '#f59e0b';
+            ?>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0;">
+                    <div>
+                        <div style="font-weight: 600;"><?php echo htmlspecialchars($task['asset_name']); ?></div>
+                        <div style="font-size: 13px; color: #666;"><?php echo htmlspecialchars($task['issue']); ?></div>
+                        <div style="font-size: 12px; color: #64748b;">
+                            <i class="fas fa-wrench"></i> by <?php echo htmlspecialchars($task['mechanic_name'] ?? 'Unknown'); ?>
+                        </div>
+                        <?php if ($task['completed_notes']): ?>
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
+                                <i class="fas fa-comment"></i> <?php echo htmlspecialchars(substr($task['completed_notes'], 0, 50)) . (strlen($task['completed_notes']) > 50 ? '...' : ''); ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: 500; color: <?php echo $status_color; ?>; font-size: 13px;">
+                            <?php echo $completion_status; ?>
+                        </div>
+                        <div style="font-size: 12px; color: #64748b;">
+                            <?php echo date('M d', strtotime($task['completed_date'])); ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <p style="text-align: center; padding: 20px; color: #94a3b8; background: #f8fafc; border-radius: 8px;">
+                <i class="fas fa-info-circle"></i> No maintenance completed in the last 30 days
+            </p>
+        <?php endif; ?>
+    </div>
+</div> 
+
+            
+ 
         
         <!-- Asset Lifecycle Summary -->
         <div class="card card-full">

@@ -26,7 +26,7 @@ try {
             s.shipment_status,
             -- Get driver from dispatch_schedule (where drivers are actually assigned)
             u.full_name as current_driver,
-            -- Check if vehicle has pending maintenance
+            -- Check if vehicle has active maintenance (pending OR in_progress)
             CASE 
                 WHEN m.id IS NOT NULL THEN 1
                 ELSE 0
@@ -44,7 +44,7 @@ try {
             AND ds.status IN ('in-progress', 'scheduled')
         LEFT JOIN users u ON COALESCE(s.driver_id, ds.driver_id) = u.id
         LEFT JOIN maintenance_alerts m ON a.asset_name = m.asset_name 
-            AND m.status = 'pending'
+            AND m.status IN ('pending', 'in_progress')  -- ← FIXED: Check both
         WHERE a.asset_type = 'vehicle'
         ORDER BY 
             CASE 

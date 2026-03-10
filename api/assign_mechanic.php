@@ -12,6 +12,26 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Before assigning mechanic, check if vehicle is still in use
+$maintenance_id = $input['id'];
+
+// Get vehicle name from maintenance record
+$vehicle_stmt = $pdo->prepare("
+    SELECT m.asset_name, a.id as vehicle_id 
+    FROM maintenance_alerts m
+    LEFT JOIN assets a ON m.asset_name = a.asset_name
+    WHERE m.id = ?
+");
+$vehicle_stmt->execute([$maintenance_id]);
+$vehicle_data = $vehicle_stmt->fetch();
+
+if ($vehicle_data && isVehicleInUse($vehicle_data['vehicle_id'], $pdo)) {
+    echo json_encode([
+        'success' => false,
+        'error' => 'Cannot assign mechanic: Vehicle is currently in use'
+    ]);
+    exit();
+}
 // Check if user has permission (admin or fleet_manager only)
 $user_role = $_SESSION['role'];
 if (!in_array($user_role, ['admin', 'fleet_manager'])) {

@@ -24,12 +24,16 @@ try {
         $vehicle_id = $row['id'];
         $vehicle_name = $row['asset_name'];
         
-        // Check if vehicle has pending maintenance
-        $maintenance_check = $pdo->prepare("
-            SELECT id FROM maintenance_alerts 
-            WHERE asset_name = ? AND status = 'pending'
-        ");
-        $maintenance_check->execute([$vehicle_name]);
+      // Check if vehicle has ACTIVE maintenance (pending OR in_progress)
+$maintenance_check = $pdo->prepare("
+    SELECT id FROM maintenance_alerts 
+    WHERE asset_name = ? AND status IN ('pending', 'in_progress')
+");
+$maintenance_check->execute([$vehicle_name]);
+
+if ($maintenance_check->rowCount() > 0) {
+    continue; // Skip vehicles with active maintenance
+}
         
         if ($maintenance_check->rowCount() > 0) {
             continue; // Skip vehicles with pending maintenance

@@ -52,8 +52,6 @@ try {
         $display_status = $trip['status'];
         if ($trip['status'] === 'in-progress') {
             $display_status = 'in_transit';
-        } else if ($trip['status'] === 'completed') {
-            $display_status = 'delivered';
         }
         
         $formatted_trips[] = [

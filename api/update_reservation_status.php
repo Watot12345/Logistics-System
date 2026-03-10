@@ -81,17 +81,18 @@ try {
             $shift
         ]);
         
-        // 2. Create shipment with customer data
+        // 2. Create shipment with customer data and LINK to reservation
         $shipment_stmt = $pdo->prepare("
             INSERT INTO shipments (
                 customer_name,
                 delivery_address,
                 vehicle_id,
+                order_id,
                 shipment_status,
                 departure_time,
                 estimated_arrival,
                 created_at
-            ) VALUES (?, ?, ?, 'pending', ?, ?, NOW())
+            ) VALUES (?, ?, ?, ?, 'pending', ?, ?, NOW())
         ");
         
         // Combine date and time
@@ -102,6 +103,7 @@ try {
             $reservation['customer_name'] ?? 'Customer',
             $reservation['delivery_address'] ?? 'To be assigned',
             $reservation['vehicle_id'],
+            $reservation['id'],  // ← THIS LINKS IT TO THE RESERVATION
             $departure,
             $arrival
         ]);

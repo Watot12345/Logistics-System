@@ -1,35 +1,47 @@
 <?php
-// api/update_po_status.php
 session_start();
 require_once '../config/db.php';
 
+header('Content-Type: application/json');
+
 if (!isset($_SESSION['user_id'])) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
+    echo json_encode(['success' => false, 'error' => 'Not authenticated']);
     exit();
 }
 
 $data = json_decode(file_get_contents('php://input'), true);
+$schedule_id = $data['schedule_id'] ?? null;
+$status = $data['status'] ?? null;
+$location = $data['current_location'] ?? null;
+
+if (!$schedule_id || !$status) {
+    echo json_encode(['success' => false, 'error' => 'Missing required fields']);
+    exit();
+}
 
 try {
+    // Map the status values correctly
+    $valid_statuses = ['in-progress', 'delivered', 'awaiting_verification', 'completed', 'cancelled'];
+    
+    if (!in_array($status, $valid_statuses)) {
+        echo json_encode(['success' => false, 'error' => 'Invalid status']);
+        exit();
+    }
+    
     $stmt = $pdo->prepare("
-        UPDATE purchase_orders 
-        SET status = :status,
-            approved_by = CASE WHEN :status = 'approved' THEN :user_id ELSE approved_by END,
-            approved_at = CASE WHEN :status = 'approved' THEN NOW() ELSE approved_at END
-        WHERE id = :po_id
+        UPDATE dispatch_schedule 
+        SET status = ?, 
+            notes = CONCAT(IFNULL(notes, ''), '\n[', NOW(), '] Status changed to ', ?, ' - Location: ', ?),
+            updated_at = NOW() 
+        WHERE id = ?
     ");
     
-    $stmt->execute([
-        'status' => $data['status'],
-        'po_id' => $data['po_id'],
-        'user_id' => $_SESSION['user_id']
-    ]);
+    $stmt->execute([$status, $status, $location, $schedule_id]);
     
     echo json_encode(['success' => true]);
     
-} catch(PDOException $e) {
-    http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+} catch (PDOException $e) {
+    error_log("Error updating dispatch status: " . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Database error']);
 }
 ?>
