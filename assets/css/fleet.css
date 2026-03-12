@@ -4,6 +4,364 @@
 
 /* Page Header Actions */
 /* Warning message styles */
+/* Location History Dropdown Styles */
+.location-history-container {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    margin-top: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.location-current {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-left: 4px solid #3b82f6;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.location-current i {
+    color: #3b82f6;
+    font-size: 18px;
+}
+
+.location-current span {
+    flex: 1;
+    font-size: 14px;
+}
+
+.location-history-dropdown {
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    background: #ffffff;
+    font-size: 13px;
+    color: #1e293b;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    font-weight: 500;
+}
+
+.location-history-dropdown:hover {
+    background-color: #f8fafc;
+}
+
+.location-history-dropdown option {
+    padding: 12px;
+    background: white;
+    color: #1e293b;
+    font-size: 13px;
+}
+
+/* Color-coded location items */
+.location-item-status {
+    color: #8b5cf6 !important;
+    font-weight: 600;
+    background-color: #f5f3ff;
+}
+
+.location-item-update {
+    color: #3b82f6 !important;
+    font-weight: 500;
+}
+
+.location-item-default {
+    color: #64748b !important;
+}
+
+/* Timestamp styling */
+.location-timestamp {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #f8fafc;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 12px;
+}
+
+.location-timestamp i {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+.location-time {
+    color: #475569;
+    font-weight: 500;
+}
+
+.location-date {
+    color: #64748b;
+    font-size: 11px;
+}
+
+/* Badge styles */
+.location-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    margin-left: 8px;
+}
+
+.badge-status {
+    background: #8b5cf620;
+    color: #8b5cf6;
+    border: 1px solid #8b5cf640;
+}
+
+.badge-update {
+    background: #3b82f620;
+    color: #3b82f6;
+    border: 1px solid #3b82f640;
+}
+
+.badge-default {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+/* Location type indicators */
+.location-type-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+}
+
+.type-status {
+    background: #8b5cf620;
+    color: #8b5cf6;
+}
+
+.type-update {
+    background: #3b82f620;
+    color: #3b82f6;
+}
+
+.type-default {
+    background: #e2e8f0;
+    color: #64748b;
+}
+
+/* Compact location view */
+.location-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.location-compact:last-child {
+    border-bottom: none;
+}
+
+/* Location Card Styles */
+.location-card {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    margin-top: 10px;
+}
+
+.location-current {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 18px 20px;
+}
+
+.location-current i {
+    font-size: 24px;
+    width: 32px;
+    text-align: center;
+}
+
+.current-info {
+    flex: 1;
+}
+
+.current-text {
+    font-weight: 600;
+    font-size: 16px;
+    color: #1e293b;
+    margin-bottom: 4px;
+}
+
+.current-time {
+    font-size: 12px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.type-badge {
+    padding: 6px 16px;
+    border-radius: 30px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.history-section {
+    border-top: 1px solid #e2e8f0;
+    padding: 15px 20px;
+    background: #f8fafc;
+}
+
+.history-header {
+    font-size: 13px;
+    color: #475569;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+/* Location Card Styles */
+.location-card {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    margin: 10px 0;
+    border: 1px solid #e2e8f0;
+}
+
+.location-current {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 18px 20px;
+}
+
+.current-info {
+    flex: 1;
+}
+
+.current-text {
+    font-weight: 600;
+    font-size: 16px;
+    color: #1e293b;
+    margin-bottom: 6px;
+}
+
+.current-time {
+    font-size: 12px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.type-badge {
+    padding: 6px 16px;
+    border-radius: 30px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.history-section {
+    border-top: 1px solid #e2e8f0;
+    padding: 15px 20px;
+    background: #f8fafc;
+}
+
+.history-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.history-dropdown {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+    font-size: 14px;
+    color: #1e293b;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.history-dropdown:hover {
+    border-color: #94a3b8;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.history-dropdown option {
+    padding: 10px;
+    font-size: 13px;
+}
+
+.no-location {
+    padding: 20px;
+    text-align: center;
+    color: #94a3b8;
+    background: #f8fafc;
+    border-radius: 12px;
+    font-size: 14px;
+    border: 1px dashed #cbd5e1;
+}
+.history-dropdown {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+    font-size: 14px;
+    color: #1e293b;
+    cursor: pointer;
+    outline: none;
+}
+
+.history-dropdown:hover {
+    border-color: #94a3b8;
+}
+
+.history-dropdown option {
+    padding: 10px;
+    font-size: 13px;
+}
+
+.no-location {
+    padding: 20px;
+    text-align: center;
+    color: #94a3b8;
+    background: #f8fafc;
+    border-radius: 12px;
+    font-size: 14px;
+}
 .warning-container {
     text-align: center;
     padding: 30px;

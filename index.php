@@ -78,12 +78,12 @@ require_once 'includes/auth.php';
                     
                     <div>
                         <label class="block text-gray-700 font-medium mb-1">
-                            <i class="fas fa-user mr-2 text-blue-500"></i>Username or Email
+                            <i class="fas fa-user mr-2 text-blue-500"></i>Username
                         </label>
                         <input type="text" name="username" required 
                             value="<?php echo isset($_POST['username']) ? htmlspecialchars($_POST['username']) : ''; ?>"
                             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                            placeholder="Enter your username or email">
+                            placeholder="Enter your username">
                     </div>
                     
                     <div>
@@ -101,11 +101,7 @@ require_once 'includes/auth.php';
                     </div>
                     
                     <div class="flex items-center justify-between">
-                        <label class="flex items-center">
-                            <input type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                            <span class="ml-2 text-sm text-gray-600">Remember me</span>
-                        </label>
-                        <a href="#" class="text-sm text-blue-600 hover:text-blue-800">Forgot password?</a>
+                        <a href="includes/forgot_password.php" class="text-sm text-blue-600 hover:text-blue-800">Forgot password?</a>
                     </div>
                     
                     <button type="submit" 

@@ -42,20 +42,22 @@ try {
     // Begin transaction
     $pdo->beginTransaction();
     
-    // Update dispatch schedule status
+    // FIXED: Update dispatch schedule status - removed the extra parameter
     $update = $pdo->prepare("
         UPDATE dispatch_schedule 
         SET status = ?, 
-            notes = CONCAT(COALESCE(notes, ''), '\n[', NOW(), '] ', ?, ' at ', ?)
+            notes = CONCAT(COALESCE(notes, ''), '\n[', NOW(), '] ', ?)
         WHERE id = ?
     ");
     
-    $action_text = "Status changed to $status";
+    // Create the complete note text
+    $note_text = "Status changed to $status";
     if ($current_location) {
-        $action_text .= " - Location: $current_location";
+        $note_text .= " - Location: $current_location";
     }
     
-    $update->execute([$status, $action_text, $current_location, $schedule_id]);
+    // FIXED: Only pass 3 parameters for 3 placeholders
+    $update->execute([$status, $note_text, $schedule_id]);
     
     // Update the corresponding shipment based on status
     if ($schedule['vehicle_id']) {
@@ -70,9 +72,6 @@ try {
         
         if ($shipment) {
             // Map dispatch status to shipment status
-            $shipment_status = 'pending';
-            $update_fields = [];
-            
             if ($status === 'in-progress') {
                 $shipment_status = 'in_transit';
                 $update_shipment = $pdo->prepare("

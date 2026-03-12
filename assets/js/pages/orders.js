@@ -3,49 +3,178 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Orders.js loaded');
     setupEventListeners();
-    // setupModalFunctions removed since it's not defined
+    
+    // Set active tab based on URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status') || 'pending';
+    setActiveTab(status);
+    
+    // Set filter dropdown values based on URL
+    const filterStatus = urlParams.get('filter_status');
+    if (filterStatus) {
+        const statusFilter = document.getElementById('poStatus');
+        if (statusFilter) statusFilter.value = filterStatus;
+    }
+    
+    const supplier = urlParams.get('supplier');
+    if (supplier && supplier !== 'all') {
+        const supplierFilter = document.getElementById('poSupplier');
+        if (supplierFilter) supplierFilter.value = supplier;
+    }
 });
+
+function setActiveTab(status) {
+    document.querySelectorAll('.tab').forEach(tab => {
+        if (tab.dataset.tab === status) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+}
 
 function setupEventListeners() {
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', function() {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
             const status = this.dataset.tab;
-            window.location.href = `../modules/orders.php?status=${status}`;
+            window.location.href = `?status=${status}`;
         });
     });
     
     // Status filter
-    document.getElementById('poStatus').addEventListener('change', function() {
-        const status = this.value;
-        const currentTab = document.querySelector('.tab.active').dataset.tab;
-        window.location.href = `../modules/orders.php?status=${status}&tab=${currentTab}`;
-    });
+    const statusFilter = document.getElementById('poStatus');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', function() {
+            filterByStatus(this.value);
+        });
+    }
     
     // Supplier filter
-    document.getElementById('poSupplier').addEventListener('change', function() {
-        const supplier = this.value;
-        window.location.href = `../modules/orders.php?supplier=${supplier}`;
-    });
+    const supplierFilter = document.getElementById('poSupplier');
+    if (supplierFilter) {
+        supplierFilter.addEventListener('change', function() {
+            filterBySupplier(this.value);
+        });
+    }
     
-    // Search
-    let searchTimeout;
-    document.getElementById('searchPO').addEventListener('input', function() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            filterPOList(this.value);
-        }, 300);
-    });
+    // Search with debounce
+    const searchInput = document.getElementById('searchPO');
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                filterBySearch(this.value);
+            }, 500);
+        });
+        
+        // Enter key for search
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                filterBySearch(this.value);
+            }
+        });
+    }
 }
 
-function filterPOList(searchTerm) {
-    const rows = document.querySelectorAll('.purchase-orders-table tbody tr');
-    searchTerm = searchTerm.toLowerCase();
+function filterByStatus(status) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentTab = urlParams.get('status') || 'pending';
+    const supplier = urlParams.get('supplier') || 'all';
+    const search = urlParams.get('search') || '';
     
-    rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(searchTerm) ? '' : 'none';
-    });
+    let url = `?status=${currentTab}&filter_status=${status}`;
+    if (supplier !== 'all') url += `&supplier=${supplier}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    
+    window.location.href = url;
+}
+
+function filterBySupplier(supplierId) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentTab = urlParams.get('status') || 'pending';
+    const statusFilter = urlParams.get('filter_status') || 'all';
+    const search = urlParams.get('search') || '';
+    
+    let url = `?status=${currentTab}&filter_status=${statusFilter}`;
+    if (supplierId !== 'all') url += `&supplier=${supplierId}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    
+    window.location.href = url;
+}
+
+function filterBySearch(searchTerm) {
+    if (!searchTerm.trim()) {
+        // If search is empty, remove it from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.delete('search');
+        window.location.href = '?' + urlParams.toString();
+        return;
+    }
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentTab = urlParams.get('status') || 'pending';
+    const statusFilter = urlParams.get('filter_status') || 'all';
+    const supplier = urlParams.get('supplier') || 'all';
+    
+    let url = `?status=${currentTab}&filter_status=${statusFilter}&search=${encodeURIComponent(searchTerm)}`;
+    if (supplier !== 'all') url += `&supplier=${supplier}`;
+    
+    window.location.href = url;
+}
+
+function clearFilters() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentTab = urlParams.get('status') || 'pending';
+    window.location.href = `?status=${currentTab}`;
+}
+
+// Update PO Status function
+async function updatePOStatus(poId, newStatus) {
+    console.log(`Updating PO ${poId} to ${newStatus}...`);
+    
+    let actionText = newStatus;
+    if (newStatus === 'approved') actionText = 'approve';
+    else if (newStatus === 'rejected') actionText = 'reject';
+    else if (newStatus === 'completed') actionText = 'mark as completed';
+    else if (newStatus === 'cancelled') actionText = 'cancel';
+    
+    if (!confirm(`Are you sure you want to ${actionText} this purchase order?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('../api/update_po_status.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                po_id: poId,
+                status: newStatus
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Server response:', result);
+        
+        if (result.success) {
+            alert(`Purchase order ${newStatus} successfully!`);
+            window.location.reload();
+        } else {
+            alert('Error updating PO: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error updating PO:', error);
+        alert('Error updating purchase order: ' + error.message);
+    }
 }
 
 // Modal functions
@@ -82,7 +211,7 @@ async function loadSuppliersForModal() {
         const select = document.querySelector('#poModal select.form-select:first-of-type');
         
         if (!select) {
-            console.error('❌ Supplier select not found! Looking for: #poModal select.form-select:first-of-type');
+            console.error('❌ Supplier select not found!');
             return;
         }
         
@@ -110,48 +239,6 @@ async function loadItemsForModal() {
         console.log('✅ Items stored globally');
     } catch (error) {
         console.error('❌ Error loading items:', error);
-    }
-}
-
-// Add this function to orders.js
-async function updatePOStatus(poId, newStatus) {
-    console.log(`Updating PO ${poId} to ${newStatus}...`);
-    
-    // Confirm action
-    const action = newStatus === 'approved' ? 'approve' : 'reject';
-    if (!confirm(`Are you sure you want to ${action} this purchase order?`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('../api/update_po_status.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                po_id: poId,
-                status: newStatus
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        console.log('Server response:', result);
-        
-        if (result.success) {
-            alert(`Purchase order ${newStatus} successfully!`);
-            // Reload the page to show updated status
-            window.location.reload();
-        } else {
-            alert('Error updating PO: ' + (result.error || 'Unknown error'));
-        }
-    } catch (error) {
-        console.error('Error updating PO:', error);
-        alert('Error updating purchase order: ' + error.message);
     }
 }
 
@@ -340,4 +427,11 @@ async function savePO() {
         console.error('Error saving PO:', error);
         alert('Error saving purchase order: ' + error.message);
     }
+}
+
+// View PO function
+function viewPO(poId) {
+    console.log('Viewing PO:', poId);
+    // You can implement this to show PO details
+    alert('View PO feature coming soon!');
 }

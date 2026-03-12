@@ -9,8 +9,8 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 // Check user role
-$isAdmin = isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
-$isEmployee = isset($_SESSION['role']) && $_SESSION['role'] === 'employee';
+$isAdmin = isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin', 'employee', 'fleet_manager', 'dispatcher']);
+$isEmployee = isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin', 'employee', 'fleet_manager', 'dispatcher']);
 
 // Include database connection first
 require_once '../backend/inventory-function.php';
@@ -365,7 +365,7 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
                     <?php endforeach; ?>
                 </select>
                 
-                <?php if ($isAdmin): ?>
+               
                     <div style="display: flex; gap: 4px;">
                         <button class="btn btn-icon" onclick="openAddCategoryModal()" title="Add New Category">
                             <i class="fas fa-plus-circle" style="color: #2563eb; font-size: 24px;"></i>
@@ -387,7 +387,7 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
                             <?php endif; ?>
                         <?php endif; ?>
                     </div>
-                <?php endif; ?>
+               
             </div>
             
             <!-- Supplier Filter with Delete -->
@@ -402,7 +402,7 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
                     <?php endforeach; ?>
                 </select>
                 
-                <?php if ($isAdmin): ?>
+               
                     <div style="display: flex; gap: 4px;">
                         <button class="btn btn-icon" onclick="openAddSupplierModal()" title="Add New Supplier">
                             <i class="fas fa-plus-circle" style="color: #10b981; font-size: 24px;"></i>
@@ -424,7 +424,7 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
                             <?php endif; ?>
                         <?php endif; ?>
                     </div>
-                <?php endif; ?>
+            
             </div>
         </div>
     </div>

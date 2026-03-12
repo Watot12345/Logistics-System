@@ -1,3 +1,22 @@
+account details
+
+role   | username or email           |   password
+admin          joshua                    joshua
+employee    asierra389@gmail.com          joshua
+Fleet manager   jay jay                jayjay123
+Mechanic       john doe                johndoe123
+Driver         john john               johnjohn123
+Dispatcher     jon jon                 jonjon123
+
+
+
+
+
+
+
+
+
+
 logistics-system/
 │
 ├── index.php
