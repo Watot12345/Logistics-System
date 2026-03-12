@@ -684,7 +684,7 @@ foreach ($maintenance_alerts as $alert) {
                         <i class="fas fa-play"></i> Start Trip
                     </button>
                     <button class="btn btn-success" onclick="updateStatus('delivered')" style="width: 100%; margin-bottom: 10px;">
-                        <i class="fas fa-check"></i> Mark Delivered
+                        <i class="fas fa-check"></i> Delivered
                     </button>
                       <button class="btn btn-warning" onclick="reportDelay()" style="width: 100%; margin-bottom: 10px;">
                 <i class="fas fa-exclamation-triangle"></i> Report Delay

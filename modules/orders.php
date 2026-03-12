@@ -185,108 +185,179 @@ include '../includes/header.php';
             </div>
             
             <!-- Tabs -->
-            <div class="card" style="margin-bottom: 24px;">
-                <div class="tabs">
-                    <button class="tab active" data-tab="pending">Pending Approval</button>
-                    <button class="tab" data-tab="approved">Approved</button>
-                    <button class="tab" data-tab="all">All Orders</button>
-                </div>
-            </div>
+           <div class="card" style="margin-bottom: 24px;">
+    <div class="tabs">
+        <button class="tab <?php echo (!isset($_GET['status']) || $_GET['status'] == 'pending') ? 'active' : ''; ?>" data-tab="pending" onclick="window.location.href='?status=pending'">
+            Pending Approval
+        </button>
+        <button class="tab <?php echo (isset($_GET['status']) && $_GET['status'] == 'approved') ? 'active' : ''; ?>" data-tab="approved" onclick="window.location.href='?status=approved'">
+            Approved
+        </button>
+        <button class="tab <?php echo (isset($_GET['status']) && $_GET['status'] == 'all') ? 'active' : ''; ?>" data-tab="all" onclick="window.location.href='?status=all'">
+            All Orders
+        </button>
+    </div>
+</div>
             
             <!-- Dashboard Grid -->
             <div class="dashboard-grid">
-                <!-- Purchase Order Documents -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2><i class="fas fa-file-invoice"></i> Purchase Orders</h2>
-                        <div class="card-actions">
-                            <button class="card-action-btn" onclick="loadPurchaseOrders()">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <!-- Filter Bar -->
-                        <div class="filter-bar">
-                            <div class="filter-group">
-                                <select class="filter-select" id="poStatus">
-                                    <option value="all">All Status</option>
-                                    <option value="pending">Pending</option>
-                                    <option value="approved">Approved</option>
-                                    <option value="draft">Draft</option>
-                                </select>
-                                <select class="filter-select" id="poSupplier">
-                                    <option value="all">All Suppliers</option>
-                                    <?php
-                                    // Get suppliers for filter
-                                    $suppliers = $pdo->query("SELECT id, supplier_name FROM suppliers ORDER BY supplier_name")->fetchAll();
-                                    foreach ($suppliers as $supplier) {
-                                        echo "<option value=\"{$supplier['id']}\">{$supplier['supplier_name']}</option>";
-                                    }
-                                    ?>
-                                </select>
-                            </div>
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="searchPO" placeholder="Search orders...">
-                            </div>
-                        </div>
-                        
-                        <!-- PO List - Now with REAL data -->
-                        <div class="po-list">
-                            <?php if (empty($recent_orders)): ?>
-                                <div class="empty-state">No purchase orders found</div>
-                            <?php else: ?>
-                                <table class="purchase-orders-table">
-                                    <thead>
-                                        <tr>
-                                            <th>PO Number</th>
-                                            <th>Supplier</th>
-                                            <th>Order Date</th>
-                                            <th>Total</th>
-                                            <th>Status</th>
-                                            <th>Priority</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($recent_orders as $order): ?>
-                                        <tr>
-                                            <td><strong><?php echo htmlspecialchars($order['po_number']); ?></strong></td>
-                                            <td><?php echo htmlspecialchars($order['supplier_name']); ?></td>
-                                            <td><?php echo date('Y-m-d', strtotime($order['order_date'])); ?></td>
-                                            <td>₱<?php echo number_format($order['total_amount'], 2); ?></td>
-                                            <td>
-                                                <span class="status-badge status-<?php echo $order['status']; ?>">
-                                                    <?php echo ucfirst($order['status']); ?>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="priority-badge priority-<?php echo $order['priority']; ?>">
-                                                    <?php echo ucfirst($order['priority']); ?>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <button class="action-btn" onclick="viewPO(<?php echo $order['id']; ?>)">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <?php if ($order['status'] == 'pending'): ?>
-                                                <button class="action-btn approve" onclick="updatePOStatus(<?php echo $order['id']; ?>, 'approved')">
-                                                    <i class="fas fa-check"></i>
-                                                </button>
-                                                <button class="action-btn reject" onclick="updatePOStatus(<?php echo $order['id']; ?>, 'rejected')">
-                                                    <i class="fas fa-times"></i>
-                                                </button>
-                                                <?php endif; ?>
-                                            </td>
-                                        </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            <?php endif; ?>
-                        </div>
-                    </div>
+    <!-- Purchase Order Documents -->
+    <div class="card">
+        <div class="card-header">
+            <h2><i class="fas fa-file-invoice"></i> Purchase Orders</h2>
+            <div class="card-actions">
+                <button class="card-action-btn" onclick="loadPurchaseOrders()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Filter Bar -->
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <select class="filter-select" id="poSupplier" onchange="filterBySupplier(this.value)">
+                        <option value="all">Suppliers Products</option>
+                        <?php
+                        // Get suppliers for filter
+                        $suppliers = $pdo->query("SELECT id, supplier_name FROM suppliers ORDER BY supplier_name")->fetchAll();
+                        foreach ($suppliers as $supplier) {
+                            $selected = (isset($_GET['supplier']) && $_GET['supplier'] == $supplier['id']) ? 'selected' : '';
+                            echo "<option value=\"{$supplier['id']}\" $selected>{$supplier['supplier_name']}</option>";
+                        }
+                        ?>
+                    </select>
                 </div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchPO" placeholder="Search orders..." value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search']) : ''; ?>">
+                </div>
+            </div>
+            
+            <!-- PO List - Filtered by tab -->
+<div class="po-list">
+    <?php
+    // Get current filters
+    $current_tab = isset($_GET['status']) ? $_GET['status'] : 'pending';
+    $status_filter = isset($_GET['filter_status']) ? $_GET['filter_status'] : 'all';
+    $supplier_filter = isset($_GET['supplier']) ? $_GET['supplier'] : null;
+    $search_term = isset($_GET['search']) ? $_GET['search'] : null;
+    
+    $query = "
+        SELECT po.*, s.supplier_name, u.full_name as requester
+        FROM purchase_orders po
+        JOIN suppliers s ON po.supplier_id = s.id
+        LEFT JOIN users u ON po.created_by = u.id
+        WHERE 1=1
+    ";
+    
+    $params = [];
+    
+    // Apply tab filter (this is the main filter)
+    if ($current_tab != 'all') {
+        // If tab is not 'all', filter by that status
+        $query .= " AND po.status = :tab_status";
+        $params[':tab_status'] = $current_tab;
+    } else {
+        // If tab is 'all', apply the status dropdown filter if not 'all'
+        if ($status_filter != 'all') {
+            $query .= " AND po.status = :filter_status";
+            $params[':filter_status'] = $status_filter;
+        }
+        // If status_filter is 'all', show all statuses (no status filter)
+    }
+    
+    // Apply supplier filter
+    if ($supplier_filter && $supplier_filter != 'all') {
+        $query .= " AND po.supplier_id = :supplier";
+        $params[':supplier'] = $supplier_filter;
+    }
+    
+    // Apply search
+    if ($search_term) {
+        $query .= " AND (po.po_number LIKE :search OR s.supplier_name LIKE :search)";
+        $params[':search'] = "%$search_term%";
+    }
+    
+    $query .= " ORDER BY po.created_at DESC LIMIT 50";
+    
+    $stmt = $pdo->prepare($query);
+    $stmt->execute($params);
+    $filtered_orders = $stmt->fetchAll();
+    
+    if (empty($filtered_orders)): ?>
+        <div class="empty-state">
+            <i class="fas fa-file-invoice" style="font-size: 48px; color: #cbd5e1; margin-bottom: 16px;"></i>
+            <h3 style="color: #64748b; margin-bottom: 8px;"></h3>
+            <p style="color: #94a3b8;">
+                <?php 
+                if ($current_tab != 'all') {
+                    echo "No " . $current_tab . " orders match the current filters";
+                } else {
+                    if ($status_filter != 'all') {
+                        echo "No " . $status_filter . " orders match the current filters";
+                    } else {
+                        echo "";
+                    }
+                }
+                ?>
+            </p>
+        </div>
+    <?php else: ?>
+        <table class="purchase-orders-table">
+            <thead>
+                <tr>
+                    <th>PO Number</th>
+                    <th>Supplier</th>
+                    <th>Order Date</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($filtered_orders as $order): ?>
+                <tr>
+                    <td><strong><?php echo htmlspecialchars($order['po_number']); ?></strong></td>
+                    <td><?php echo htmlspecialchars($order['supplier_name']); ?></td>
+                    <td><?php echo date('Y-m-d', strtotime($order['order_date'])); ?></td>
+                    <td>₱<?php echo number_format($order['total_amount'], 2); ?></td>
+                    <td>
+                        <span class="status-badge status-<?php echo $order['status']; ?>">
+                            <?php echo ucfirst($order['status']); ?>
+                        </span>
+                    </td>
+                    <td>
+                        <span class="priority-badge priority-<?php echo $order['priority']; ?>">
+                            <?php echo ucfirst($order['priority']); ?>
+                        </span>
+                    </td>
+                    <td>
+                        <button class="action-btn" onclick="viewPO(<?php echo $order['id']; ?>)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <?php if ($order['status'] == 'pending'): ?>
+                        <button class="action-btn approve" onclick="updatePOStatus(<?php echo $order['id']; ?>, 'approved')">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button class="action-btn reject" onclick="updatePOStatus(<?php echo $order['id']; ?>, 'rejected')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <?php endif; ?>
+                        <?php if ($order['status'] == 'approved'): ?>
+                        <button class="action-btn complete" onclick="updatePOStatus(<?php echo $order['id']; ?>, 'completed')">
+                            <i class="fas fa-check-double"></i>
+                        </button>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+</div>
+        </div>
+    </div>
                 
                 <!-- Supplier List and Performance -->
                 <div class="card">

@@ -105,6 +105,16 @@ if ($show_dashboard):
                 </a>
             </li>
             <?php endif; ?>
+
+            <?php if (in_array($_SESSION['role'], ['admin'])): ?>
+            <li class="nav-item">
+                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'employee.php' : 'modules/employee.php'; ?>" 
+                   class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'employee.php') ? 'active' : ''; ?>">
+                    <i class="fas fa-users"></i>
+                    <span>Employee Management</span>
+                </a>
+            </li>
+            <?php endif; ?>
         </ul>
     </div>
 </nav>

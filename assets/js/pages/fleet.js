@@ -239,7 +239,6 @@ function startRealTimeUpdates() {
 // ============================================
 // DRIVER FUNCTIONS
 // ============================================
-
 function loadDriverAssignment() {
     fetch('../api/get_driver_assignment.php')
         .then(response => response.json())
@@ -253,54 +252,97 @@ function loadDriverAssignment() {
                 if (data.has_assignment) {
                     const a = data.assignment;
                     
+                    // Parse location history with color coding
+                    const locationHistory = parseLocationHistory(a.current_location);
+                    
                     // Determine badge class and text based on status
                     let badgeClass = 'card-badge ';
                     let statusText = a.shipment_status.toUpperCase();
+                    let statusIcon = '';
                     
                     if (a.shipment_status === 'in_transit' || a.shipment_status === 'in-progress') {
                         badgeClass += 'status-warning';
+                        statusIcon = '<i class="fas fa-play-circle"></i>';
+                        statusText = 'IN TRANSIT';
                     } else if (a.shipment_status === 'delivered') {
                         badgeClass += 'status-info';
+                        statusIcon = '<i class="fas fa-check-circle"></i>';
                         statusText = 'DELIVERED (AWAITING RETURN)';
                     } else if (a.shipment_status === 'completed') {
                         badgeClass += 'status-success';
+                        statusIcon = '<i class="fas fa-check-double"></i>';
                         statusText = 'COMPLETED';
+                    } else if (a.shipment_status === 'pending') {
+                        badgeClass += 'status-warning';
+                        statusIcon = '<i class="fas fa-clock"></i>';
+                        statusText = 'PENDING';
+                    } else if (a.shipment_status === 'returned') {
+                        badgeClass += 'status-success';
+                        statusIcon = '<i class="fas fa-undo-alt"></i>';
+                        statusText = 'RETURNED';
                     } else {
                         badgeClass += 'status-info';
+                        statusIcon = '<i class="fas fa-info-circle"></i>';
                     }
                     
-                    statusBadge.textContent = statusText;
+                    statusBadge.innerHTML = statusIcon + ' ' + statusText;
                     statusBadge.className = badgeClass;
+                    
+                    // Generate color-coded location dropdown HTML
+                    const locationHTML = generateColorCodedLocationDropdown(locationHistory);
+                    
+                    // Get action buttons (update button removed from here)
+                    const actionButtons = getActionButtons(a.shipment_status);
                     
                     content.innerHTML = `
                         <div class="assignment-details">
                             <div class="detail-row">
-                                <strong>Vehicle:</strong> ${a.vehicle_name} (${a.vehicle_condition}% condition)
+                                <strong><i class="fas fa-truck"></i> Vehicle:</strong>
+                                <span>${a.vehicle_name} <span style="color: #666; font-size: 12px;">(Condition: ${a.vehicle_condition}%)</span></span>
                             </div>
                             <div class="detail-row">
-                                <strong>Customer:</strong> ${a.customer_name || 'N/A'}
+                                <strong><i class="fas fa-user"></i> Customer:</strong>
+                                <span>${a.customer_name || 'N/A'}</span>
                             </div>
                             <div class="detail-row">
-                                <strong>Delivery Address:</strong> ${a.delivery_address || 'N/A'}
+                                <strong><i class="fas fa-map-marker-alt"></i> Delivery Address:</strong>
+                                <span>${a.delivery_address || 'N/A'}</span>
                             </div>
-                            <div class="detail-row">
-                                <strong>Current Location:</strong> ${a.current_location || 'Not started'}
+                            
+                            <!-- Color-coded Location Row -->
+                            <div class="detail-row location-row">
+                                <strong><i class="fas fa-location-dot"></i> Current Location:</strong>
+                                ${locationHTML}
                             </div>
+                            
                             <div class="detail-row">
-                                <strong>Estimated Arrival:</strong> ${a.estimated_arrival ? new Date(a.estimated_arrival).toLocaleString() : 'N/A'}
+                                <strong><i class="fas fa-clock"></i> Estimated Arrival:</strong>
+                                <span>${a.estimated_arrival ? new Date(a.estimated_arrival).toLocaleString() : 'N/A'}</span>
+                            </div>
+                            ${a.route ? `
+                            <div class="detail-row">
+                                <strong><i class="fas fa-route"></i> Route:</strong>
+                                <span>${a.route}</span>
+                            </div>
+                            ` : ''}
+                            
+                            <!-- Quick Actions - Update button is NOT here anymore -->
+                            <div class="assignment-actions">
+                                ${actionButtons}
                             </div>
                         </div>
                     `;
+                    
                 } else {
-                    statusBadge.textContent = 'NO ASSIGNMENT';
+                    // No assignment code...
+                    statusBadge.innerHTML = '<i class="fas fa-clock"></i> NO ASSIGNMENT';
                     statusBadge.className = 'card-badge status-warning';
                     content.innerHTML = `
-                        <div style="text-align: center; padding: 30px;">
-                            <div style="background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px; color: #856404;"></i>
-                                <h3 style="margin-bottom: 10px; color: #856404;">No Active Assignment</h3>
-                                <p style="margin-bottom: 15px;">${data.message || 'You don\'t have any active assignments at the moment.'}</p>
-                                <p style="font-size: 13px; color: #666;">Please contact your dispatcher to get assigned to a shipment.</p>
+                        <div style="text-align: center; padding: 40px;">
+                            <div style="background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); border: 1px solid #ffe69c; color: #856404; border-radius: 16px; padding: 30px; margin-bottom: 20px;">
+                                <i class="fas fa-exclamation-triangle" style="font-size: 56px; margin-bottom: 16px; color: #856404;"></i>
+                                <h3 style="margin-bottom: 10px; color: #856404; font-size: 24px;">No Active Assignment</h3>
+                                <p style="margin-bottom: 15px; font-size: 16px;">${data.message || 'You don\'t have any active assignments at the moment.'}</p>
                             </div>
                         </div>
                     `;
@@ -311,6 +353,315 @@ function loadDriverAssignment() {
             console.error('Error loading assignment:', error);
         });
 }
+
+// Enhanced location history parser with clean, readable text
+function parseLocationHistory(currentLocation) {
+    const history = [];
+    
+    if (!currentLocation || currentLocation === 'Not started') {
+        return [{
+            displayText: 'Not started',
+            timestamp: null,
+            type: 'default',
+            icon: 'fa-circle',
+            color: '#64748b',
+            time: '',
+            date: '',
+            formattedTime: 'Not started'
+        }];
+    }
+    
+    // Clean up any duplicate text
+    currentLocation = currentLocation.replace(/Dispatch center at Dispatch center/gi, 'Dispatch center');
+    
+    // Split by timestamps
+    const parts = currentLocation.split(/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/);
+    
+    // First pass: collect all entries
+    const rawEntries = [];
+    for (let i = 1; i < parts.length; i += 2) {
+        const timestamp = parts[i];
+        let message = parts[i + 1] ? parts[i + 1].trim() : '';
+        
+        if (!message || !timestamp) continue;
+        
+        const [datePart, timePart] = timestamp.split(' ');
+        const [year, month, day] = datePart.split('-').map(Number);
+        let [hour, minute, second] = timePart.split(':').map(Number);
+        
+        // Convert 21 to 9 AM
+        if (hour === 21) {
+            hour = 9;
+        }
+        
+        rawEntries.push({
+            timestamp: timestamp,
+            message: message,
+            hour: hour,
+            minute: minute,
+            year: year,
+            month: month,
+            day: day,
+            sortTime: new Date(year, month-1, day, hour, minute, second).getTime()
+        });
+    }
+    
+    // Sort by time (oldest first for processing)
+    rawEntries.sort((a, b) => a.sortTime - b.sortTime);
+    
+    // Process entries to merge location into empty entry
+    const processedEntries = [];
+    let lastValidLocation = null;
+    
+    for (let i = 0; i < rawEntries.length; i++) {
+        const entry = rawEntries[i];
+        
+        // Check if this is a location update with empty location
+        if (entry.message.includes('Location update:') && 
+            (entry.message.includes('Location update:') && entry.message.replace('Location update:', '').trim() === '')) {
+            
+            // This is an empty location update - look ahead for the next location
+            let locationToAdd = null;
+            
+            // Look at next entries to find a location
+            for (let j = i + 1; j < rawEntries.length; j++) {
+                const nextEntry = rawEntries[j];
+                if (nextEntry.message.includes('Location update:')) {
+                    const loc = nextEntry.message.replace('Location update:', '').trim();
+                    if (loc && loc !== '') {
+                        locationToAdd = loc;
+                        // Mark the next entry as used/removed
+                        rawEntries[j].used = true;
+                        break;
+                    }
+                }
+            }
+            
+            // If we found a location, update this entry
+            if (locationToAdd) {
+                entry.message = `Location update: ${locationToAdd}`;
+                entry.displayText = `Arrived at ${locationToAdd}`;
+                processedEntries.push(entry);
+            } else {
+                // No location found, skip this empty entry
+                continue;
+            }
+        }
+        // Skip entries that were marked as used (the ones we took location from)
+        else if (!entry.used) {
+            processedEntries.push(entry);
+        }
+    }
+    
+    // Now convert processed entries to the final format
+    const uniqueEntries = new Map();
+    
+    processedEntries.forEach(entry => {
+        const { timestamp, message, hour, minute, year, month, day } = entry;
+        
+        // Format time in 12-hour format
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const hour12 = hour % 12 || 12;
+        const time12h = `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
+        
+        // Format date
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const date = `${monthNames[month-1]} ${day}, ${year}`;
+        const formattedTime = `${time12h} • ${date}`;
+        
+        let type = 'update';
+        let icon = 'fa-map-marker-alt';
+        let color = '#3b82f6';
+        let bgColor = '#3b82f615';
+        let displayText = '';
+        
+        // Clean the message
+        const cleanMessage = message.replace(/ at Dispatch center$/, '');
+        
+        // Determine type
+        if (cleanMessage.includes('Status changed to in-progress')) {
+            type = 'trip_start';
+            icon = 'fa-play-circle';
+            color = '#8b5cf6';
+            bgColor = '#8b5cf615';
+            
+            let location = 'Dispatch center';
+            const locationMatch = cleanMessage.match(/Location: ([^-\n]+)/);
+            if (locationMatch) {
+                location = locationMatch[1].trim();
+            }
+            displayText = `Started trip from ${location}`;
+        }
+        else if (cleanMessage.includes('Location update:')) {
+            const location = cleanMessage.replace('Location update:', '').trim();
+            type = 'location';
+            icon = 'fa-map-pin';
+            color = '#3b82f6';
+            bgColor = '#3b82f615';
+            displayText = `Arrived at ${location}`;
+        }
+        else if (cleanMessage.includes('Status changed to delivered')) {
+            type = 'delivered';
+            icon = 'fa-check-circle';
+            color = '#10b981';
+            bgColor = '#10b98115';
+            
+            let location = 'destination';
+            const locationMatch = cleanMessage.match(/Location: ([^-\n]+)/);
+            if (locationMatch) {
+                location = locationMatch[1].trim();
+            }
+            displayText = `Delivered to ${location}`;
+        }
+        else if (cleanMessage.includes('Status changed to awaiting_verification')) {
+            type = 'return';
+            icon = 'fa-undo-alt';
+            color = '#f59e0b';
+            bgColor = '#f59e0b15';
+            displayText = 'Return requested - waiting for verification';
+        }
+        else if (cleanMessage.includes('Status changed to completed')) {
+            type = 'completed';
+            icon = 'fa-flag-checkered';
+            color = '#6b7280';
+            bgColor = '#6b728015';
+            displayText = 'Trip completed';
+        }
+        else {
+            displayText = cleanMessage;
+        }
+        
+        const uniqueKey = `${timestamp}_${displayText}`;
+        
+        uniqueEntries.set(uniqueKey, {
+            displayText: displayText,
+            raw: cleanMessage,
+            timestamp: timestamp,
+            type: type,
+            icon: icon,
+            color: color,
+            bgColor: bgColor,
+            time: time12h,
+            date: date,
+            formattedTime: formattedTime
+        });
+    });
+    
+    // Convert Map to array and sort by timestamp (newest first)
+    const historyArray = Array.from(uniqueEntries.values());
+    
+    return historyArray.sort((a, b) => {
+        if (!a.timestamp) return 1;
+        if (!b.timestamp) return -1;
+        
+        const parseTime = (timestamp) => {
+            const [datePart, timePart] = timestamp.split(' ');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hour, minute, second] = timePart.split(':').map(Number);
+            // Convert 21 to 9 for sorting
+            const sortHour = hour === 21 ? 9 : hour;
+            return new Date(year, month-1, day, sortHour, minute, second).getTime();
+        };
+        
+        return parseTime(b.timestamp) - parseTime(a.timestamp);
+    });
+}
+// Generate clean location dropdown
+function generateColorCodedLocationDropdown(history) {
+    if (!history || history.length === 0) {
+        return `<div class="no-location">No location updates</div>`;
+    }
+    
+    const current = history[0];
+    
+    // Get type label
+    const getTypeLabel = (type) => {
+        const labels = {
+            'trip_start': 'TRIP START',
+            'location': 'LOCATION',
+            'delivered': 'DELIVERED',
+            'return': 'RETURN',
+            'completed': 'COMPLETED',
+            'default': 'UPDATE'
+        };
+        return labels[type] || 'UPDATE';
+    };
+    
+    // Generate dropdown options with 12-hour format
+    let options = '';
+    history.forEach((item, index) => {
+        const isCurrent = index === 0;
+        options += `<option value="${item.raw}" ${isCurrent ? 'selected' : ''}>
+            ${item.time} - ${item.displayText}
+        </option>`;
+    });
+    
+    return `
+        <div class="location-card" style="border-left: 4px solid ${current.color};">
+            <!-- Current Location -->
+            <div class="location-current" style="background: ${current.bgColor};">
+                <i class="fas ${current.icon}" style="color: ${current.color}; font-size: 20px;"></i>
+                <div class="current-info">
+                    <div class="current-text">${current.displayText}</div>
+                    <div class="current-time">
+                        <i class="far fa-clock"></i> ${current.formattedTime || current.time + ' • ' + current.date}
+                    </div>
+                </div>
+                <span class="type-badge" style="background: ${current.color}; color: white;">
+                    ${getTypeLabel(current.type)}
+                </span>
+            </div>
+            
+            <!-- History Dropdown (if multiple updates) -->
+            ${history.length > 1 ? `
+            <div class="history-section">
+                <div class="history-header">
+                    <i class="fas fa-history"></i> Previous Updates
+                </div>
+                <select class="history-dropdown" id="locationHistory">
+                    ${options}
+                </select>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Simplified action buttons
+function getActionButtons(status) {
+    switch(status) {
+        case 'pending':
+            return `
+               
+            `;
+        
+        case 'in_transit':
+        case 'in-progress':
+            return `
+              
+            `;
+        
+        case 'delivered':
+            return `
+               
+            `;
+        
+        case 'returned':
+            return `
+              
+            `;
+        
+        case 'completed':
+            return `
+               
+            `;
+        
+        default:
+            return '';
+    }
+}
+
+
 function loadDriverTrips() {
     const tripHistory = document.getElementById('trip-history');
     if (!tripHistory) {
@@ -698,10 +1049,18 @@ function updateLocation() {
                 const assignment = data.assignment;
                 const assignmentId = assignment.id;
                 
-                const currentLocation = prompt('Enter current location:');
+                // Show location input with suggestions
+                const currentLocation = prompt('Enter current location (e.g., City, Landmark, Address):');
                 if (!currentLocation) return;
                 
-                // Update location
+                // Show loading on the button
+                const btn = event?.target;
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+                    btn.disabled = true;
+                }
+                
+                // Update location with structured format
                 fetch('../api/update_dispatch_location.php', {
                     method: 'POST',
                     headers: {
@@ -709,20 +1068,26 @@ function updateLocation() {
                     },
                     body: JSON.stringify({
                         schedule_id: assignmentId,
-                        current_location: currentLocation
+                        current_location: `[${new Date().toISOString().slice(0,19).replace('T',' ')}] Location update: ${currentLocation}`
                     })
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         showNotification('Location updated successfully!', 'success');
-                        loadDriverAssignment();
+                        loadDriverAssignment(); // Reload to show new location
                     } else {
                         showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
                     }
                 })
                 .catch(error => {
                     showNotification('Error: ' + error.message, 'error');
+                })
+                .finally(() => {
+                    if (btn) {
+                        btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Update Location';
+                        btn.disabled = false;
+                    }
                 });
             } else {
                 showNotification('No active assignment found', 'error');
