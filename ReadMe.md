@@ -2,7 +2,7 @@ account details
 
 role   | username or email           |   password
 admin          joshua                    joshua
-employee    asierra389@gmail.com          joshua
+employee    asierra389@gmail.com         Joshua123
 Fleet manager   jay jay                jayjay123
 Mechanic       john doe                johndoe123
 Driver         john john               johnjohn123
