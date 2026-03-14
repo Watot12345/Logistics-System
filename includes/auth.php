@@ -135,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             
             if ($user && password_verify($password, $user['password'])) {
-                 /* ********** 2FA DISABLED FOR DEVELOPMENT **********
+                
                 // Generate and send verification code
                 $verification_code = sprintf("%06d", random_int(0, 999999));
                 $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
@@ -172,33 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $messageType = 'error';
                     error_log("Failed to send verification email to {$user['email']}");
                 }
-                    ********** 2FA DISABLED FOR DEVELOPMENT ********** */
-                    // *** DIRECT LOGIN (NO 2FA) FOR DEVELOPMENT ***
-    $_SESSION['user_id'] = $user['id'];
-    $_SESSION['username'] = $user['username'];
-    $_SESSION['full_name'] = $user['full_name'];
-    $_SESSION['role'] = $user['role'];
-    $_SESSION['logged_in'] = true;
-    
-    // Optional: Show a small notice
-    echo "<div style='
-        position: fixed;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #fbbf24;
-        color: #92400e;
-        padding: 8px 20px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: bold;
-        z-index: 9999;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    '>⚡ DEV MODE: 2FA Disabled</div>";
-    
-    // Redirect straight to dashboard
-    header('Location: dashboard.php');
-    exit();
+                 
             } else {
                 $message = 'Invalid username/email or password';
                 $messageType = 'error';
