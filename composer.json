@@ -1,7 +1,5 @@
 {
   "require": {
-    "php": ">=8.0",
-    "ext-pdo_mysql": "*",
-    "ext-mysqli": "*"
+    "php": "8.2"
   }
 }
