@@ -1,14 +1,14 @@
 FROM php:8.2-apache
 
-# Install MySQL extensions
-RUN docker-php-ext-install pdo_mysql mysqli
+# Force Apache to use prefork MPM
+RUN apt-get update && \
+    apt-get install -y apache2 && \
+    a2dismod mpm_event mpm_worker || true && \
+    a2enmod mpm_prefork && \
+    docker-php-ext-install pdo_mysql mysqli
 
-# Copy application
 COPY . /var/www/html/
+RUN chown -R www-data:www-data /var/www/html/
 
-# Enable Apache modules
-RUN a2enmod rewrite
-
-WORKDIR /var/www/html
-
-# Apache runs automatically
+EXPOSE 80
+CMD ["apache2-foreground"]
