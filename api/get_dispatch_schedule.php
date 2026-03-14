@@ -11,6 +11,58 @@ if (!isset($_SESSION['user_id'])) {
 require_once '../config/db.php';
 
 try {
+    // Check if we're fetching a single dispatch by ID
+    if (isset($_GET['id']) && is_numeric($_GET['id'])) {
+        // Fetch single dispatch
+        $id = intval($_GET['id']);
+        
+        $stmt = $pdo->prepare("
+            SELECT 
+                ds.id,
+                ds.reservation_id,
+                ds.vehicle_id,
+                ds.driver_id,
+                ds.scheduled_date,
+                ds.status,
+                ds.created_at,
+                ds.notes,
+                a.asset_name as vehicle_name,
+                a.asset_condition as vehicle_condition,
+                u.full_name as driver_name,
+                u.username as driver_username,
+                vr.purpose,
+                vr.department,
+                vr.start_time,
+                vr.end_time,
+                vr.customer_name,
+                vr.delivery_address,
+                vr.start_date,
+                vr.end_date
+            FROM dispatch_schedule ds
+            LEFT JOIN assets a ON ds.vehicle_id = a.id
+            LEFT JOIN users u ON ds.driver_id = u.id
+            LEFT JOIN vehicle_reservations vr ON ds.reservation_id = vr.id
+            WHERE ds.id = :id
+        ");
+        
+        $stmt->execute([':id' => $id]);
+        $dispatch = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($dispatch) {
+            echo json_encode([
+                'success' => true,
+                'data' => $dispatch
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Dispatch not found'
+            ]);
+        }
+        exit();
+    }
+    
+    // If no ID provided, return today's schedule (your existing code)
     // Check if dispatch_schedule table exists
     $tableCheck = $pdo->query("SHOW TABLES LIKE 'dispatch_schedule'");
     

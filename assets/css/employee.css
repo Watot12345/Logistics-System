@@ -3,6 +3,70 @@
 /* Employee Management Specific Styles */
 
 /* Page Header Actions */
+/* Employee ID Badge */
+.user-id-badge {
+    font-size: 0.75rem;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: 2px 8px;
+    border-radius: 12px;
+    display: inline-block;
+    margin-top: 4px;
+}
+
+/* Employee ID Display in table */
+.employee-id-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f3f4f6;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    color: #4b5563;
+    font-family: monospace;
+}
+
+.employee-id-display i {
+    color: #9ca3af;
+    font-size: 0.8rem;
+}
+
+/* Role badges for new roles */
+.role-fleet_manager {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+}
+
+.role-fleet_manager i {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.role-mechanic {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
+.role-mechanic i {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Update existing role badges */
+.role-admin {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.role-dispatcher {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.role-driver {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.role-employee {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+}
 .page-content {
    flex: 1;
     margin-left: 288px;
@@ -758,7 +822,21 @@
 .view-modal {
     max-width: 500px;
 }
+.profile-employee-id {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: 4px 12px;
+    border-radius: 20px;
+    display: inline-block;
+    font-family: monospace;
+}
 
+.profile-employee-id i {
+    margin-right: 6px;
+    color: #9ca3af;
+}
 .profile-header {
     display: flex;
     align-items: center;

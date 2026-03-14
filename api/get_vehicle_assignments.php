@@ -3,7 +3,7 @@ date_default_timezone_set('Asia/Manila');
 session_start();
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'dispatcher', 'fleet_manager'])) {
+if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'], ['admin', 'dispatcher', 'fleet_manager', 'employee'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit();

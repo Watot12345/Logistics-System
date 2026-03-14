@@ -220,36 +220,15 @@ include '../includes/header.php';
     <div class="header-container">
         
         <div class="header-left">
-            <button class="menu-toggle" onclick="toggleSidebar()">
-                <i class="fas fa-bars"></i>
-            </button>
-
-            <div class="search-container">
-                <i class="fas fa-search search-icon"></i>
-                <input type="text" class="search-input" placeholder="Search...">
-            </div>
         </div>
         
         <div class="header-right">
-
-            <button class="header-btn">
-                <i class="fas fa-bell"></i>
-                <span class="notification-badge"></span>
-            </button>
-
-            <button class="header-btn">
-                <i class="fas fa-envelope"></i>
-            </button>
-
             <div class="divider"></div>
-
             <div class="user-info-header">
-
                 <!-- FULL NAME -->
                 <span class="user-name-header">
                     <?php echo htmlspecialchars($_SESSION['full_name']); ?>
                 </span>
-
                 <!-- AVATAR INITIALS -->
                 <div class="avatar-small">
                     <?php
@@ -260,7 +239,6 @@ include '../includes/header.php';
                         foreach ($words as $word) {
                             $initials .= strtoupper(substr($word, 0, 1));
                         }
-
                         echo $initials;
                     ?>
                 </div>
@@ -283,7 +261,7 @@ include '../includes/header.php';
                     </div>
                 </div>
                 
-               
+   <body data-user-role="<?php echo $_SESSION['role']; ?>">            
            <!-- Statistics Cards - HIDDEN from drivers -->
 <?php if ($_SESSION['role'] !== 'driver' && $_SESSION['role'] !== 'mechanic'): ?>
 <div class="stats-grid">
@@ -695,6 +673,9 @@ foreach ($maintenance_alerts as $alert) {
                     <button class="btn btn-warning" onclick="updateLocation()" style="width: 100%;">
                         <i class="fas fa-map-marker-alt"></i> Update Location
                     </button>
+                   <button class="btn btn-danger" onclick="reportEmergencyBreakdown()" style="width: 100%; margin-top: 10px; font-weight: bold;">
+                        <i class="fas fa-exclamation-circle"></i> 🚨 EMERGENCY BREAKDOWN
+                    </button>
                 </div>
             </div>
         </div>
@@ -717,21 +698,30 @@ foreach ($maintenance_alerts as $alert) {
 
 <?php if ($_SESSION['role'] === 'mechanic'): ?>
 <div id="tab-mechanic" class="tab-pane" style="display: block;">
-    <!-- My Assigned Tasks -->
-    <div class="card card-full" id="my-tasks-card">
-        <div class="card-header">
-            <h2><i class="fas fa-tasks"></i> My Assigned Maintenance Tasks</h2>
-            <span class="card-badge" id="tasks-count">Loading...</span>
+    
+    <!-- Emergency Breakdowns Assigned to Me -->
+    <div class="card card-full" style="margin-bottom: 20px; border-left: 4px solid #dc2626;">
+        <div class="card-header" style="background: #fee2e2;">
+            <h2><i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i> My Emergency Assignments</h2>
+            <span class="card-badge" style="background: #dc2626; color: white;" id="my-emergency-count">0</span>
         </div>
-        <div class="card-body" id="my-tasks-content">
-            <div style="text-align: center; padding: 40px;">
-                <i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #3b82f6;"></i>
-                <p>Loading your tasks...</p>
-            </div>
+        <div class="card-body" id="my-emergency-list">
+            <!-- Loaded via AJAX -->
         </div>
     </div>
     
-    <!-- Mechanic Performance Stats -->
+    <!-- My Scheduled Maintenance Tasks -->
+    <div class="card card-full" id="my-tasks-card">
+        <div class="card-header">
+            <h2><i class="fas fa-tasks"></i> My Scheduled Maintenance Tasks</h2>
+            <span class="card-badge" id="tasks-count">Loading...</span>
+        </div>
+        <div class="card-body" id="my-tasks-content">
+            <!-- Existing mechanic tasks loaded here -->
+        </div>
+    </div>
+    
+    <!-- My Performance Stats -->
     <div class="dashboard-grid">
         <div class="card">
             <div class="card-header">
@@ -740,18 +730,6 @@ foreach ($maintenance_alerts as $alert) {
             <div class="card-body">
                 <div class="stats-mini-grid" id="mechanic-stats">
                     <!-- Filled by JS -->
-                    <div class="stat-mini">
-                        <div class="value">0</div>
-                        <div class="label">Completed</div>
-                    </div>
-                    <div class="stat-mini">
-                        <div class="value">0</div>
-                        <div class="label">In Progress</div>
-                    </div>
-                    <div class="stat-mini">
-                        <div class="value">0%</div>
-                        <div class="label">Efficiency</div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -765,8 +743,8 @@ foreach ($maintenance_alerts as $alert) {
                     <button class="btn btn-primary" onclick="refreshMechanicTasks()" style="width: 100%; margin-bottom: 10px;">
                         <i class="fas fa-sync-alt"></i> Refresh Tasks
                     </button>
-                    <button class="btn btn-info" onclick="viewAllMaintenance()" style="width: 100%;">
-                        <i class="fas fa-list"></i> View All Tasks
+                    <button class="btn btn-info" onclick="updateMechanicStatus()" style="width: 100%;">
+                        <i class="fas fa-toggle-on"></i> Toggle Availability
                     </button>
                 </div>
             </div>
@@ -787,6 +765,22 @@ foreach ($maintenance_alerts as $alert) {
     </div>
 </div>
 <?php endif; ?>
+<!-- Unified Task Details Modal -->
+<div id="taskDetailsModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 650px;">
+        <div class="modal-header" style="background: #2563eb; color: white;">
+            <h3><i class="fas fa-info-circle"></i> <span id="modalTitle">Task Details</span></h3>
+            <button class="modal-close" onclick="closeTaskDetailsModal()" style="color: white;">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 0;" id="taskDetailsContainer">
+            <!-- Content will be loaded dynamically -->
+        </div>
+        <div class="modal-footer" style="padding: 15px; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn btn-outline" onclick="closeTaskDetailsModal()">Close</button>
+            <button class="btn btn-primary" id="taskActionBtn" style="display: none;">Action</button>
+        </div>
+    </div>
+</div>
 
                 <div id="tab-reservations" class="tab-pane" style="display: none;">
                     <!-- Vehicle Reservation List -->
@@ -800,21 +794,20 @@ foreach ($maintenance_alerts as $alert) {
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="filter-bar">
-                                <div class="filter-group">
-                                    <select class="filter-select">
-                                        <option value="all">All Status</option>
-                                        <option value="approved">Approved</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="rejected">Rejected</option>
-                                    </select>
-                                    <select class="filter-select">
-                                        <option value="all">All Vehicles</option>
-                                        <option value="volvo">Volvo FH16</option>
-                                        <option value="scania">Scania R500</option>
-                                    </select>
-                                </div>
-                            </div>
+                                      <div class="filter-bar">
+    <div class="filter-group">
+        <select id="reservation-status-filter" class="filter-select">
+            <option value="all">All Status</option>
+            <option value="approved">Approved</option>
+            <option value="pending">Pending</option>
+            <option value="rejected">Rejected</option>
+        </select>
+        <select id="reservation-vehicle-filter" class="filter-select">
+            <option value="all">All Vehicles</option>
+            <!-- Vehicles will be loaded here by JavaScript -->
+        </select>
+    </div>
+</div>
                             <div class="reservation-list">
                                 <!-- Dynamic content loaded via JS -->
                             </div>
@@ -835,20 +828,221 @@ foreach ($maintenance_alerts as $alert) {
 </div>
 
 <!-- Pending Verification Section -->
-     <div class="card card-full">
-    <div class="card-header">
-        <h2><i class="fas fa-clipboard-check"></i> Pending Verification</h2>
-        <span class="card-badge">Vehicles awaiting return confirmation</span>
-    </div>
-    <div class="card-body">
-        <div id="verification-list" class="verification-list">
-            <div style="text-align: center; padding: 30px; color: #94a3b8;">
-                <i class="fas fa-spinner fa-spin" style="font-size: 40px; margin-bottom: 10px;"></i>
-                <p>Loading verification data...</p>
+<?php
+function isDispatcher() {
+    if (isset($_SESSION['user_data']) && is_array($_SESSION['user_data'])) {
+        if (isset($_SESSION['user_data']['role']) && $_SESSION['user_data']['role'] === 'dispatcher') {
+            return true;
+        }
+        if (isset($_SESSION['user_data']['usertype']) && $_SESSION['user_data']['usertype'] === 'dispatcher') {
+            return true;
+        }
+        if (isset($_SESSION['user_data']['user_type']) && $_SESSION['user_data']['user_type'] === 'dispatcher') {
+            return true;
+        }
+    }
+    if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'dispatcher') {
+        return true;
+    }
+    if (isset($_SESSION['role']) && $_SESSION['role'] === 'dispatcher') {
+        return true;
+    }
+    if (isset($_SESSION['usertype']) && $_SESSION['usertype'] === 'dispatcher') {
+        return true;
+    }
+    return false;
+}
+
+if (function_exists('isDispatcher') && isDispatcher()):
+    // Define $trainees HERE inside the dispatcher condition
+    try {
+        $stmt = $pdo->query("
+            SELECT dt.*, u.full_name, u.email, u.employee_id, a.full_name as assigned_by_name
+            FROM driver_training dt
+            JOIN users u ON dt.user_id = u.id
+            JOIN users a ON dt.assigned_by = a.id
+            WHERE dt.training_status IN ('pending', 'in_progress')
+            ORDER BY dt.assigned_date DESC
+        ");
+        $trainees = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $trainees = [];
+        error_log("Error fetching trainees: " . $e->getMessage());
+    }
+?>
+    <div class="card card-full">
+        <div class="card-header">
+            <h2><i class="fas fa-clipboard-check"></i> Pending Verification</h2>
+            <span class="card-badge">Vehicles awaiting return confirmation</span>
+        </div>
+        <div class="card-body">
+            <div id="verification-list" class="verification-list">
+                <div style="text-align: center; padding: 30px; color: #94a3b8;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 40px; margin-bottom: 10px;"></i>
+                    <p>Loading verification data...</p>
+                </div>
             </div>
         </div>
     </div>
-</div>
+
+    <!-- New Driver Training Section -->
+    <div class="card card-full" style="margin-top: 20px;">
+        <div class="card-header">
+            <h2><i class="fas fa-users"></i> Driver Training</h2>
+            <span class="card-badge">Pending Trainees</span>
+        </div>
+        <div class="card-body">
+            <!-- Training Stats -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
+                <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 15px; border-radius: 10px; color: white;">
+                    <h3 style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Pending Training</h3>
+                    <p style="margin: 5px 0 0; font-size: 2rem; font-weight: bold;">
+                        <?php echo count(array_filter($trainees, function($t) { return $t['training_status'] === 'pending'; })); ?>
+                    </p>
+                </div>
+                <div style="background: linear-gradient(135deg, #3b82f6, #2563eb); padding: 15px; border-radius: 10px; color: white;">
+                    <h3 style="margin: 0; font-size: 0.9rem; opacity: 0.9;">In Progress</h3>
+                    <p style="margin: 5px 0 0; font-size: 2rem; font-weight: bold;">
+                        <?php echo count(array_filter($trainees, function($t) { return $t['training_status'] === 'in_progress'; })); ?>
+                    </p>
+                </div>
+                <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 15px; border-radius: 10px; color: white;">
+                    <h3 style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Completed This Month</h3>
+                    <p style="margin: 5px 0 0; font-size: 2rem; font-weight: bold;">
+                        <?php
+                        try {
+                            $stmt = $pdo->query("
+                                SELECT COUNT(*) as count FROM driver_training 
+                                WHERE training_status = 'passed' 
+                                AND MONTH(completed_date) = MONTH(CURRENT_DATE())
+                            ");
+                            $completed = $stmt->fetch(PDO::FETCH_ASSOC);
+                            echo $completed['count'];
+                        } catch (PDOException $e) {
+                            echo "0";
+                        }
+                        ?>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Trainees List -->
+            <table class="table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Employee ID</th>
+                        <th>Assigned By</th>
+                        <th>Assigned Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($trainees)): ?>
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 30px;">
+                            <i class="fas fa-user-graduate" style="font-size: 40px; color: #94a3b8; margin-bottom: 10px;"></i>
+                            <p>No pending trainees</p>
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                        <?php foreach ($trainees as $trainee): ?>
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div class="avatar-small">
+                                        <?php 
+                                        $name = $trainee['full_name'];
+                                        $words = explode(" ", $name);
+                                        $initials = "";
+                                        foreach ($words as $word) {
+                                            $initials .= strtoupper(substr($word, 0, 1));
+                                        }
+                                        echo $initials;
+                                        ?>
+                                    </div>
+                                    <div>
+                                        <strong><?php echo htmlspecialchars($trainee['full_name']); ?></strong>
+                                        <br>
+                                        <small style="color: #64748b;"><?php echo htmlspecialchars($trainee['email']); ?></small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><?php echo htmlspecialchars($trainee['employee_id']); ?></td>
+                            <td><?php echo htmlspecialchars($trainee['assigned_by_name']); ?></td>
+                            <td><?php echo date('M d, Y', strtotime($trainee['assigned_date'])); ?></td>
+                            <td>
+                                <?php 
+                                $statusColors = [
+                                    'pending' => 'badge-warning',
+                                    'in_progress' => 'badge-info',
+                                    'passed' => 'badge-success',
+                                    'failed' => 'badge-danger'
+                                ];
+                                $statusText = [
+                                    'pending' => 'Pending',
+                                    'in_progress' => 'In Progress',
+                                    'passed' => 'Passed',
+                                    'failed' => 'Failed'
+                                ];
+                                ?>
+                                <span class="badge <?php echo $statusColors[$trainee['training_status']]; ?>">
+                                    <?php echo $statusText[$trainee['training_status']]; ?>
+                                </span>
+                            </td>
+                            <td>
+                                <button class="action-btn" onclick="openTrainingModal(<?php echo $trainee['id']; ?>)" title="Review">
+                                    <i class="fas fa-clipboard-check"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Training Review Modal -->
+    <div id="trainingModal" class="modal modal-hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Review Driver Training</h3>
+                <button class="modal-close" onclick="closeTrainingModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <form id="trainingForm" onsubmit="event.preventDefault(); submitTrainingReview();">
+                    <input type="hidden" id="trainingId">
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label class="form-label">Training Status</label>
+                        <select class="form-select" id="trainingStatus" required>
+                            <option value="in_progress">In Progress</option>
+                            <option value="passed">Passed - Promote to Driver</option>
+                            <option value="failed">Failed - Reject</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label class="form-label">Notes / Evaluation</label>
+                        <textarea class="form-input" id="trainingNotes" rows="4" 
+                            placeholder="Enter evaluation notes, feedback, or reason for decision..."></textarea>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeTrainingModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Submit Review</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php 
+endif; // End of dispatcher condition
+?>
                     
                     
                     <!-- Approved and Rejected Reservations -->
@@ -1396,7 +1590,6 @@ if ($in_progress_count > 0 && $pending_count > 0): ?>
                 </p>
             <?php endif; ?>
         </div>
-        
         <!-- Mechanic Performance -->
         <?php if ($can_manage_maintenance): ?>
         <div style="margin-top: 20px;">
@@ -1435,6 +1628,87 @@ if ($in_progress_count > 0 && $pending_count > 0): ?>
         <?php endif; ?>
     </div>
 </div>
+<!-- Assign Mechanic to Breakdown Modal -->
+<div id="assignMechanicBreakdownModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header" style="background: #dc2626; color: white;">
+            <h3><i class="fas fa-wrench"></i> Assign Mechanic to Breakdown</h3>
+            <button class="modal-close" onclick="closeAssignMechanicBreakdownModal()" style="color: white;">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 20px;">
+          <form id="assignMechanicBreakdownForm" onsubmit="submitMechanicAssignment(event)">
+                <input type="hidden" id="breakdownId" value="">
+                
+                <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #dc2626;">
+                    <div id="breakdownSummary">
+                        <strong>Vehicle:</strong> <span id="breakdownVehicle"></span><br>
+                        <strong>Location:</strong> <span id="breakdownLocation"></span><br>
+                        <strong>Driver:</strong> <span id="breakdownDriver"></span><br>
+                        <strong>Issue:</strong> <span id="breakdownIssue"></span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Select Mechanic *</label>
+                    <select id="breakdownMechanicSelect" class="form-control" required>
+                        <option value="">Loading mechanics...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Estimated Arrival Time</label>
+                    <input type="text" id="breakdownEstimatedArrival" class="form-control" 
+                        placeholder="e.g., 30 minutes, 1 hour, ASAP">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Instructions for Mechanic</label>
+                    <textarea id="breakdownInstructions" class="form-control" rows="3" 
+                        placeholder="Any special instructions, tools needed, or additional info..."></textarea>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeAssignMechanicBreakdownModal()">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-check-circle"></i> Assign Mechanic
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- View Breakdown Details Modal -->
+<div id="viewBreakdownModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header" style="background: #dc2626; color: white;">
+            <h3><i class="fas fa-exclamation-triangle"></i> Emergency Breakdown Details</h3>
+            <button class="modal-close" onclick="closeViewBreakdownModal()" style="color: white;">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 20px;">
+            <div id="breakdownDetailsContainer">
+                <!-- Content will be loaded dynamically -->
+            </div>
+        </div>
+        <div class="modal-footer" style="padding: 15px; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn btn-outline" onclick="closeViewBreakdownModal()">Close</button>
+            <button class="btn btn-danger" id="assignFromDetailsBtn" onclick="assignFromDetails()">
+                <i class="fas fa-user-plus"></i> Assign Mechanic
+            </button>
+        </div>
+    </div>
+</div>
+  <?php if ($_SESSION['role'] === 'fleet_manager' || $_SESSION['role'] === 'admin'): ?>
+<!-- Emergency Breakdowns Section (Always visible) -->
+<div class="card card-full" style="border-left: 4px solid #ef4444; margin-bottom: 20px;">
+    <div class="card-header" style="background: #fee2e2;">
+        <h2><i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i> Active Breakdowns</h2>
+        <span class="card-badge" style="background: #ef4444; color: white;" id="breakdown-count">0</span>
+    </div>
+    <div class="card-body" id="breakdown-list">
+        <!-- Loaded via AJAX -->
+    </div>
+</div>
+<?php endif; ?>
                 </div>
             </div>
         </main>

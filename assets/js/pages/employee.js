@@ -1,5 +1,3 @@
-// assets/js/employees.js
-
 // Employee Management Module
 const EmployeeManagement = {
     // State
@@ -13,13 +11,15 @@ const EmployeeManagement = {
     },
     employees: [],
     currentEmployee: null,
+    deleteId: null,
 
     // Initialize
     init: function() {
         console.log('Employee management initialized');
         this.loadEmployees();
+         this.addTrainingButtonStyle(); 
+        this.loadStatistics();
         this.setupEventListeners();
-        this.updateStats();
     },
 
     // Setup Event Listeners
@@ -28,13 +28,13 @@ const EmployeeManagement = {
         document.getElementById('filterRole')?.addEventListener('change', (e) => {
             this.filters.role = e.target.value;
             this.currentPage = 1;
-            this.filterEmployees();
+            this.loadEmployees();
         });
 
         document.getElementById('filterStatus')?.addEventListener('change', (e) => {
             this.filters.status = e.target.value;
             this.currentPage = 1;
-            this.filterEmployees();
+            this.loadEmployees();
         });
 
         // Search
@@ -43,13 +43,14 @@ const EmployeeManagement = {
             searchInput.addEventListener('input', debounce((e) => {
                 this.filters.search = e.target.value.toLowerCase();
                 this.currentPage = 1;
-                this.filterEmployees();
+                this.loadEmployees();
             }, 300));
         }
 
         // Refresh button
         document.getElementById('refreshData')?.addEventListener('click', () => {
             this.loadEmployees();
+            this.loadStatistics();
             this.showNotification('Data refreshed', 'success');
         });
 
@@ -59,271 +60,364 @@ const EmployeeManagement = {
         });
     },
 
-    // Load Employees (Mock Data)
-    loadEmployees: function() {
-        // Mock data - in real app, this would come from API
-        this.employees = [
-            {
-                id: 'EMP001',
-                name: 'John Smith',
-                email: 'john.smith@company.com',
-                phone: '+1 234-567-8901',
-                role: 'admin',
-                status: 'active',
-                department: 'Management',
-                joinDate: '2023-01-15',
-                lastActive: '2024-02-20 09:30 AM',
-                avatar: 'JS'
-            },
-            {
-                id: 'EMP002',
-                name: 'Sarah Johnson',
-                email: 'sarah.j@company.com',
-                phone: '+1 234-567-8902',
-                role: 'dispatcher',
-                status: 'active',
-                department: 'Operations',
-                joinDate: '2023-03-20',
-                lastActive: '2024-02-20 08:45 AM',
-                avatar: 'SJ'
-            },
-            {
-                id: 'EMP003',
-                name: 'Mike Wilson',
-                email: 'mike.w@company.com',
-                phone: '+1 234-567-8903',
-                role: 'driver',
-                status: 'active',
-                department: 'Transport',
-                joinDate: '2023-06-10',
-                lastActive: '2024-02-20 07:15 AM',
-                avatar: 'MW'
-            },
-            {
-                id: 'EMP004',
-                name: 'Emily Davis',
-                email: 'emily.d@company.com',
-                phone: '+1 234-567-8904',
-                role: 'employee',
-                status: 'active',
-                department: 'Warehouse',
-                joinDate: '2023-08-05',
-                lastActive: '2024-02-19 04:30 PM',
-                avatar: 'ED'
-            },
-            {
-                id: 'EMP005',
-                name: 'Tom Brown',
-                email: 'tom.b@company.com',
-                phone: '+1 234-567-8905',
-                role: 'driver',
-                status: 'on-leave',
-                department: 'Transport',
-                joinDate: '2023-02-28',
-                lastActive: '2024-02-18 02:15 PM',
-                avatar: 'TB'
-            },
-            {
-                id: 'EMP006',
-                name: 'Lisa Anderson',
-                email: 'lisa.a@company.com',
-                phone: '+1 234-567-8906',
-                role: 'dispatcher',
-                status: 'active',
-                department: 'Operations',
-                joinDate: '2023-04-12',
-                lastActive: '2024-02-20 10:00 AM',
-                avatar: 'LA'
-            },
-            {
-                id: 'EMP007',
-                name: 'David Lee',
-                email: 'david.l@company.com',
-                phone: '+1 234-567-8907',
-                role: 'employee',
-                status: 'inactive',
-                department: 'Warehouse',
-                joinDate: '2023-07-19',
-                lastActive: '2024-02-15 11:20 AM',
-                avatar: 'DL'
-            },
-            {
-                id: 'EMP008',
-                name: 'Anna Martinez',
-                email: 'anna.m@company.com',
-                phone: '+1 234-567-8908',
-                role: 'admin',
-                status: 'active',
-                department: 'Management',
-                joinDate: '2023-09-01',
-                lastActive: '2024-02-20 09:15 AM',
-                avatar: 'AM'
-            },
-            {
-                id: 'EMP009',
-                name: 'James Taylor',
-                email: 'james.t@company.com',
-                phone: '+1 234-567-8909',
-                role: 'driver',
-                status: 'active',
-                department: 'Transport',
-                joinDate: '2023-10-10',
-                lastActive: '2024-02-20 08:30 AM',
-                avatar: 'JT'
-            },
-            {
-                id: 'EMP010',
-                name: 'Patricia White',
-                email: 'patricia.w@company.com',
-                phone: '+1 234-567-8910',
-                role: 'employee',
-                status: 'active',
-                department: 'Warehouse',
-                joinDate: '2023-11-15',
-                lastActive: '2024-02-19 03:45 PM',
-                avatar: 'PW'
-            },
-            {
-                id: 'EMP011',
-                name: 'Robert Chen',
-                email: 'robert.c@company.com',
-                phone: '+1 234-567-8911',
-                role: 'dispatcher',
-                status: 'on-leave',
-                department: 'Operations',
-                joinDate: '2023-05-22',
-                lastActive: '2024-02-17 01:20 PM',
-                avatar: 'RC'
-            },
-            {
-                id: 'EMP012',
-                name: 'Maria Garcia',
-                email: 'maria.g@company.com',
-                phone: '+1 234-567-8912',
-                role: 'driver',
-                status: 'active',
-                department: 'Transport',
-                joinDate: '2023-12-01',
-                lastActive: '2024-02-20 07:45 AM',
-                avatar: 'MG'
+    // Load Employees from API
+    loadEmployees: async function() {
+        try {
+            // Build query string with filters
+            const params = new URLSearchParams({
+                page: this.currentPage,
+                limit: this.itemsPerPage,
+                search: this.filters.search,
+                role: this.filters.role,
+                status: this.filters.status
+            });
+
+            const response = await fetch(`../api/employees.php?${params}`);
+            const result = await response.json();
+
+            if (result.success) {
+                this.employees = result.data.data;
+                this.totalItems = result.data.total;
+                this.renderTable();
+                this.updatePagination();
+            } else {
+                this.showNotification(result.error || 'Error loading employees', 'error');
             }
-        ];
-
-        this.totalItems = this.employees.length;
-        this.filterEmployees();
-        this.updateStats();
+        } catch (error) {
+            console.error('Error loading employees:', error);
+            this.showNotification('Error connecting to server', 'error');
+        }
     },
 
-    // Filter Employees
-    filterEmployees: function() {
-        let filtered = [...this.employees];
-
-        // Apply role filter
-        if (this.filters.role !== 'all') {
-            filtered = filtered.filter(emp => emp.role === this.filters.role);
-        }
-
-        // Apply status filter
-        if (this.filters.status !== 'all') {
-            filtered = filtered.filter(emp => emp.status === this.filters.status);
-        }
-
-        // Apply search filter
-        if (this.filters.search) {
-            filtered = filtered.filter(emp => 
-                emp.name.toLowerCase().includes(this.filters.search) ||
-                emp.email.toLowerCase().includes(this.filters.search) ||
-                emp.id.toLowerCase().includes(this.filters.search) ||
-                emp.department.toLowerCase().includes(this.filters.search)
-            );
-        }
-
-        this.renderTable(filtered);
-        this.updatePagination(filtered.length);
-    },
-
-    // Render Table
-    renderTable: function(filteredEmployees) {
-        const tbody = document.querySelector('#employeeTable tbody');
-        if (!tbody) return;
-
-        const start = (this.currentPage - 1) * this.itemsPerPage;
-        const end = start + this.itemsPerPage;
-        const pageEmployees = filteredEmployees.slice(start, end);
-
-        if (pageEmployees.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="7">
-                        <div class="empty-state">
-                            <i class="fas fa-users"></i>
-                            <h3>No employees found</h3>
-                            <p>Try adjusting your filters or add a new employee</p>
-                            <button class="btn btn-primary" onclick="EmployeeManagement.openAddModal()">
-                                <i class="fas fa-plus"></i> Add Employee
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
+    // Load Statistics from API
+    // Load Statistics from API
+loadStatistics: async function() {
+    try {
+        const response = await fetch('../api/employees.php?stats=1');
+        
+        if (response.status === 403) {
             return;
         }
+        
+        const result = await response.json();
 
-        let html = '';
-        pageEmployees.forEach(emp => {
-            html += `
-                <tr>
-                    <td>
-                        <div class="user-info">
-                            <div class="user-avatar">${emp.avatar}</div>
-                            <div class="user-details">
-                                <span class="user-name">${emp.name}</span>
-                                <span class="user-email">${emp.email}</span>
+        if (result.success) {
+            const stats = result.data;
+            
+            // Update stat values
+            const statValues = document.querySelectorAll('.stat-value');
+            if (statValues.length >= 4) {
+                statValues[0].textContent = stats.total || 0;                    // Total Employees
+                statValues[1].textContent = stats.active || 0;                   // Active Employees
+                statValues[2].textContent = stats.active_drivers || 0;           // Active Drivers
+                statValues[3].textContent = stats.active_dispatchers || 0;       // Active Dispatchers
+            }
+
+            // Update trends with real data
+            const totalTrend = document.getElementById('totalTrend');
+            if (totalTrend) {
+                totalTrend.innerHTML = `
+                    <i class="fas fa-arrow-up"></i> 
+                    <span>${stats.joined_this_month || 0}</span> this month
+                `;
+            }
+
+            const activeTrend = document.getElementById('activeTrend');
+            if (activeTrend) {
+                const activePercentage = stats.total > 0 
+                    ? Math.round((stats.active / stats.total) * 100) 
+                    : 0;
+                activeTrend.innerHTML = `
+                    <i class="fas fa-check"></i> 
+                    <span>${activePercentage}</span>% of workforce
+                `;
+            }
+
+            const driversTrend = document.getElementById('driversTrend');
+            if (driversTrend) {
+                // Show both scheduled and on road
+                driversTrend.innerHTML = `
+                    <i class="fas fa-truck"></i> 
+                    <span>${stats.on_road || 0}</span> on road
+                `;
+            }
+
+            const dispatchersTrend = document.getElementById('dispatchersTrend');
+            if (dispatchersTrend) {
+                dispatchersTrend.innerHTML = `
+                    <i class="fas fa-clock"></i> 
+                    <span>${stats.on_duty || 0}</span> on duty
+                `;
+            }
+            
+            console.log('Statistics updated:', stats);
+        }
+    } catch (error) {
+        console.error('Error loading statistics:', error);
+    }
+},
+
+    // Render Table
+// Update the renderTable function to add a new action for pending training
+renderTable: function() {
+    const tbody = document.querySelector('#employeeTable tbody');
+    if (!tbody) return;
+
+    if (this.employees.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5">
+                    <div class="empty-state">
+                        <i class="fas fa-users"></i>
+                        <h3>No employees found</h3>
+                        <p>Try adjusting your filters or add a new employee</p>
+                        <button class="btn btn-primary" onclick="EmployeeManagement.openAddModal()">
+                            <i class="fas fa-plus"></i> Add Employee
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    let html = '';
+    this.employees.forEach(emp => {
+        const initials = this.getInitials(emp.full_name);
+        
+        // Check if employee can be assigned to training (not already a driver or in training)
+        const canAssignToTraining = emp.role !== 'driver' && emp.status !== 'pending';
+        
+        html += `
+            <tr>
+                <td>
+                    <div class="user-info">
+                        <div class="user-avatar">${initials}</div>
+                        <div class="user-details">
+                            <span class="user-name">${emp.full_name}</span>
+                            <span class="user-email">${emp.email}</span>
+                            <span class="user-id-badge">${emp.employee_id}</span>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="role-badge role-${emp.role}">
+                        <i class="fas fa-${this.getRoleIcon(emp.role)}"></i>
+                        ${this.formatRole(emp.role)}
+                    </span>
+                </td>
+                <td>
+                    <span class="employee-id-display">
+                        <i class="fas fa-id-card"></i>
+                        ${emp.employee_id}
+                    </span>
+                </td>
+                <td>
+                    <span class="status-badge status-${emp.status}">
+                        <i class="fas fa-${this.getStatusIcon(emp.status)}"></i>
+                        ${emp.status ? emp.status.replace('-', ' ').toUpperCase() : 'UNKNOWN'}
+                    </span>
+                </td>
+                <td>
+                    <div class="action-group">
+                        <button class="action-btn view" onclick="EmployeeManagement.openViewModal(${emp.id})" title="View">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="action-btn edit" onclick="EmployeeManagement.openEditModal(${emp.id})" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        ${canAssignToTraining ? `
+                        <button class="action-btn training" onclick="EmployeeManagement.openTrainingModal(${emp.id}, '${emp.full_name}')" title="Assign to Driver Training">
+                            <i class="fas fa-graduation-cap"></i>
+                        </button>
+                        ` : ''}
+                        <button class="action-btn delete" onclick="EmployeeManagement.openDeleteModal(${emp.id}, '${emp.full_name}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+},
+
+// Add new function to open training assignment modal
+openTrainingModal: function(userId, userName) {
+    // Store in current employee
+    this.currentEmployee = { id: userId, full_name: userName };
+    
+    // Create modal if it doesn't exist
+    if (!document.getElementById('assignTrainingModal')) {
+        this.createTrainingModal();
+    }
+    
+    // Set user name in modal
+    document.getElementById('trainingUserName').textContent = userName;
+    document.getElementById('trainingUserId').value = userId;
+    document.getElementById('trainingNotes').value = '';
+    
+    // Show modal
+    document.getElementById('assignTrainingModal').classList.remove('modal-hidden');
+},
+
+// Create training assignment modal
+createTrainingModal: function() {
+    const modalHtml = `
+        <div id="assignTrainingModal" class="modal modal-hidden">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">
+                        <i class="fas fa-graduation-cap"></i>
+                        Assign to Driver Training
+                    </h3>
+                    <button class="modal-close" onclick="EmployeeManagement.closeModal('assignTrainingModal')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body" style="padding: 20px;">
+                    <form id="assignTrainingForm" onsubmit="event.preventDefault(); EmployeeManagement.submitTrainingAssignment();">
+                        <input type="hidden" id="trainingUserId">
+                        
+                        <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <div style="width: 50px; height: 50px; background: #3b82f6; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; font-weight: bold;">
+                                    <i class="fas fa-user"></i>
+                                </div>
+                                <div>
+                                    <div style="font-weight: 600; font-size: 16px;" id="trainingUserName"></div>
+                                    <div style="color: #64748b; font-size: 13px;">Assigning to driver training program</div>
+                                </div>
                             </div>
                         </div>
-                    </td>
-                    <td>
-                        <span class="role-badge role-${emp.role}">
-                            <i class="fas fa-${this.getRoleIcon(emp.role)}"></i>
-                            ${emp.role.charAt(0).toUpperCase() + emp.role.slice(1)}
-                        </span>
-                    </td>
-                    <td>
-                        <div class="contact-info">
-                            <div class="contact-item">
-                                <i class="fas fa-phone"></i>
-                                ${emp.phone}
-                            </div>
-                            <div class="contact-item">
-                                <i class="fas fa-building"></i>
-                                ${emp.department}
-                            </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label class="form-label">
+                                <i class="fas fa-clipboard-list"></i>
+                                Training Notes (Optional)
+                            </label>
+                            <textarea class="form-input" id="trainingNotes" rows="3" 
+                                placeholder="Enter any notes or instructions for the dispatcher..."></textarea>
                         </div>
-                    </td>
-                    <td>
-                        <span class="status-badge status-${emp.status}">
-                            <i class="fas fa-${this.getStatusIcon(emp.status)}"></i>
-                            ${emp.status.replace('-', ' ').toUpperCase()}
-                        </span>
-                    </td>
-                    <td>
-                        <div class="action-group">
-                            <button class="action-btn view" onclick="EmployeeManagement.openViewModal('${emp.id}')" title="View">
-                                <i class="fas fa-eye"></i>
+                        
+                        <div style="margin-bottom: 20px; padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                            <i class="fas fa-info-circle" style="color: #f59e0b; margin-right: 8px;"></i>
+                            <span style="font-size: 13px; color: #92400e;">
+                                This employee will be assigned to dispatcher for driver training. 
+                                Their role will remain as ${this.currentEmployee?.role || 'current'} until training is completed.
+                            </span>
+                        </div>
+                        
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline" onclick="EmployeeManagement.closeModal('assignTrainingModal')">
+                                Cancel
                             </button>
-                            <button class="action-btn edit" onclick="EmployeeManagement.openEditModal('${emp.id}')" title="Edit">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="action-btn delete" onclick="EmployeeManagement.openDeleteModal('${emp.id}')" title="Delete">
-                                <i class="fas fa-trash"></i>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-graduation-cap"></i>
+                                Assign to Training
                             </button>
                         </div>
-                    </td>
-                </tr>
-            `;
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Append to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+},
+
+// Submit training assignment
+submitTrainingAssignment: async function() {
+    const userId = document.getElementById('trainingUserId').value;
+    const notes = document.getElementById('trainingNotes').value;
+    
+    if (!userId) {
+        this.showNotification('User ID is missing', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('../api/assign_training.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                notes: notes
+            })
         });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            this.showNotification('Employee assigned to training successfully', 'success');
+            this.closeModal('assignTrainingModal');
+            // Reload employees to show updated status
+            this.loadEmployees();
+        } else {
+            this.showNotification(result.error || 'Error assigning to training', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        this.showNotification('Error connecting to server', 'error');
+    }
+},
 
-        tbody.innerHTML = html;
+// Add CSS for the new action button
+addTrainingButtonStyle: function() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .action-btn.training {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        .action-btn.training:hover {
+            background: #fde68a;
+            color: #b45309;
+        }
+    `;
+    document.head.appendChild(style);
+},
+
+// Format role name for display
+formatRole: function(role) {
+    const roleMap = {
+        'admin': 'Admin',
+        'dispatcher': 'Dispatcher',
+        'driver': 'Driver',
+        'fleet_manager': 'Fleet Manager',
+        'mechanic': 'Mechanic',
+        'employee': 'Employee'
+    };
+    return roleMap[role] || role;
+},
+
+// Update getRoleIcon function
+getRoleIcon: function(role) {
+    const icons = {
+        'admin': 'crown',
+        'dispatcher': 'headset',
+        'driver': 'truck',
+        'fleet_manager': 'flag',
+        'mechanic': 'wrench',
+        'employee': 'user'
+    };
+    return icons[role] || 'user';
+},
+
+    // Get initials from name
+    getInitials: function(name) {
+        if (!name) return 'U';
+        return name.split(' ').map(word => word[0]).join('').toUpperCase().substring(0, 2);
+    },
+
+    // Capitalize first letter
+    capitalizeFirst: function(string) {
+        if (!string) return '';
+        return string.charAt(0).toUpperCase() + string.slice(1);
     },
 
     // Get Role Icon
@@ -332,6 +426,8 @@ const EmployeeManagement = {
             'admin': 'crown',
             'dispatcher': 'headset',
             'driver': 'truck',
+            'fleet_manager': 'flag',
+            'mechanic': 'wrench',
             'employee': 'user'
         };
         return icons[role] || 'user';
@@ -348,14 +444,16 @@ const EmployeeManagement = {
     },
 
     // Update Pagination
-    updatePagination: function(totalFiltered) {
-        const totalPages = Math.ceil(totalFiltered / this.itemsPerPage);
+    updatePagination: function() {
+        const totalPages = Math.ceil(this.totalItems / this.itemsPerPage);
         const start = (this.currentPage - 1) * this.itemsPerPage + 1;
-        const end = Math.min(this.currentPage * this.itemsPerPage, totalFiltered);
+        const end = Math.min(this.currentPage * this.itemsPerPage, this.totalItems);
 
         // Update info
-        document.querySelector('.pagination-info').textContent = 
-            `Showing ${start} to ${end} of ${totalFiltered} employees`;
+        const infoElement = document.querySelector('.pagination-info');
+        if (infoElement) {
+            infoElement.textContent = `Showing ${start} to ${end} of ${this.totalItems} employees`;
+        }
 
         // Update page buttons
         const controls = document.querySelector('.pagination-controls');
@@ -377,7 +475,7 @@ const EmployeeManagement = {
                     </button>
                 `;
             } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
-                html += `<button class="page-btn" disabled>...</button>`;
+                html += `<span class="page-ellipsis">...</span>`;
             }
         }
 
@@ -393,24 +491,9 @@ const EmployeeManagement = {
 
     // Change Page
     changePage: function(page) {
-        if (page < 1 || page > Math.ceil(this.totalItems / this.itemsPerPage)) return;
+        if (page < 1) return;
         this.currentPage = page;
-        this.filterEmployees();
-    },
-
-    // Update Statistics
-    updateStats: function() {
-        const total = this.employees.length;
-        const active = this.employees.filter(e => e.status === 'active').length;
-        const drivers = this.employees.filter(e => e.role === 'driver').length;
-        const dispatchers = this.employees.filter(e => e.role === 'dispatcher').length;
-
-        document.querySelectorAll('.stat-value').forEach((el, index) => {
-            if (index === 0) el.textContent = total;
-            if (index === 1) el.textContent = active;
-            if (index === 2) el.textContent = drivers;
-            if (index === 3) el.textContent = dispatchers;
-        });
+        this.loadEmployees();
     },
 
     // Open Add Modal
@@ -418,71 +501,90 @@ const EmployeeManagement = {
         this.currentEmployee = null;
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-plus"></i> Add New Employee';
         document.getElementById('employeeForm').reset();
+        document.getElementById('empPassword').required = true;
+        document.getElementById('avatarPreview').textContent = 'JS';
         document.getElementById('employeeModal').classList.remove('modal-hidden');
-        
-        // Set default password hint
-        document.querySelector('.form-hint').textContent = 'Leave blank to auto-generate';
     },
 
     // Open Edit Modal
-    openEditModal: function(empId) {
-        const employee = this.employees.find(e => e.id === empId);
-        if (!employee) return;
+    openEditModal: async function(id) {
+        try {
+            const response = await fetch(`../api/employees.php?id=${id}`);
+            const result = await response.json();
 
-        this.currentEmployee = employee;
-        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-edit"></i> Edit Employee';
-        
-        // Fill form
-        document.getElementById('empName').value = employee.name;
-        document.getElementById('empEmail').value = employee.email;
-        document.getElementById('empPhone').value = employee.phone;
-        document.getElementById('empRole').value = employee.role;
-        document.getElementById('empStatus').value = employee.status;
-        document.getElementById('empDepartment').value = employee.department;
-        
-        document.getElementById('employeeModal').classList.remove('modal-hidden');
-        
-        // Update avatar preview
-        document.getElementById('avatarPreview').textContent = employee.avatar;
+            if (result.success) {
+                this.currentEmployee = result.data;
+                document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-edit"></i> Edit Employee';
+                
+                // Fill form
+                document.getElementById('empName').value = result.data.full_name || '';
+                document.getElementById('empEmail').value = result.data.email || '';
+                document.getElementById('empPhone').value = result.data.phone || '';
+                document.getElementById('empRole').value = result.data.role || '';
+                document.getElementById('empStatus').value = result.data.status || 'active';
+                document.getElementById('empDepartment').value = result.data.department || '';
+                document.getElementById('empPassword').value = '';
+                document.getElementById('empPassword').required = false;
+                
+                // Update avatar preview
+                document.getElementById('avatarPreview').textContent = this.getInitials(result.data.full_name);
+                
+                document.getElementById('employeeModal').classList.remove('modal-hidden');
+            } else {
+                this.showNotification('Error loading employee data', 'error');
+            }
+        } catch (error) {
+            console.error('Error loading employee:', error);
+            this.showNotification('Error loading employee data', 'error');
+        }
     },
 
     // Open View Modal
-    openViewModal: function(empId) {
-        const employee = this.employees.find(e => e.id === empId);
-        if (!employee) return;
+    // Open View Modal
+openViewModal: async function(id) {
+    try {
+        const response = await fetch(`../api/employees.php?id=${id}`);
+        const result = await response.json();
 
-        document.getElementById('viewAvatar').textContent = employee.avatar;
-        document.getElementById('viewName').textContent = employee.name;
-        document.getElementById('viewEmail').textContent = employee.email;
-        document.getElementById('viewRole').innerHTML = `
-            <span class="role-badge role-${employee.role}">
-                <i class="fas fa-${this.getRoleIcon(employee.role)}"></i>
-                ${employee.role.charAt(0).toUpperCase() + employee.role.slice(1)}
-            </span>
-        `;
-        document.getElementById('viewStatus').innerHTML = `
-            <span class="status-badge status-${employee.status}">
-                <i class="fas fa-${this.getStatusIcon(employee.status)}"></i>
-                ${employee.status.replace('-', ' ').toUpperCase()}
-            </span>
-        `;
-        document.getElementById('viewPhone').innerHTML = `<i class="fas fa-phone"></i> ${employee.phone}`;
-        document.getElementById('viewDepartment').innerHTML = `<i class="fas fa-building"></i> ${employee.department}`;
-        document.getElementById('viewId').innerHTML = `<i class="fas fa-id-card"></i> ${employee.id}`;
-        document.getElementById('viewJoinDate').innerHTML = `<i class="fas fa-calendar-plus"></i> ${employee.joinDate}`;
-        document.getElementById('viewLastActive').innerHTML = `<i class="fas fa-clock"></i> ${employee.lastActive}`;
+        if (result.success) {
+            const emp = result.data;
+            
+            document.getElementById('viewAvatar').textContent = this.getInitials(emp.full_name);
+            document.getElementById('viewName').textContent = emp.full_name || 'N/A';
+            document.getElementById('viewEmail').textContent = emp.email || 'N/A';
+            document.getElementById('viewRole').innerHTML = `
+                <span class="role-badge role-${emp.role}">
+                    <i class="fas fa-${this.getRoleIcon(emp.role)}"></i>
+                    ${this.formatRole(emp.role)}
+                </span>
+            `;
+            document.getElementById('viewId').innerHTML = `
+                <i class="fas fa-id-card"></i> ${emp.employee_id || 'N/A'}
+            `;
+            document.getElementById('viewStatus').innerHTML = `
+                <span class="status-badge status-${emp.status}">
+                    <i class="fas fa-${this.getStatusIcon(emp.status)}"></i>
+                    ${emp.status ? emp.status.replace('-', ' ').toUpperCase() : 'UNKNOWN'}
+                </span>
+            `;
+            document.getElementById('viewPhone').innerHTML = `<i class="fas fa-phone"></i> ${emp.phone || 'Not provided'}`;
+            document.getElementById('viewDepartment').innerHTML = `<i class="fas fa-building"></i> ${emp.department || 'Not assigned'}`;
+            document.getElementById('viewJoinDate').innerHTML = `<i class="fas fa-calendar-plus"></i> ${emp.join_date ? new Date(emp.join_date).toLocaleDateString() : 'Not available'}`;
+            document.getElementById('viewLastActive').innerHTML = `<i class="fas fa-clock"></i> ${emp.last_login ? new Date(emp.last_login).toLocaleString() : 'Never'}`;
 
-        document.getElementById('viewModal').classList.remove('modal-hidden');
-    },
-
+            document.getElementById('viewModal').classList.remove('modal-hidden');
+        } else {
+            this.showNotification('Error loading employee data', 'error');
+        }
+    } catch (error) {
+        console.error('Error loading employee:', error);
+        this.showNotification('Error loading employee data', 'error');
+    }
+},
     // Open Delete Modal
-    openDeleteModal: function(empId) {
-        const employee = this.employees.find(e => e.id === empId);
-        if (!employee) return;
-
-        this.currentEmployee = employee;
-        document.getElementById('deleteName').textContent = employee.name;
-        document.getElementById('deleteRole').textContent = employee.role;
+    openDeleteModal: function(id, name) {
+        this.deleteId = id;
+        document.getElementById('deleteName').textContent = name;
         document.getElementById('deleteModal').classList.remove('modal-hidden');
     },
 
@@ -492,12 +594,10 @@ const EmployeeManagement = {
     },
 
     // Save Employee (Add/Edit)
-    saveEmployee: function() {
-        const form = document.getElementById('employeeForm');
-        
+    saveEmployee: async function() {
         // Get form data
         const employeeData = {
-            name: document.getElementById('empName').value,
+            full_name: document.getElementById('empName').value,
             email: document.getElementById('empEmail').value,
             phone: document.getElementById('empPhone').value,
             role: document.getElementById('empRole').value,
@@ -505,37 +605,62 @@ const EmployeeManagement = {
             department: document.getElementById('empDepartment').value
         };
 
+        // Add password if provided
+        const password = document.getElementById('empPassword').value;
+        if (password) {
+            employeeData.password = password;
+        } else if (!this.currentEmployee) {
+            // Password required for new employees
+            this.showNotification('Password is required for new employees', 'error');
+            return;
+        }
+
         // Validate
         if (!this.validateEmployee(employeeData)) {
             return;
         }
 
-        if (this.currentEmployee) {
-            // Update existing
-            Object.assign(this.currentEmployee, employeeData);
-            this.showNotification(`Employee ${employeeData.name} updated successfully`, 'success');
-        } else {
-            // Add new
-            const newEmployee = {
-                ...employeeData,
-                id: 'EMP' + String(this.employees.length + 1).padStart(3, '0'),
-                joinDate: new Date().toISOString().split('T')[0],
-                lastActive: 'Just now',
-                avatar: employeeData.name.split(' ').map(n => n[0]).join('')
-            };
-            this.employees.push(newEmployee);
-            this.showNotification(`Employee ${employeeData.name} added successfully`, 'success');
-        }
+        try {
+            let url = '../api/employees.php';
+            let method = 'POST';
 
-        this.closeModal('employeeModal');
-        this.filterEmployees();
-        this.updateStats();
+            if (this.currentEmployee) {
+                // Update existing
+                url += `?id=${this.currentEmployee.id}`;
+                method = 'PUT';
+            }
+
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(employeeData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.closeModal('employeeModal');
+                this.loadEmployees();
+                this.loadStatistics();
+                this.showNotification(
+                    `Employee ${this.currentEmployee ? 'updated' : 'created'} successfully`, 
+                    'success'
+                );
+            } else {
+                this.showNotification(result.error || 'Error saving employee', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving employee:', error);
+            this.showNotification('Error connecting to server', 'error');
+        }
     },
 
     // Validate Employee Form
     validateEmployee: function(data) {
         // Name validation
-        if (!data.name || data.name.trim().length < 2) {
+        if (!data.full_name || data.full_name.trim().length < 2) {
             this.showNotification('Please enter a valid name', 'error');
             return false;
         }
@@ -554,38 +679,64 @@ const EmployeeManagement = {
             return false;
         }
 
+        // Role validation
+        if (!data.role) {
+            this.showNotification('Please select a role', 'error');
+            return false;
+        }
+
+        // Department validation
+        if (!data.department) {
+            this.showNotification('Please enter a department', 'error');
+            return false;
+        }
+
         return true;
     },
 
     // Confirm Delete
-    confirmDelete: function() {
-        if (this.currentEmployee) {
-            const index = this.employees.findIndex(e => e.id === this.currentEmployee.id);
-            if (index !== -1) {
-                const name = this.employees[index].name;
-                this.employees.splice(index, 1);
-                this.showNotification(`Employee ${name} deleted successfully`, 'success');
+    confirmDelete: async function() {
+        if (!this.deleteId) return;
+
+        try {
+            const response = await fetch(`../api/employees.php?id=${this.deleteId}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.closeModal('deleteModal');
+                this.loadEmployees();
+                this.loadStatistics();
+                this.showNotification('Employee deleted successfully', 'success');
+            } else {
+                this.showNotification(result.error || 'Error deleting employee', 'error');
             }
+        } catch (error) {
+            console.error('Error deleting employee:', error);
+            this.showNotification('Error connecting to server', 'error');
         }
-        
-        this.closeModal('deleteModal');
-        this.filterEmployees();
-        this.updateStats();
     },
 
     // Export Employees
     exportEmployees: function() {
+        if (this.employees.length === 0) {
+            this.showNotification('No employees to export', 'warning');
+            return;
+        }
+
         // Create CSV
-        const headers = ['ID', 'Name', 'Email', 'Phone', 'Role', 'Status', 'Department', 'Join Date'];
+        const headers = ['Employee ID', 'Name', 'Email', 'Phone', 'Role', 'Status', 'Department', 'Join Date'];
         const csvData = this.employees.map(emp => [
-            emp.id,
-            emp.name,
+            emp.employee_id,
+            emp.full_name,
             emp.email,
             emp.phone,
             emp.role,
             emp.status,
             emp.department,
-            emp.joinDate
+            emp.join_date
         ]);
 
         const csv = [headers, ...csvData].map(row => row.join(',')).join('\n');
@@ -603,18 +754,28 @@ const EmployeeManagement = {
 
     // Show Notification
     showNotification: function(message, type = 'info') {
+        const toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) return;
+
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
+        
+        const icon = type === 'success' ? 'check-circle' : 
+                    type === 'error' ? 'exclamation-circle' : 
+                    type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+        
         toast.innerHTML = `
-            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+            <i class="fas fa-${icon}"></i>
             <span>${message}</span>
             <i class="fas fa-times toast-close" onclick="this.parentElement.remove()"></i>
         `;
 
-        document.getElementById('toastContainer').appendChild(toast);
+        toastContainer.appendChild(toast);
 
         setTimeout(() => {
-            toast.remove();
+            if (toast.parentElement) {
+                toast.remove();
+            }
         }, 5000);
     }
 };

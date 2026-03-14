@@ -61,23 +61,10 @@ include '../includes/header.php';
             <header class="header">
                 <div class="header-container">
                     <div class="header-left">
-                        <button class="menu-toggle" onclick="toggleSidebar()">
-                            <i class="fas fa-bars"></i>
-                        </button>
-                        <div class="search-container">
-                            <i class="fas fa-search search-icon"></i>
-                            <input type="text" class="search-input" placeholder="Search...">
-                        </div>
                     </div>
                     
                     <div class="header-right">
-                        <button class="header-btn">
-                            <i class="fas fa-bell"></i>
-                            <span class="notification-badge"></span>
-                        </button>
-                        <button class="header-btn">
-                            <i class="fas fa-envelope"></i>
-                        </button>
+                    
                         <div class="divider"></div>
                         <div class="user-info-header">
                             <span class="user-name-header">
@@ -206,26 +193,12 @@ include '../includes/header.php';
         <div class="card-header">
             <h2><i class="fas fa-file-invoice"></i> Purchase Orders</h2>
             <div class="card-actions">
-                <button class="card-action-btn" onclick="loadPurchaseOrders()">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
             </div>
         </div>
         <div class="card-body">
             <!-- Filter Bar -->
             <div class="filter-bar">
                 <div class="filter-group">
-                    <select class="filter-select" id="poSupplier" onchange="filterBySupplier(this.value)">
-                        <option value="all">Suppliers Products</option>
-                        <?php
-                        // Get suppliers for filter
-                        $suppliers = $pdo->query("SELECT id, supplier_name FROM suppliers ORDER BY supplier_name")->fetchAll();
-                        foreach ($suppliers as $supplier) {
-                            $selected = (isset($_GET['supplier']) && $_GET['supplier'] == $supplier['id']) ? 'selected' : '';
-                            echo "<option value=\"{$supplier['id']}\" $selected>{$supplier['supplier_name']}</option>";
-                        }
-                        ?>
-                    </select>
                 </div>
                 <div class="search-box">
                     <i class="fas fa-search"></i>
@@ -590,7 +563,7 @@ include '../includes/header.php';
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label"><i class="fas fa-hashtag"></i> PO Number</label>
-                        <input type="text" class="form-input" id="poNumber" readonly>
+                      <input type="text" placeholder="Auto generated..." class="form-input" id="poNumber" readonly disabled style="background-color: #f5f5f5; color: #666;">
                     </div>
                     
                     <div class="form-group">
@@ -658,12 +631,12 @@ include '../includes/header.php';
                         <span class="total-value" id="subtotal">₱0.00</span>
                     </div>
                     <div class="total-row">
-                        <span class="total-label">Tax (10%):</span>
+                        <span class="total-label">Vat (12%):</span>
                         <span class="total-value" id="tax">₱0.00</span>
                     </div>
                     <div class="total-row grand-total">
                         <span class="total-label">Total:</span>
-                        <span class="total-value" id="total">$0.00</span>
+                        <span class="total-value" id="total">₱0.00</span>
                     </div>
                 </div>
             </div>

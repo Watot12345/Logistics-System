@@ -1,17 +1,4 @@
 // assets/js/fleet.js - Combined Fleet Management JavaScript
-
-// ============================================
-// INITIALIZATION
-// ============================================
-// Add this at the very beginning of your fleet.js
-// ============================================
-// MAINTENANCE COMPLETE FUNCTIONS - MUST BE AT TOP
-// ============================================
-// Force the complete button to work with better debugging
-// Add this after your existing code
-// Replace the code at line 490-493 with this:
-
-// Move this INSIDE the DOMContentLoaded event (around line 30-40)
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Fleet dashboard loaded');
     
@@ -25,24 +12,46 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start real-time updates
     startRealTimeUpdates();
     
-    // Load role-specific data - ONLY for drivers
+    // Get user role ONCE
     const userRole = document.body.dataset.userRole;
+    console.log('Current user role:', userRole);
+    
+    // Load role-specific data
     if (userRole === 'driver') {
+        console.log('👤 Driver detected');
         loadDriverAssignment();
         loadDriverStats();
         loadDriverTrips();
     }
     
-    // 🔴 YOU ARE MISSING THIS LINE:
-    const activeTab = document.querySelector('.tab.active');
-    
-    // Check if overview tab is active and user is not driver
-    if (userRole !== 'driver' && activeTab && activeTab.dataset.tab === 'overview') {
-        console.log('Overview tab active on load, loading trip history...');
-        setTimeout(loadTripHistory, 1000);
+    if (userRole === 'fleet_manager' || userRole === 'admin') {
+        console.log('📋 Fleet manager/admin detected - loading emergency requests');
+        // Load emergency requests after a short delay
+        setTimeout(() => {
+            if (typeof loadEmergencyBreakdowns === 'function') {
+                loadEmergencyBreakdowns();
+            } else {
+                console.error('loadEmergencyBreakdowns function not found!');
+            }
+        }, 1000);
     }
     
-    // ADD THIS SECTION HERE - Move the reservations tab listener inside DOMContentLoaded
+    if (userRole === 'mechanic') {
+        console.log('🔧 Mechanic detected');
+        setTimeout(() => {
+            if (typeof loadMechanicTasks === 'function') {
+                loadMechanicTasks();
+            }
+            if (typeof loadMyEmergencyBreakdowns === 'function') {
+            loadMyEmergencyBreakdowns();
+        }   
+        }, 1000);
+    }
+    
+    // Define activeTab
+    const activeTab = document.querySelector('.tab.active');
+    
+    // Reservations tab listener
     const reservationsTab = document.querySelector('.tab[data-tab="reservations"]');
     if (reservationsTab) {
         reservationsTab.addEventListener('click', function() {
@@ -389,10 +398,7 @@ function parseLocationHistory(currentLocation) {
         const [year, month, day] = datePart.split('-').map(Number);
         let [hour, minute, second] = timePart.split(':').map(Number);
         
-        // Convert 21 to 9 AM
-        if (hour === 21) {
-            hour = 9;
-        }
+        // ✅ REMOVED THE CONVERSION - Keep original hour
         
         rawEntries.push({
             timestamp: timestamp,
@@ -558,9 +564,8 @@ function parseLocationHistory(currentLocation) {
             const [datePart, timePart] = timestamp.split(' ');
             const [year, month, day] = datePart.split('-').map(Number);
             const [hour, minute, second] = timePart.split(':').map(Number);
-            // Convert 21 to 9 for sorting
-            const sortHour = hour === 21 ? 9 : hour;
-            return new Date(year, month-1, day, sortHour, minute, second).getTime();
+            // ✅ REMOVED THE CONVERSION - Use original hour for sorting
+            return new Date(year, month-1, day, hour, minute, second).getTime();
         };
         
         return parseTime(b.timestamp) - parseTime(a.timestamp);
@@ -1041,7 +1046,6 @@ function updateStatus(newStatus) {
 }
 
 function updateLocation() {
-    // First, get the current assignment
     fetch('../api/get_driver_assignment.php')
         .then(response => response.json())
         .then(data => {
@@ -1049,54 +1053,120 @@ function updateLocation() {
                 const assignment = data.assignment;
                 const assignmentId = assignment.id;
                 
-                // Show location input with suggestions
-                const currentLocation = prompt('Enter current location (e.g., City, Landmark, Address):');
+                const currentLocation = prompt('Enter current location:');
                 if (!currentLocation) return;
                 
-                // Show loading on the button
-                const btn = event?.target;
-                if (btn) {
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
-                    btn.disabled = true;
-                }
+                // ✅ FIX: Send ONLY the location name, not the timestamp
+                // Let PHP add the timestamp with the correct timezone
                 
-                // Update location with structured format
                 fetch('../api/update_dispatch_location.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         schedule_id: assignmentId,
-                        current_location: `[${new Date().toISOString().slice(0,19).replace('T',' ')}] Location update: ${currentLocation}`
+                        current_location: currentLocation // Just the location name
                     })
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        showNotification('Location updated successfully!', 'success');
-                        loadDriverAssignment(); // Reload to show new location
-                    } else {
-                        showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
-                    }
-                })
-                .catch(error => {
-                    showNotification('Error: ' + error.message, 'error');
-                })
-                .finally(() => {
-                    if (btn) {
-                        btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Update Location';
-                        btn.disabled = false;
+                        showNotification('Location updated!', 'success');
+                        loadDriverAssignment();
                     }
                 });
-            } else {
-                showNotification('No active assignment found', 'error');
             }
-        })
-        .catch(error => {
-            console.error('Error getting assignment:', error);
-            showNotification('Error: ' + error.message, 'error');
         });
+}
+// ============================================
+// TRAINING MODAL FUNCTIONS
+// ============================================
+
+function openTrainingModal(trainingId) {
+    console.log('🔵 Opening training modal for ID:', trainingId);
+    
+    const modal = document.getElementById('trainingModal');
+    if (!modal) {
+        console.error('❌ Training modal not found!');
+        alert('Training modal not found. Please refresh the page.');
+        return;
+    }
+    
+    // Set the training ID
+    document.getElementById('trainingId').value = trainingId;
+    
+    // Reset the form
+    document.getElementById('trainingStatus').value = 'in_progress';
+    document.getElementById('trainingNotes').value = '';
+    
+    // Show the modal
+    modal.classList.remove('modal-hidden');
+}
+
+function closeTrainingModal() {
+    console.log('Closing training modal');
+    const modal = document.getElementById('trainingModal');
+    if (modal) {
+        modal.classList.add('modal-hidden');
+        document.getElementById('trainingForm').reset();
+    }
+}
+
+async function submitTrainingReview() {
+    console.log('📤 Submitting training review...');
+    
+    const trainingId = document.getElementById('trainingId').value;
+    const status = document.getElementById('trainingStatus').value;
+    const notes = document.getElementById('trainingNotes').value;
+
+    if (!trainingId || !status) {
+        showNotification('Please select a status', 'error');
+        return;
+    }
+
+    // Show loading on button
+    const submitBtn = document.querySelector('#trainingForm button[type="submit"]');
+    const originalText = submitBtn ? submitBtn.innerHTML : 'Submit Review';
+    if (submitBtn) {
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+        submitBtn.disabled = true;
+    }
+
+    try {
+        const response = await fetch('../api/training_review.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                training_id: trainingId,
+                status: status,
+                notes: notes
+            })
+        });
+
+        const result = await response.json();
+        console.log('📥 Review response:', result);
+
+        if (result.success) {
+            showNotification('Training review submitted successfully', 'success');
+            closeTrainingModal();
+            // Reload the page after a short delay to show updated data
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showNotification(result.error || 'Error submitting review', 'error');
+            if (submitBtn) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error:', error);
+        showNotification('Error connecting to server', 'error');
+        if (submitBtn) {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    }
 }
 
 // ============================================
@@ -1298,6 +1368,54 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+// ============================================
+// RESERVATION FILTER FUNCTIONS
+// ============================================
+
+// Store all reservations globally (if not already declared)
+if (typeof allReservations === 'undefined') {
+    var allReservations = [];
+}
+
+// Load vehicles into filter dropdown
+function loadReservationVehicleFilter() {
+    const vehicleFilter = document.getElementById('reservation-vehicle-filter');
+    if (!vehicleFilter) return;
+    
+    fetch('../api/get_vehicles.php?_=' + new Date().getTime())
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.vehicles && data.vehicles.length > 0) {
+                vehicleFilter.innerHTML = '<option value="all">All Vehicles</option>';
+                
+                data.vehicles.forEach(vehicle => {
+                    const option = document.createElement('option');
+                    option.value = vehicle.asset_name;
+                    option.textContent = vehicle.asset_name;
+                    vehicleFilter.appendChild(option);
+                });
+            }
+        })
+        .catch(error => console.error('Error loading vehicles:', error));
+}
+
+// Filter function
+function filterReservations() {
+    const statusFilter = document.getElementById('reservation-status-filter').value;
+    const vehicleFilter = document.getElementById('reservation-vehicle-filter').value;
+    
+    const filtered = allReservations.filter(res => {
+        if (statusFilter !== 'all' && res.status !== statusFilter) return false;
+        if (vehicleFilter !== 'all' && res.vehicle_name !== vehicleFilter) return false;
+        return true;
+    });
+    
+    // Re-render using your existing display function
+    if (typeof displayReservations === 'function') {
+        displayReservations(filtered);
+    }
+}
+
 
 function loadVehicleReservations() {
     console.log('Loading vehicle reservations...');
@@ -1332,7 +1450,7 @@ function loadVehicleReservations() {
     // Show loading state
     reservationList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading reservations...</div>';
     
-    fetch('../api/get_reservations.php')
+    fetch('../api/get_reservations.php?_=' + new Date().getTime())
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -1343,6 +1461,9 @@ function loadVehicleReservations() {
             console.log('Reservations data received:', data);
             
             if (data.success && data.reservations) {
+                // ✅ MOVE THIS LINE HERE - inside the success block where 'data' exists
+                allReservations = data.reservations || [];
+                
                 console.log(`Displaying ${data.reservations.length} reservations`);
                 displayReservations(data.reservations);
                 updateReservationStats(data.reservations);
@@ -1356,19 +1477,33 @@ function loadVehicleReservations() {
             reservationList.innerHTML = '<div class="error-state">Failed to load reservations: ' + error.message + '</div>';
         });
 }
-
 function displayReservations(reservations) {
     console.log('Displaying reservations:', reservations);
     
-    // Find all the containers
-    const allReservationsContainer = document.querySelector('#tab-reservations .card-full .reservation-list') || 
-                                     document.querySelector('#tab-reservations .reservation-list');
+    // Get current filter values
+    const statusFilter = document.getElementById('reservation-status-filter').value;
+    const vehicleFilter = document.getElementById('reservation-vehicle-filter').value;
     
+    // Get user role from body dataset
+    const userRole = document.body.dataset.userRole;
+    const canApproveReject = userRole === 'admin' || userRole === 'dispatcher';
+    
+    console.log('Current user role:', userRole, 'Can approve/reject:', canApproveReject);
+    
+    // Find the main reservations container
+    const allReservationsContainer = document.querySelector('#tab-reservations .card-full .reservation-list');
+    
+    // Find approved and rejected containers - MORE SPECIFIC SELECTORS
     const approvedContainer = document.querySelector('#tab-reservations .dashboard-grid .card:first-child .reservation-list');
     const rejectedContainer = document.querySelector('#tab-reservations .dashboard-grid .card:last-child .reservation-list');
     
+    // Debug output - check if containers are found
+    console.log('✅ All reservations container:', allReservationsContainer);
+    console.log('✅ Approved container:', approvedContainer);
+    console.log('✅ Rejected container:', rejectedContainer);
+    
     if (!allReservationsContainer) {
-        console.error('Could not find reservations container');
+        console.error('❌ Could not find main reservations container');
         return;
     }
     
@@ -1379,7 +1514,7 @@ function displayReservations(reservations) {
     
     console.log(`Stats - Total: ${reservations.length}, Approved: ${approved.length}, Rejected: ${rejected.length}, Pending: ${pending.length}`);
     
-    // Update badges
+    // Update the badges in the card headers
     document.querySelectorAll('#tab-reservations .card-badge').forEach(badge => {
         const cardHeader = badge.closest('.card-header');
         if (cardHeader) {
@@ -1392,13 +1527,46 @@ function displayReservations(reservations) {
         }
     });
     
-    // Display all reservations
+    // Display all reservations in the main list
     if (reservations.length === 0) {
-        allReservationsContainer.innerHTML = '<div class="empty-state">No reservations found</div>';
+        // Custom message based on filters
+        let emptyMessage = '';
+        let emptyIcon = 'fa-calendar-times';
+        
+        if (statusFilter === 'pending') {
+            emptyMessage = 'No pending reservations';
+            emptyIcon = 'fa-clock';
+        } else if (statusFilter === 'rejected') {
+            emptyMessage = 'No rejected reservations';
+            emptyIcon = 'fa-times-circle';
+        } else if (statusFilter === 'approved') {
+            emptyMessage = 'No approved reservations';
+            emptyIcon = 'fa-check-circle';
+        } else if (statusFilter === 'all' && vehicleFilter !== 'all') {
+            emptyMessage = `No reservations for ${vehicleFilter}`;
+            emptyIcon = 'fa-truck';
+        } else if (statusFilter !== 'all' && vehicleFilter !== 'all') {
+            emptyMessage = `No ${statusFilter} reservations for ${vehicleFilter}`;
+            emptyIcon = 'fa-filter';
+        } else {
+            emptyMessage = 'No reservations found';
+            emptyIcon = 'fa-calendar-times';
+        }
+        
+        allReservationsContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #94a3b8;">
+                <i class="fas ${emptyIcon}" style="font-size: 48px; margin-bottom: 15px;"></i>
+                <p style="font-size: 16px; margin-bottom: 20px;">${emptyMessage}</p>
+                ${(statusFilter !== 'all' || vehicleFilter !== 'all') ? `
+                    <button onclick="resetFilters()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                        <i class="fas fa-times"></i> Clear Filters
+                    </button>
+                ` : ''}
+            </div>
+        `;
     } else {
         let allHtml = '';
         reservations.forEach(res => {
-            // Your data structure uses 'from' and 'to' which already have formatted dates
             const fromDisplay = res.from || 'N/A';
             const toDisplay = res.to || 'N/A';
             
@@ -1445,12 +1613,18 @@ function displayReservations(reservations) {
                         </span>
                         ${res.status === 'pending' ? `
                             <div style="margin-top: 10px;">
-                                <button onclick="approveReservation(${res.id})" class="btn-small" style="background-color: #10b981; color: white; border: none; padding: 5px 10px; border-radius: 4px; margin-right: 5px; cursor: pointer;">
-                                    <i class="fas fa-check"></i> Approve
-                                </button>
-                                <button onclick="rejectReservation(${res.id})" class="btn-small" style="background-color: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
-                                    <i class="fas fa-times"></i> Reject
-                                </button>
+                                ${canApproveReject ? `
+                                    <button onclick="approveReservation(${res.id})" class="btn-small" style="background-color: #10b981; color: white; border: none; padding: 5px 10px; border-radius: 4px; margin-right: 5px; cursor: pointer;">
+                                        <i class="fas fa-check"></i> Approve
+                                    </button>
+                                    <button onclick="rejectReservation(${res.id})" class="btn-small" style="background-color: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
+                                ` : `
+                                    <span style="display: inline-block; padding: 5px 10px; background-color: #f3f4f6; color: #9ca3af; border-radius: 4px; font-size: 12px;">
+                                        <i class="fas fa-clock"></i> Pending approval
+                                    </span>
+                                `}
                             </div>
                         ` : ''}
                     </div>
@@ -1469,8 +1643,11 @@ function displayReservations(reservations) {
             approved.forEach(res => {
                 approvedHtml += `
                     <div style="padding: 12px; border-bottom: 1px solid #f0f0f0;">
-                        <div style="font-weight: 500;">${res.vehicle_name}</div>
-                        <div style="font-size: 12px; color: #666;">${res.requester} • ${res.from}</div>
+                        <div style="font-weight: 500;">${res.vehicle_name || 'Unknown'}</div>
+                        <div style="font-size: 12px; color: #666;">
+                            <i class="fas fa-user"></i> ${res.requester || 'Unknown'} • 
+                            <i class="fas fa-calendar"></i> ${res.from || 'N/A'}
+                        </div>
                     </div>
                 `;
             });
@@ -1487,8 +1664,11 @@ function displayReservations(reservations) {
             rejected.forEach(res => {
                 rejectedHtml += `
                     <div style="padding: 12px; border-bottom: 1px solid #f0f0f0;">
-                        <div style="font-weight: 500;">${res.vehicle_name}</div>
-                        <div style="font-size: 12px; color: #666;">${res.requester} • ${res.from}</div>
+                        <div style="font-weight: 500;">${res.vehicle_name || 'Unknown'}</div>
+                        <div style="font-size: 12px; color: #666;">
+                            <i class="fas fa-user"></i> ${res.requester || 'Unknown'} • 
+                            <i class="fas fa-calendar"></i> ${res.from || 'N/A'}
+                        </div>
                     </div>
                 `;
             });
@@ -1496,7 +1676,1357 @@ function displayReservations(reservations) {
         }
     }
 }
+function resetFilters() {
+    document.getElementById('reservation-status-filter').value = 'all';
+    document.getElementById('reservation-vehicle-filter').value = 'all';
+    
+    // Reload all reservations
+    if (allReservations.length > 0) {
+        displayReservations(allReservations);
+    } else {
+        loadVehicleReservations();
+    }
+}
+// ============================================
+// EMERGENCY BREAKDOWN REPORTING (for drivers)
+// ============================================
+function reportEmergencyBreakdown() {
+    console.log('🚨 Driver reporting emergency breakdown');
+    
+    // First, get current assignment to know which vehicle
+    fetch('../api/get_driver_assignment.php')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Assignment data for emergency:', data);
+            
+            if (data.success && data.has_assignment) {
+                const assignment = data.assignment;
+                
+                // Now get the correct vehicle_id from assets table using vehicle_name
+                fetch(`../api/get_vehicle_id.php?name=${encodeURIComponent(assignment.vehicle_name)}`)
+                    .then(response => response.json())
+                    .then(vehicleData => {
+                        if (vehicleData.success) {
+                            assignment.correct_vehicle_id = vehicleData.vehicle_id;
+                            showEmergencyBreakdownModal(assignment);
+                        } else {
+                            // If we can't get the ID, still try with the original ID
+                            showEmergencyBreakdownModal(assignment);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error getting vehicle ID:', error);
+                        showEmergencyBreakdownModal(assignment);
+                    });
+            } else {
+                showNotification('No active assignment found. You can only report emergencies while on a trip.', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Error checking assignment', 'error');
+        });
+}
+function showEmergencyBreakdownModal(assignment) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('emergencyBreakdownModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'emergencyBreakdownModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header" style="background: #dc2626; color: white;">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Report Emergency Breakdown</h3>
+                    <button class="modal-close" onclick="closeEmergencyBreakdownModal()" style="color: white;">&times;</button>
+                </div>
+                <div class="modal-body" style="padding: 20px;">
+                    <form id="emergencyBreakdownForm" onsubmit="submitEmergencyBreakdown(event)">
+                        <input type="hidden" id="emergencyVehicleId" value="">
+                        <input type="hidden" id="emergencyVehicleName" value="">
+                        <input type="hidden" id="emergencyCorrectVehicleId" value="">
+                        
+                        <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #dc2626;">
+                            <strong>Vehicle:</strong> <span id="displayVehicleName"></span><br>
+                            <strong>Current Location:</strong> <span id="displayCurrentLocation"></span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Issue Type *</label>
+                            <select id="emergencyIssueType" class="form-control" required>
+                                <option value="">Select issue type...</option>
+                                <option value="critical">🚨 Complete Breakdown - Cannot move</option>
+                                <option value="major">🔧 Engine Problem - Major issue</option>
+                                <option value="major">🛞 Flat Tire / Tire Issue</option>
+                                <option value="critical">⛔ Brake Failure - Cannot drive</option>
+                                <option value="major">⚡ Electrical Issue</option>
+                                <option value="critical">💥 Accident Damage</option>
+                                <option value="minor">🔩 Minor Issue - Can continue slowly</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Priority *</label>
+                            <select id="emergencyPriority" class="form-control" required>
+                                <option value="high" selected>🔴 HIGH - Cannot continue trip</option>
+                                <option value="medium">🟠 MEDIUM - Can continue slowly</option>
+                                <option value="low">🟡 LOW - Can complete trip but needs attention</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Description of Problem *</label>
+                            <textarea id="emergencyDescription" class="form-control" rows="3" required 
+                                placeholder="Describe what happened, any unusual sounds, warning lights, etc..."></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Exact Location *</label>
+                            <input type="text" id="emergencyLocation" class="form-control" required 
+                                placeholder="e.g., KM 50 North Expressway, near gas station, landmark">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Can you continue driving?</label>
+                            <select id="emergencyCanDrive" class="form-control">
+                                <option value="no">❌ No - Vehicle cannot move</option>
+                                <option value="yes">⚠️ Yes - But need assistance soon</option>
+                            </select>
+                        </div>
+                        
+                        <div style="background: #ffedd5; padding: 12px; border-radius: 8px; margin: 15px 0; font-size: 13px; border-left: 4px solid #f97316;">
+                            <i class="fas fa-info-circle" style="color: #c2410c;"></i> 
+                            <strong>Important:</strong> Fleet manager will be notified immediately. A mechanic will be dispatched to your location. Stay with your vehicle.
+                        </div>
+                        
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline" onclick="closeEmergencyBreakdownModal()">Cancel</button>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-exclamation-triangle"></i> Report Emergency
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // Fill in vehicle info
+    document.getElementById('emergencyVehicleId').value = assignment.id || assignment.vehicle_id;
+    document.getElementById('emergencyVehicleName').value = assignment.vehicle_name;
+    document.getElementById('emergencyCorrectVehicleId').value = assignment.correct_vehicle_id || assignment.vehicle_id || assignment.id;
+    document.getElementById('displayVehicleName').textContent = assignment.vehicle_name;
+    document.getElementById('displayCurrentLocation').textContent = assignment.current_location || 'Unknown';
+    
+    // Show modal
+    modal.style.display = 'flex';
+}
 
+function closeEmergencyBreakdownModal() {
+    const modal = document.getElementById('emergencyBreakdownModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.getElementById('emergencyBreakdownForm').reset();
+    }
+}
+
+function submitEmergencyBreakdown(event) {
+    event.preventDefault();
+    console.log('📤 Submitting emergency breakdown...');
+    
+    // Use the correct vehicle ID that exists in assets table
+    const vehicleId = document.getElementById('emergencyCorrectVehicleId').value || 
+                      document.getElementById('emergencyVehicleId').value;
+    
+    const formData = {
+        vehicle_id: vehicleId,  // This should now be a valid ID from assets table
+        vehicle_name: document.getElementById('emergencyVehicleName').value,
+        issue_type: document.getElementById('emergencyIssueType').value,
+        priority: document.getElementById('emergencyPriority').value,
+        description: document.getElementById('emergencyDescription').value,
+        location: document.getElementById('emergencyLocation').value,
+        can_drive: document.getElementById('emergencyCanDrive').value
+    };
+    
+    console.log('Form data being sent:', formData);
+    
+    // Validate
+    if (!formData.issue_type || !formData.description || !formData.location) {
+        alert('Please fill all required fields');
+        return;
+    }
+    
+    // Show loading
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reporting...';
+    submitBtn.disabled = true;
+    
+    // Submit to API
+    fetch('../api/report_emergency_breakdown.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Response:', data);
+        if (data.success) {
+            alert('✅ EMERGENCY REPORTED! Mechanic will be dispatched to your location.');
+            closeEmergencyBreakdownModal();
+            loadDriverAssignment();
+        } else {
+            alert('❌ Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error:', error);
+        alert('Error reporting emergency: ' + error.message);
+    })
+    .finally(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+// ============================================
+// EMERGENCY BREAKDOWN FUNCTIONS
+// ============================================
+function loadEmergencyBreakdowns() {
+    console.log('🚨 Loading emergency breakdowns...');
+    
+    const breakdownList = document.getElementById('breakdown-list');
+    const breakdownCount = document.getElementById('breakdown-count');
+    
+    if (!breakdownList) {
+        console.log('Breakdown list element not found - check HTML');
+        return;
+    }
+    
+    breakdownList.innerHTML = '<div style="text-align: center; padding: 30px;"><i class="fas fa-spinner fa-spin"></i> Loading emergencies...</div>';
+    
+    fetch('../api/get_emergency_breakdowns.php?_=' + new Date().getTime())
+        .then(response => response.json())
+        .then(data => {
+            console.log('📦 Breakdown data:', data);
+            
+            if (data.success) {
+                if (breakdownCount) {
+                    breakdownCount.textContent = data.active_count || 0;
+                }
+                
+                if (data.breakdowns && data.breakdowns.length > 0) {
+                    let html = '';
+                    data.breakdowns.forEach(breakdown => {
+                        // Determine color based on priority
+                        let priorityColor, priorityBg;
+                        if (breakdown.priority === 'high') {
+                            priorityColor = '#dc2626';
+                            priorityBg = '#fee2e2';
+                        } else if (breakdown.priority === 'medium') {
+                            priorityColor = '#f97316';
+                            priorityBg = '#ffedd5';
+                        } else {
+                            priorityColor = '#3b82f6';
+                            priorityBg = '#dbeafe';
+                        }
+                        
+                        // Format time
+                        const reportTime = new Date(breakdown.reported_at).toLocaleString();
+                        
+                        html += `
+                            <div style="background: white; border: 1px solid #f0f0f0; border-left: 4px solid ${priorityColor}; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                                            <span style="background: ${priorityBg}; color: ${priorityColor}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                                                <i class="fas fa-exclamation-triangle"></i> ${breakdown.priority.toUpperCase()} PRIORITY
+                                            </span>
+                                            <span style="background: #f3f4f6; color: #4b5563; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+                                                ${breakdown.issue_type}
+                                            </span>
+                                            <span style="background: #e0f2fe; color: #0369a1; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+                                                <i class="fas fa-${breakdown.can_drive === 'yes' ? 'check' : 'times'}"></i> 
+                                                Can Drive: ${breakdown.can_drive}
+                                            </span>
+                                        </div>
+                                        
+                                        <h3 style="margin: 0 0 10px 0; font-size: 18px; color: #1e293b;">${breakdown.vehicle_name}</h3>
+                                        
+                                        <p style="margin: 0 0 15px 0; color: #4b5563; background: #f8fafc; padding: 10px; border-radius: 6px;">
+                                            <i class="fas fa-quote-left" style="color: #94a3b8; margin-right: 5px;"></i>
+                                            ${breakdown.description}
+                                        </p>
+                                        
+                                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px;">
+                                            <div>
+                                                <div style="font-size: 11px; color: #64748b;">Driver</div>
+                                                <div style="font-weight: 500;">${breakdown.driver_name || 'Unknown'} 
+                                                    ${breakdown.driver_phone ? `<span style="font-size: 11px; color: #3b82f6;">(${breakdown.driver_phone})</span>` : ''}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 11px; color: #64748b;">Location</div>
+                                                <div style="font-weight: 500;">${breakdown.location}</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 11px; color: #64748b;">Reported</div>
+                                                <div style="font-weight: 500;">${reportTime}</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 11px; color: #64748b;">Status</div>
+                                                <div style="font-weight: 500; text-transform: capitalize;">${breakdown.status}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="min-width: 150px; text-align: right;">
+                                       <button class="btn btn-danger" onclick="assignMechanicToBreakdown(${breakdown.id})" style="width: 100%; margin-bottom: 5px; background-color: #dc2626;">
+    <i class="fas fa-user-plus"></i> Assign Mechanic to Breakdown
+</button>
+                                        <button class="btn btn-outline" onclick="viewBreakdownDetails(${breakdown.id})" style="width: 100%;">
+                                            <i class="fas fa-eye"></i> Details
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    breakdownList.innerHTML = html;
+                } else {
+                    breakdownList.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #94a3b8;">
+                            <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 15px;"></i>
+                            <p style="font-size: 16px; font-weight: 500;">No active road emergencies</p>
+                            <p style="font-size: 13px;">All vehicles are running smoothly</p>
+                        </div>
+                    `;
+                }
+            } else {
+                breakdownList.innerHTML = `<div class="error-state">Error: ${data.error}</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            breakdownList.innerHTML = '<div class="error-state">Failed to load emergencies</div>';
+        });
+}
+// ============================================
+// BREAKDOWN MECHANIC ASSIGNMENT FUNCTIONS
+// ============================================
+
+function assignMechanicToBreakdown(breakdownId) {
+    console.log('🔧 Opening assign mechanic modal for breakdown ID:', breakdownId);
+    
+    // Fetch breakdown details first
+    fetch('../api/get_breakdown_details.php?id=' + breakdownId)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAssignMechanicBreakdownModal(data.breakdown);
+            } else {
+                showNotification('Error loading breakdown details', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Error loading breakdown details', 'error');
+        });
+}
+
+function showAssignMechanicBreakdownModal(breakdown) {
+    const modal = document.getElementById('assignMechanicBreakdownModal');
+    if (!modal) {
+        console.error('Assign mechanic breakdown modal not found');
+        return;
+    }
+    
+    // Set breakdown details
+    document.getElementById('breakdownId').value = breakdown.id;
+    document.getElementById('breakdownVehicle').textContent = breakdown.vehicle_name;
+    document.getElementById('breakdownLocation').textContent = breakdown.location;
+    document.getElementById('breakdownDriver').textContent = breakdown.driver_name + ' (' + (breakdown.driver_phone || 'No phone') + ')';
+    document.getElementById('breakdownIssue').textContent = breakdown.description;
+    
+    // Load available mechanics
+    loadAvailableMechanicsForBreakdown();
+    
+    modal.style.display = 'flex';
+}
+
+function closeAssignMechanicBreakdownModal() {
+    const modal = document.getElementById('assignMechanicBreakdownModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.getElementById('assignMechanicBreakdownForm').reset();
+    }
+}
+
+function loadAvailableMechanicsForBreakdown() {
+    const mechanicSelect = document.getElementById('breakdownMechanicSelect');
+    if (!mechanicSelect) return;
+    
+    mechanicSelect.innerHTML = '<option value="">Loading mechanics...</option>';
+    
+    fetch('../api/get_available_mechanics.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.mechanics.length > 0) {
+                let options = '<option value="">Select a mechanic</option>';
+                data.mechanics.forEach(mech => {
+                    options += `<option value="${mech.id}">${mech.full_name} - ${mech.specialization || 'General'}</option>`;
+                });
+                mechanicSelect.innerHTML = options;
+            } else {
+                mechanicSelect.innerHTML = '<option value="">No mechanics available</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading mechanics:', error);
+            mechanicSelect.innerHTML = '<option value="">Error loading mechanics</option>';
+        });
+}
+
+function submitMechanicAssignment(event) {
+    event.preventDefault();
+    
+    const breakdownId = document.getElementById('breakdownId').value;
+    const mechanicId = document.getElementById('breakdownMechanicSelect').value;
+    const estimatedArrival = document.getElementById('breakdownEstimatedArrival').value;
+    const instructions = document.getElementById('breakdownInstructions').value;
+    
+    if (!mechanicId) {
+        showNotification('Please select a mechanic', 'error');
+        return;
+    }
+    
+    // Show loading
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Assigning...';
+    submitBtn.disabled = true;
+    
+    fetch('../api/assign_mechanic_to_breakdown.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            breakdown_id: breakdownId,
+            assigned_mechanic: mechanicId,
+            estimated_arrival: estimatedArrival,
+            notes: instructions
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('✅ Mechanic assigned to breakdown successfully!', 'success');
+            closeAssignMechanicBreakdownModal();
+            // Refresh the breakdowns list
+            loadEmergencyBreakdowns();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Error assigning mechanic', 'error');
+    })
+    .finally(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
+// ============================================
+// MECHANIC FUNCTIONS - EMERGENCY BREAKDOWNS
+// ============================================
+// ============================================
+// UNIFIED TASK DETAILS FUNCTION
+// ============================================
+
+function viewTaskDetails(taskId, taskType) {
+    console.log(`📋 Viewing ${taskType} details:`, taskId);
+    
+    const modal = document.getElementById('taskDetailsModal');
+    const container = document.getElementById('taskDetailsContainer');
+    const actionBtn = document.getElementById('taskActionBtn');
+    const modalTitle = document.getElementById('modalTitle');
+    const userRole = document.body.dataset.userRole;
+    
+    if (!modal || !container) {
+        console.error('Task details modal not found');
+        return;
+    }
+    
+    // Show loading
+    container.innerHTML = `
+        <div style="text-align: center; padding: 60px;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 48px; color: #2563eb;"></i>
+            <p style="margin-top: 20px; color: #64748b;">Loading task details...</p>
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    if (taskType === 'breakdown') {
+        modalTitle.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Emergency Breakdown Details';
+        fetch('../api/get_breakdown_details.php?id=' + taskId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayTaskDetails(data.breakdown, 'breakdown', userRole);
+                } else {
+                    container.innerHTML = `<div class="error-state">Error: ${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                container.innerHTML = `<div class="error-state">Error loading details</div>`;
+            });
+    } else if (taskType === 'maintenance') {
+        modalTitle.innerHTML = '<i class="fas fa-wrench"></i> Maintenance Task Details';
+        fetch('../api/get_maintenance_details.php?id=' + taskId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayTaskDetails(data.data, 'maintenance', userRole);
+                } else {
+                    container.innerHTML = `<div class="error-state">Error: ${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                container.innerHTML = `<div class="error-state">Error loading details</div>`;
+            });
+    }
+}
+
+function displayTaskDetails(task, type, userRole) {
+    const container = document.getElementById('taskDetailsContainer');
+    const actionBtn = document.getElementById('taskActionBtn');
+    
+    if (type === 'breakdown') {
+        // Format dates
+        const reportedDate = new Date(task.reported_at).toLocaleString();
+        const assignedDate = task.assigned_at ? new Date(task.assigned_at).toLocaleString() : 'Not yet';
+        
+        // Determine priority color
+        let priorityColor, priorityBg;
+        if (task.priority === 'high') {
+            priorityColor = '#dc2626';
+            priorityBg = '#fee2e2';
+        } else if (task.priority === 'medium') {
+            priorityColor = '#f97316';
+            priorityBg = '#ffedd5';
+        } else {
+            priorityColor = '#3b82f6';
+            priorityBg = '#dbeafe';
+        }
+        
+        // Set action button based on role and status
+        actionBtn.style.display = 'none';
+        if (userRole === 'mechanic') {
+            if (task.status === 'assigned') {
+                actionBtn.style.display = 'block';
+                actionBtn.innerHTML = '<i class="fas fa-play"></i> Start Work';
+                actionBtn.className = 'btn btn-primary';
+                actionBtn.onclick = () => startBreakdownWork(task.id);
+            } else if (task.status === 'in_progress') {
+                actionBtn.style.display = 'block';
+                actionBtn.innerHTML = '<i class="fas fa-check"></i> Mark Resolved';
+                actionBtn.className = 'btn btn-success';
+                actionBtn.onclick = () => completeBreakdownWork(task.id);
+            }
+        } else if (userRole === 'fleet_manager' || userRole === 'admin') {
+            if (task.status === 'reported') {
+                actionBtn.style.display = 'block';
+                actionBtn.innerHTML = '<i class="fas fa-user-plus"></i> Assign Mechanic';
+                actionBtn.className = 'btn btn-danger';
+                actionBtn.onclick = () => assignMechanicToBreakdown(task.id);
+            }
+        }
+        
+        container.innerHTML = `
+            <div style="padding: 20px;">
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #fee2e2;">
+                    <span style="background: ${priorityBg}; color: ${priorityColor}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                        <i class="fas fa-flag"></i> ${task.priority.toUpperCase()} PRIORITY
+                    </span>
+                    <span style="background: ${task.status === 'reported' ? '#dc2626' : task.status === 'assigned' ? '#f97316' : '#3b82f6'}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; text-transform: uppercase;">
+                        ${task.status.replace('_', ' ')}
+                    </span>
+                </div>
+                
+                <!-- Vehicle Info -->
+                <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; font-size: 16px; color: #1e293b;">
+                        <i class="fas fa-truck" style="color: #2563eb;"></i> Vehicle
+                    </h4>
+                    <div style="font-size: 20px; font-weight: 700;">${task.vehicle_name}</div>
+                </div>
+                
+                <!-- Two Column Grid for different users -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <!-- Driver Info (shown to both) -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">
+                            <i class="fas fa-user" style="color: #10b981;"></i> Driver
+                        </div>
+                        <div style="font-weight: 600;">${task.driver_name || 'Unknown'}</div>
+                        ${task.driver_phone ? `
+                            <div style="font-size: 14px; color: #2563eb; margin-top: 5px;">
+                                <i class="fas fa-phone"></i> ${task.driver_phone}
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <!-- Location (shown to both) -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">
+                            <i class="fas fa-map-marker-alt" style="color: #ef4444;"></i> Location
+                        </div>
+                        <div>${task.location}</div>
+                    </div>
+                </div>
+                
+                <!-- Issue Description -->
+                <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; font-size: 16px; color: #1e293b;">
+                        <i class="fas fa-exclamation-circle" style="color: #f97316;"></i> Issue
+                    </h4>
+                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        ${task.description}
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 13px;">
+                            <i class="fas fa-tag"></i> ${task.issue_type}
+                        </span>
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 13px;">
+                            <i class="fas fa-${task.can_drive === 'yes' ? 'check' : 'times'}"></i> 
+                            Can Drive: ${task.can_drive === 'yes' ? 'Yes' : 'No'}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Timeline -->
+                <div style="background: #f8fafc; border-radius: 12px; padding: 15px;">
+                    <h4 style="margin: 0 0 10px 0; font-size: 16px; color: #1e293b;">
+                        <i class="fas fa-clock" style="color: #6b7280;"></i> Timeline
+                    </h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <div style="font-size: 12px; color: #64748b;">Reported</div>
+                            <div style="font-weight: 500;">${reportedDate}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 12px; color: #64748b;">Assigned</div>
+                            <div style="font-weight: 500;">${assignedDate}</div>
+                        </div>
+                    </div>
+                    ${userRole === 'fleet_manager' || userRole === 'admin' ? `
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                            <div style="font-size: 12px; color: #64748b;">Assigned Mechanic</div>
+                            <div style="font-weight: 500;">${task.mechanic_name || 'Not assigned'}</div>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                ${task.resolution_notes ? `
+                    <div style="background: #f0fdf4; border-radius: 12px; padding: 15px; margin-top: 15px;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 16px; color: #166534;">
+                            <i class="fas fa-check-circle"></i> Resolution Notes
+                        </h4>
+                        <p style="margin: 0;">${task.resolution_notes}</p>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+    } else if (type === 'maintenance') {
+        // Similar structure for maintenance tasks
+        // ... (I'll add this in a follow-up response if needed)
+    }
+}
+
+function closeTaskDetailsModal() {
+    const modal = document.getElementById('taskDetailsModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+function loadMyEmergencyBreakdowns() {
+    console.log('🔧 Loading my emergency breakdowns...');
+    
+    const emergencyList = document.getElementById('my-emergency-list');
+    const emergencyCount = document.getElementById('my-emergency-count');
+    
+    if (!emergencyList) return;
+    
+    emergencyList.innerHTML = '<div style="text-align: center; padding: 30px;"><i class="fas fa-spinner fa-spin"></i> Loading your emergencies...</div>';
+    
+    fetch('../api/get_my_breakdowns.php?_=' + new Date().getTime())
+        .then(response => response.json())
+        .then(data => {
+            console.log('📦 My breakdowns:', data);
+            
+            if (data.success) {
+                if (emergencyCount) {
+                    emergencyCount.textContent = data.active_count;
+                }
+                
+                if (data.breakdowns && data.breakdowns.length > 0) {
+                    let html = '';
+                    data.breakdowns.forEach(breakdown => {
+                        // Determine priority color
+                        let priorityColor, priorityBg;
+                        if (breakdown.priority === 'high') {
+                            priorityColor = '#dc2626';
+                            priorityBg = '#fee2e2';
+                        } else if (breakdown.priority === 'medium') {
+                            priorityColor = '#f97316';
+                            priorityBg = '#ffedd5';
+                        } else {
+                            priorityColor = '#3b82f6';
+                            priorityBg = '#dbeafe';
+                        }
+                        
+                        // Format times
+                        const reportedTime = new Date(breakdown.reported_at).toLocaleString();
+                        const assignedTime = breakdown.assigned_at ? new Date(breakdown.assigned_at).toLocaleString() : 'N/A';
+                        
+                        // Determine status badge
+                        let statusBadge = '';
+                        if (breakdown.status === 'assigned') {
+                            statusBadge = '<span style="background: #f97316; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;"><i class="fas fa-clock"></i> ASSIGNED</span>';
+                        } else if (breakdown.status === 'in_progress') {
+                            statusBadge = '<span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;"><i class="fas fa-play"></i> IN PROGRESS</span>';
+                        }
+                        
+                        html += `
+                            <div style="background: white; border: 1px solid #f0f0f0; border-left: 4px solid ${priorityColor}; border-radius: 8px; padding: 20px; margin-bottom: 15px;">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                                    <div>
+                                        <span style="background: ${priorityBg}; color: ${priorityColor}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-right: 10px;">
+                                            <i class="fas fa-exclamation-triangle"></i> ${breakdown.priority.toUpperCase()} PRIORITY
+                                        </span>
+                                        ${statusBadge}
+                                    </div>
+                                    <span style="color: #64748b; font-size: 12px;">
+                                        <i class="fas fa-hashtag"></i> #${breakdown.id}
+                                    </span>
+                                </div>
+                                
+                                <h3 style="margin: 0 0 15px 0; font-size: 20px; color: #1e293b;">${breakdown.vehicle_name}</h3>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                    <div>
+                                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Issue</div>
+                                        <div style="font-weight: 500;">${breakdown.description}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Location</div>
+                                        <div style="font-weight: 500;">${breakdown.location}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Driver</div>
+                                        <div style="font-weight: 500;">${breakdown.driver_name || 'Unknown'} 
+                                            ${breakdown.driver_phone ? `<span style="font-size: 11px; color: #3b82f6;">(${breakdown.driver_phone})</span>` : ''}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Reported</div>
+                                        <div style="font-weight: 500;">${reportedTime}</div>
+                                    </div>
+                                </div>
+                                
+                                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                                    <div style="display: flex; gap: 20px; font-size: 13px;">
+                                        <div><strong>Assigned:</strong> ${assignedTime}</div>
+                                        <div><strong>Can Drive:</strong> ${breakdown.can_drive === 'yes' ? 'Yes' : 'No'}</div>
+                                        <div><strong>Issue Type:</strong> ${breakdown.issue_type}</div>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                    ${breakdown.status === 'assigned' ? `
+                                        <button class="btn btn-primary" onclick="startBreakdownWork(${breakdown.id})" style="flex: 1;">
+                                            <i class="fas fa-play"></i> Start Work
+                                        </button>
+                                    ` : ''}
+                                    ${breakdown.status === 'in_progress' ? `
+                                        <button class="btn btn-success" onclick="completeBreakdownWork(${breakdown.id})" style="flex: 1;">
+                                            <i class="fas fa-check"></i> Mark Resolved
+                                        </button>
+                                    ` : ''}
+                                    <button class="btn btn-info" onclick="viewTaskDetails(${breakdown.id}, 'breakdown')" style="width: 100%; background-color: #3b82f6; color: white; border: none;">
+    <i class="fas fa-eye"></i> View Details
+</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    emergencyList.innerHTML = html;
+                } else {
+                    emergencyList.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #94a3b8;">
+                            <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 15px;"></i>
+                            <p style="font-size: 16px; font-weight: 500;">No emergency assignments</p>
+                            <p style="font-size: 13px;">You're all caught up!</p>
+                        </div>
+                    `;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            emergencyList.innerHTML = '<div class="error-state">Failed to load emergencies</div>';
+        });
+}
+
+function startBreakdownWork(breakdownId) {
+    if (!confirm('Start working on this breakdown?')) return;
+    
+    fetch('../api/update_breakdown_status.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            breakdown_id: breakdownId,
+            action: 'start'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Started working on breakdown', 'success');
+            loadMyEmergencyBreakdowns();
+            loadMechanicTasks();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Error starting work', 'error');
+    });
+}
+
+function completeBreakdownWork(breakdownId) {
+    const notes = prompt('Enter resolution notes / work completed:');
+    if (notes === null) return;
+    
+    fetch('../api/update_breakdown_status.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            breakdown_id: breakdownId,
+            action: 'complete',
+            notes: notes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Breakdown resolved!', 'success');
+            loadMyEmergencyBreakdowns();
+            loadMechanicTasks();
+            loadMechanicActivity();
+        } else {
+            showNotification('Error: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Error completing work', 'error');
+    });
+}
+
+function updateMechanicStatus() {
+    // Toggle mechanic availability (if you have this feature)
+    showNotification('Status updated', 'success');
+}
+// ============================================
+// BREAKDOWN DETAILS FUNCTIONS
+// ============================================
+
+function viewBreakdownDetails(breakdownId) {
+    console.log('🔍 Viewing breakdown details for ID:', breakdownId);
+    
+    // Show loading in modal first
+    const modal = document.getElementById('viewBreakdownModal');
+    const container = document.getElementById('breakdownDetailsContainer');
+    
+    if (!modal || !container) {
+        console.error('View breakdown modal not found');
+        return;
+    }
+    
+    container.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 40px; color: #3b82f6;"></i>
+            <p style="margin-top: 15px; color: #64748b;">Loading breakdown details...</p>
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    // Fetch breakdown details
+    fetch('../api/get_breakdown_details.php?id=' + breakdownId)
+        .then(response => response.json())
+        .then(data => {
+            console.log('📦 Breakdown details:', data);
+            
+            if (data.success) {
+                displayBreakdownDetails(data.breakdown);
+            } else {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ef4444;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 15px;"></i>
+                        <p>Error loading breakdown details</p>
+                        <p style="font-size: 12px;">${data.error || 'Unknown error'}</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #ef4444;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 15px;"></i>
+                    <p>Error connecting to server</p>
+                </div>
+            `;
+        });
+}
+
+function displayBreakdownDetails(breakdown) {
+    const container = document.getElementById('breakdownDetailsContainer');
+    const assignBtn = document.getElementById('assignFromDetailsBtn');
+    
+    // Store breakdown ID for assignment button
+    assignBtn.setAttribute('data-breakdown-id', breakdown.id);
+    
+    // Format dates
+    const reportedDate = new Date(breakdown.reported_at).toLocaleString();
+    
+    // Determine status color
+    let statusColor = '#6b7280';
+    if (breakdown.status === 'reported') statusColor = '#dc2626';
+    else if (breakdown.status === 'assigned') statusColor = '#f97316';
+    else if (breakdown.status === 'in_progress') statusColor = '#3b82f6';
+    else if (breakdown.status === 'resolved') statusColor = '#10b981';
+    
+    // Determine priority display
+    let priorityBadge = '';
+    if (breakdown.priority === 'high') {
+        priorityBadge = '<span style="background: #fee2e2; color: #dc2626; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;"><i class="fas fa-exclamation-triangle"></i> HIGH PRIORITY</span>';
+    } else if (breakdown.priority === 'medium') {
+        priorityBadge = '<span style="background: #ffedd5; color: #f97316; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;"><i class="fas fa-exclamation-circle"></i> MEDIUM PRIORITY</span>';
+    } else {
+        priorityBadge = '<span style="background: #dbeafe; color: #3b82f6; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;"><i class="fas fa-info-circle"></i> LOW PRIORITY</span>';
+    }
+    
+    container.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <!-- Status Badge -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                ${priorityBadge}
+                <span style="background: ${statusColor}20; color: ${statusColor}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase;">
+                    ${breakdown.status.replace('_', ' ')}
+                </span>
+            </div>
+            
+            <!-- Vehicle & Driver Info Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-truck" style="color: #3b82f6;"></i> Vehicle Information
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Vehicle Name</div>
+                        <div style="font-weight: 600; font-size: 16px;">${breakdown.vehicle_name}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Vehicle ID</div>
+                        <div style="font-weight: 500;">#${breakdown.vehicle_id}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Driver Info Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-user" style="color: #10b981;"></i> Driver Information
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Driver Name</div>
+                        <div style="font-weight: 600;">${breakdown.driver_name || 'Unknown'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Contact Number</div>
+                        <div style="font-weight: 500;">
+                            ${breakdown.driver_phone ? 
+                                `<a href="tel:${breakdown.driver_phone}" style="color: #3b82f6; text-decoration: none;">${breakdown.driver_phone}</a>` : 
+                                'Not provided'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Location Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-map-marker-alt" style="color: #ef4444;"></i> Location Details
+                </h4>
+                <div>
+                    <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Exact Location</div>
+                    <div style="font-weight: 500; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        ${breakdown.location}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Issue Description Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-exclamation-circle" style="color: #f97316;"></i> Issue Description
+                </h4>
+                <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                    <p style="margin: 0 0 10px 0; line-height: 1.5;">${breakdown.description}</p>
+                    <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 13px;">
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">
+                            <i class="fas fa-tag"></i> ${breakdown.issue_type}
+                        </span>
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">
+                            <i class="fas fa-${breakdown.can_drive === 'yes' ? 'check' : 'times'}"></i> 
+                            Can Drive: ${breakdown.can_drive}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Timeline Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-clock" style="color: #6b7280;"></i> Timeline
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Reported At</div>
+                        <div style="font-weight: 500;">${reportedDate}</div>
+                    </div>
+                    ${breakdown.assigned_at ? `
+                    <div>
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Assigned At</div>
+                        <div style="font-weight: 500;">${new Date(breakdown.assigned_at).toLocaleString()}</div>
+                    </div>
+                    ` : ''}
+                    ${breakdown.assigned_mechanic ? `
+                    <div>
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Assigned Mechanic</div>
+                        <div style="font-weight: 500;">Loading...</div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+   
+}
+
+function closeViewBreakdownModal() {
+    const modal = document.getElementById('viewBreakdownModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function assignFromDetails() {
+    const assignBtn = document.getElementById('assignFromDetailsBtn');
+    const breakdownId = assignBtn.getAttribute('data-breakdown-id');
+    
+    if (breakdownId) {
+        closeViewBreakdownModal();
+        // Call the assign mechanic function with this breakdown ID
+        assignMechanicToBreakdown(breakdownId);
+    }
+}
+
+// ============================================
+// VEHICLE FILTER FUNCTIONS - FIXED VERSION
+// ============================================
+
+// Store all vehicles globally
+let allVehicles = [];
+
+// Function to load vehicles with filters
+function loadVehicleAvailability() {
+    const vehicleList = document.querySelector('.vehicle-list');
+    if (!vehicleList) return;
+    
+    vehicleList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading vehicles...</div>';
+    
+    fetch('../api/get_vehicles.php?_=' + new Date().getTime())
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(data => {
+            console.log('📦 Vehicle data received:', data);
+            
+            if (data.success && data.vehicles && data.vehicles.length > 0) {
+                // Store all vehicles globally
+                allVehicles = data.vehicles;
+                console.log(`Loaded ${allVehicles.length} vehicles`);
+                applyVehicleFilters(); // Apply filters on load
+            } else {
+                vehicleList.innerHTML = '<div class="empty-state">No vehicles available</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading vehicles:', error);
+            vehicleList.innerHTML = '<div class="error-state">Failed to load vehicles</div>';
+        });
+}
+
+// Function to determine vehicle status
+function getVehicleStatus(vehicle) {
+    // Check if has pending maintenance
+    if (vehicle.has_pending_maintenance) {
+        return 'maintenance';
+    }
+    // Check if in use
+    else if (vehicle.is_in_use) {
+        return 'in-use';
+    }
+    // Otherwise available
+    else {
+        return 'available';
+    }
+}
+
+// Function to apply vehicle filters
+function applyVehicleFilters() {
+    const typeFilter = document.getElementById('vehicleTypeFilter').value;
+    const statusFilter = document.getElementById('vehicleStatusFilter').value;
+    const searchTerm = document.getElementById('searchFleet').value.toLowerCase().trim();
+    
+    console.log('Applying filters - Type:', typeFilter, 'Status:', statusFilter, 'Search:', searchTerm);
+    
+    // First, log all vehicles for debugging
+    console.log('All vehicles:', allVehicles.map(v => ({
+        name: v.asset_name,
+        type: v.asset_type,
+        has_maintenance: v.has_pending_maintenance,
+        is_in_use: v.is_in_use,
+        status: getVehicleStatus(v)
+    })));
+    
+    const filtered = allVehicles.filter(vehicle => {
+        // TYPE FILTER
+        if (typeFilter !== 'all') {
+            const vehicleType = (vehicle.asset_type || '').toLowerCase();
+            const filterType = typeFilter.toLowerCase();
+            if (vehicleType !== filterType) return false;
+        }
+        
+        // STATUS FILTER
+        if (statusFilter !== 'all') {
+            const actualStatus = getVehicleStatus(vehicle);
+            if (statusFilter === 'good' && actualStatus !== 'available') return false;
+            if (statusFilter === 'warning' && actualStatus !== 'in-use') return false;
+            if (statusFilter === 'bad' && actualStatus !== 'maintenance') return false;
+        }
+        
+        // SEARCH FILTER
+        if (searchTerm) {
+            const vehicleName = (vehicle.asset_name || '').toLowerCase();
+            const vehicleType = (vehicle.asset_type || '').toLowerCase();
+            const vehicleId = String(vehicle.id || '');
+            
+            return vehicleName.includes(searchTerm) || 
+                   vehicleType.includes(searchTerm) ||
+                   vehicleId.includes(searchTerm);
+        }
+        
+        return true;
+    });
+    
+    console.log(`Filtered from ${allVehicles.length} to ${filtered.length} vehicles`);
+    
+    // Count by status for debugging
+    const available = filtered.filter(v => getVehicleStatus(v) === 'available').length;
+    const inUse = filtered.filter(v => getVehicleStatus(v) === 'in-use').length;
+    const maintenance = filtered.filter(v => getVehicleStatus(v) === 'maintenance').length;
+    console.log(`Filtered counts - Available: ${available}, In Use: ${inUse}, Maintenance: ${maintenance}`);
+    
+    displayFilteredVehicles(filtered);
+}
+
+// Function to display filtered vehicles
+function displayFilteredVehicles(vehicles) {
+    const vehicleList = document.querySelector('.vehicle-list');
+    if (!vehicleList) return;
+    
+    // Get current filter values for custom message
+    const typeFilter = document.getElementById('vehicleTypeFilter').value;
+    const statusFilter = document.getElementById('vehicleStatusFilter').value;
+    const searchTerm = document.getElementById('searchFleet').value;
+    
+    if (vehicles.length === 0) {
+        let emptyMessage = 'No vehicles found';
+        let emptyIcon = 'fa-truck';
+        
+        // Custom message based on filters
+        if (searchTerm) {
+            emptyMessage = `No vehicles matching "${searchTerm}"`;
+            emptyIcon = 'fa-search';
+        } else if (typeFilter !== 'all' && statusFilter !== 'all') {
+            const typeText = typeFilter === 'vehicle' ? 'trucks' : 'equipment';
+            const statusText = statusFilter === 'good' ? 'available' : 
+                              statusFilter === 'warning' ? 'in use' : 'in maintenance';
+            emptyMessage = `No ${statusText} ${typeText} found`;
+            emptyIcon = 'fa-filter';
+        } else if (typeFilter !== 'all') {
+            emptyMessage = `No ${typeFilter === 'vehicle' ? 'trucks' : 'equipment'} found`;
+            emptyIcon = typeFilter === 'vehicle' ? 'fa-truck' : 'fa-cog';
+        } else if (statusFilter !== 'all') {
+            const statusText = statusFilter === 'good' ? 'available' : 
+                              statusFilter === 'warning' ? 'in use' : 'in maintenance';
+            emptyMessage = `No ${statusText} vehicles found`;
+            emptyIcon = 'fa-filter';
+        }
+        
+        vehicleList.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #94a3b8;">
+                <i class="fas ${emptyIcon}" style="font-size: 48px; margin-bottom: 15px;"></i>
+                <p style="font-size: 16px; margin-bottom: 20px;">${emptyMessage}</p>
+                ${(typeFilter !== 'all' || statusFilter !== 'all' || searchTerm) ? `
+                    <button onclick="resetVehicleFilters()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                        <i class="fas fa-times"></i> Clear Filters
+                    </button>
+                ` : ''}
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    vehicles.forEach(vehicle => {
+        // Try to find driver name
+        let driverName = vehicle.current_driver || 
+                        vehicle.driver_name || 
+                        vehicle.driver || 
+                        vehicle.full_name || 
+                        null;
+        
+        // Determine status based on actual data
+        const actualStatus = getVehicleStatus(vehicle);
+        let statusText, statusIcon, statusColor, extraInfo = '';
+        
+        if (actualStatus === 'maintenance') {
+            statusText = 'IN MAINTENANCE';
+            statusIcon = 'wrench';
+            statusColor = '#ef4444';
+            extraInfo = `<div style="font-size: 11px; color: #ef4444; margin-top: 5px;">
+                <i class="fas fa-exclamation-triangle"></i> 
+                Maintenance: ${vehicle.maintenance_issue || 'Scheduled'} 
+                (Due: ${vehicle.due_date || 'N/A'})
+            </div>`;
+        } else if (actualStatus === 'in-use') {
+            statusText = 'IN USE';
+            statusIcon = 'play-circle';
+            statusColor = '#f59e0b';
+            extraInfo = `<div style="font-size: 11px; color: #f59e0b; margin-top: 5px;">
+                <i class="fas fa-user"></i> 
+                Driver: ${driverName || 'Unknown'}
+            </div>`;
+        } else {
+            statusText = 'AVAILABLE';
+            statusIcon = 'check-circle';
+            statusColor = '#10b981';
+        }
+        
+        // Get asset type display
+        const assetType = vehicle.asset_type === 'vehicle' ? 'Truck' : 'Equipment';
+        
+        html += `
+            <div class="vehicle-item" data-type="${vehicle.asset_type}" data-status="${actualStatus}">
+                <div class="vehicle-info">
+                    <div class="vehicle-icon">
+                        <i class="fas fa-${vehicle.asset_type === 'vehicle' ? 'truck' : 'cog'}"></i>
+                    </div>
+                    <div class="vehicle-details">
+                        <h3>${vehicle.asset_name} <span style="font-size: 12px; color: #64748b; font-weight: normal;">(${assetType})</span></h3>
+                        <div class="vehicle-meta">
+                            <span><i class="fas fa-plate"></i> ABC-${String(vehicle.id).padStart(4, '0')}</span>
+                            <span><i class="fas fa-tachometer-alt"></i> ${vehicle.mileage || 'N/A'} km</span>
+                            ${driverName ? `<span><i class="fas fa-user"></i> ${driverName}</span>` : ''}
+                        </div>
+                        ${extraInfo}
+                    </div>
+                </div>
+                <div class="vehicle-status">
+                    <span class="availability-badge" style="background-color: ${statusColor}20; color: ${statusColor}; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                        <i class="fas fa-${statusIcon}"></i>
+                        ${statusText}
+                    </span>
+                </div>
+                <div class="vehicle-metrics">
+                    <div class="vehicle-metric">
+                        <div class="value">${vehicle.fuel_level || '85'}%</div>
+                        <div class="label">Fuel</div>
+                    </div>
+                    <div class="vehicle-metric">
+                        <div class="value">${vehicle.asset_condition}%</div>
+                        <div class="label">Condition</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    vehicleList.innerHTML = html;
+}
+
+// Function to reset vehicle filters
+function resetVehicleFilters() {
+    document.getElementById('vehicleTypeFilter').value = 'all';
+    document.getElementById('vehicleStatusFilter').value = 'all';
+    document.getElementById('searchFleet').value = '';
+    
+    // Re-apply filters (which will show all vehicles)
+    applyVehicleFilters();
+}
+
+// Debounced search function
+const debouncedSearch = debounce(function() {
+    applyVehicleFilters();
+}, 300);
+
+// Add this to your DOMContentLoaded event
+document.addEventListener('DOMContentLoaded', function() {
+    // ... existing code ...
+    
+    // Vehicle filter event listeners
+    const typeFilter = document.getElementById('vehicleTypeFilter');
+    const statusFilter = document.getElementById('vehicleStatusFilter');
+    const searchInput = document.getElementById('searchFleet');
+    
+    if (typeFilter) {
+        typeFilter.addEventListener('change', applyVehicleFilters);
+        console.log('✅ Vehicle type filter listener added');
+    }
+    
+    if (statusFilter) {
+        statusFilter.addEventListener('change', applyVehicleFilters);
+        console.log('✅ Vehicle status filter listener added');
+    }
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', debouncedSearch);
+        console.log('✅ Vehicle search listener added');
+    }
+});
 function updateReservationStats(reservations) {
     const pending = reservations.filter(r => r.status === 'pending').length;
     const approved = reservations.filter(r => r.status === 'approved').length;
@@ -1689,31 +3219,350 @@ function loadAvailableVehicles() {
         });
 }
 
+// ============================================
+// MECHANIC TASK DETAILS FUNCTIONS
+// ============================================
 
-// Update the openReservationModal function
-function loadVehicleAvailability() {
-    const vehicleList = document.querySelector('.vehicle-list');
-    if (!vehicleList) return;
+function viewMechanicTaskDetails(taskId, taskType) {
+    console.log(`🔍 Viewing ${taskType} details for ID:`, taskId);
     
-    vehicleList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading vehicles...</div>';
+    const modal = document.getElementById('mechanicTaskDetailsModal');
+    const container = document.getElementById('mechanicTaskDetailsContainer');
+    const actionBtn = document.getElementById('mechanicTaskActionBtn');
     
-    fetch('../api/get_vehicles.php')
-        .then(response => {
-            if (!response.ok) throw new Error('Network response was not ok');
-            return response.json();
-        })
-        .then(data => {
-            if (data.success && data.vehicles.length > 0) {
-                displayVehicles(data.vehicles);
-            } else {
-                vehicleList.innerHTML = '<div class="empty-state">No vehicles available</div>';
-            }
-        })
-        .catch(error => {
-            console.error('Error loading vehicles:', error);
-            vehicleList.innerHTML = '<div class="error-state">Failed to load vehicles</div>';
-        });
+    if (!modal || !container) {
+        console.error('Details modal not found');
+        return;
+    }
+    
+    // Show loading
+    container.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 40px; color: #3b82f6;"></i>
+            <p style="margin-top: 15px; color: #64748b;">Loading task details...</p>
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    if (taskType === 'breakdown') {
+        // Fetch breakdown details
+        fetch('../api/get_breakdown_details.php?id=' + taskId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayBreakdownTaskDetails(data.breakdown);
+                } else {
+                    container.innerHTML = `<div class="error-state">Error: ${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                container.innerHTML = `<div class="error-state">Error loading details</div>`;
+            });
+    } else if (taskType === 'maintenance') {
+        // Fetch maintenance details
+        fetch('../api/get_maintenance_details.php?id=' + taskId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayMaintenanceTaskDetails(data.data);
+                } else {
+                    container.innerHTML = `<div class="error-state">Error: ${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                container.innerHTML = `<div class="error-state">Error loading details</div>`;
+            });
+    }
 }
+
+function displayBreakdownTaskDetails(breakdown) {
+    const container = document.getElementById('mechanicTaskDetailsContainer');
+    const actionBtn = document.getElementById('mechanicTaskActionBtn');
+    
+    // Format dates
+    const reportedDate = new Date(breakdown.reported_at).toLocaleString();
+    const assignedDate = breakdown.assigned_at ? new Date(breakdown.assigned_at).toLocaleString() : 'Not yet';
+    
+    // Determine status color
+    let statusColor = '#6b7280';
+    if (breakdown.status === 'assigned') statusColor = '#f97316';
+    else if (breakdown.status === 'in_progress') statusColor = '#3b82f6';
+    else if (breakdown.status === 'resolved') statusColor = '#10b981';
+    
+    // Set action button based on status
+    if (breakdown.status === 'assigned') {
+        actionBtn.style.display = 'block';
+        actionBtn.innerHTML = '<i class="fas fa-play"></i> Start Work';
+        actionBtn.className = 'btn btn-primary';
+        actionBtn.onclick = () => startBreakdownWork(breakdown.id);
+    } else if (breakdown.status === 'in_progress') {
+        actionBtn.style.display = 'block';
+        actionBtn.innerHTML = '<i class="fas fa-check"></i> Mark Resolved';
+        actionBtn.className = 'btn btn-success';
+        actionBtn.onclick = () => completeBreakdownWork(breakdown.id);
+    } else {
+        actionBtn.style.display = 'none';
+    }
+    
+    container.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <!-- Header with type badge -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <span style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                    <i class="fas fa-exclamation-triangle"></i> EMERGENCY BREAKDOWN
+                </span>
+                <span style="background: ${statusColor}20; color: ${statusColor}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase;">
+                    ${breakdown.status.replace('_', ' ')}
+                </span>
+            </div>
+            
+            <!-- Vehicle Info Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b;">
+                    <i class="fas fa-truck" style="color: #3b82f6;"></i> Vehicle Information
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Vehicle Name</div>
+                        <div style="font-weight: 600; font-size: 18px;">${breakdown.vehicle_name}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Vehicle ID</div>
+                        <div style="font-weight: 500;">#${breakdown.vehicle_id}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Condition</div>
+                        <div style="font-weight: 500;">${breakdown.asset_condition || 'N/A'}%</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Driver Info Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b;">
+                    <i class="fas fa-user" style="color: #10b981;"></i> Driver Information
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Driver Name</div>
+                        <div style="font-weight: 600;">${breakdown.driver_name || 'Unknown'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Contact Number</div>
+                        <div style="font-weight: 500;">
+                            ${breakdown.driver_phone ? 
+                                `<a href="tel:${breakdown.driver_phone}" style="color: #3b82f6; text-decoration: none;">${breakdown.driver_phone}</a>` : 
+                                'Not provided'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Location Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b;">
+                    <i class="fas fa-map-marker-alt" style="color: #ef4444;"></i> Location Details
+                </h4>
+                <div>
+                    <div style="font-size: 12px; color: #64748b;">Exact Location</div>
+                    <div style="font-weight: 500; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        ${breakdown.location}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Issue Description Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b;">
+                    <i class="fas fa-exclamation-circle" style="color: #f97316;"></i> Issue Description
+                </h4>
+                <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                    <p style="margin: 0 0 10px 0; line-height: 1.5;">${breakdown.description}</p>
+                    <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 13px; flex-wrap: wrap;">
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">
+                            <i class="fas fa-tag"></i> ${breakdown.issue_type}
+                        </span>
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">
+                            <i class="fas fa-${breakdown.can_drive === 'yes' ? 'check' : 'times'}"></i> 
+                            Can Drive: ${breakdown.can_drive === 'yes' ? 'Yes' : 'No'}
+                        </span>
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">
+                            <i class="fas fa-flag"></i> ${breakdown.priority} priority
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Timeline Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b;">
+                    <i class="fas fa-clock" style="color: #6b7280;"></i> Timeline
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Reported At</div>
+                        <div style="font-weight: 500;">${reportedDate}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Assigned At</div>
+                        <div style="font-weight: 500;">${assignedDate}</div>
+                    </div>
+                    ${breakdown.resolved_at ? `
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Resolved At</div>
+                        <div style="font-weight: 500;">${new Date(breakdown.resolved_at).toLocaleString()}</div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            ${breakdown.resolution_notes ? `
+            <!-- Resolution Notes -->
+            <div style="background: #f0fdf4; border-radius: 12px; padding: 20px; margin-top: 20px; border: 1px solid #86efac;">
+                <h4 style="margin: 0 0 10px 0; font-size: 16px; color: #166534;">
+                    <i class="fas fa-check-circle" style="color: #16a34a;"></i> Resolution Notes
+                </h4>
+                <p style="margin: 0; color: #166534;">${breakdown.resolution_notes}</p>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function displayMaintenanceTaskDetails(task) {
+    const container = document.getElementById('mechanicTaskDetailsContainer');
+    const actionBtn = document.getElementById('mechanicTaskActionBtn');
+    
+    // Format dates
+    const createdDate = new Date(task.created_at).toLocaleString();
+    const dueDate = new Date(task.due_date).toLocaleDateString();
+    
+    // Determine status color
+    let statusColor = '#6b7280';
+    if (task.status === 'pending') statusColor = '#f59e0b';
+    else if (task.status === 'in_progress') statusColor = '#3b82f6';
+    else if (task.status === 'completed') statusColor = '#10b981';
+    
+    // Set action button based on status
+    if (task.status === 'pending') {
+        actionBtn.style.display = 'block';
+        actionBtn.innerHTML = '<i class="fas fa-play"></i> Start Work';
+        actionBtn.className = 'btn btn-primary';
+        actionBtn.onclick = () => startMaintenance(task.id);
+    } else if (task.status === 'in_progress') {
+        actionBtn.style.display = 'block';
+        actionBtn.innerHTML = '<i class="fas fa-check"></i> Complete Task';
+        actionBtn.className = 'btn btn-success';
+        actionBtn.onclick = () => completeTask(task.id, task.asset_name);
+    } else {
+        actionBtn.style.display = 'none';
+    }
+    
+    container.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <!-- Header with type badge -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                    <i class="fas fa-wrench"></i> SCHEDULED MAINTENANCE
+                </span>
+                <span style="background: ${statusColor}20; color: ${statusColor}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase;">
+                    ${task.status.replace('_', ' ')}
+                </span>
+            </div>
+            
+            <!-- Vehicle Info Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b;">
+                    <i class="fas fa-truck" style="color: #3b82f6;"></i> Vehicle Information
+                </h4>
+                <div>
+                    <div style="font-size: 12px; color: #64748b;">Vehicle Name</div>
+                    <div style="font-weight: 600; font-size: 18px;">${task.asset_name}</div>
+                </div>
+            </div>
+            
+            <!-- Issue Details Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b;">
+                    <i class="fas fa-tools" style="color: #f97316;"></i> Issue Details
+                </h4>
+                <div style="background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                    <p style="margin: 0 0 15px 0; font-size: 16px;">${task.issue}</p>
+                    <div style="display: flex; gap: 15px; font-size: 13px; flex-wrap: wrap;">
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">
+                            <i class="fas fa-tag"></i> ${task.issue_type}
+                        </span>
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">
+                            <i class="fas fa-flag"></i> ${task.priority} priority
+                        </span>
+                        ${task.estimated_hours ? `
+                        <span style="background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">
+                            <i class="fas fa-clock"></i> Est: ${task.estimated_hours} hours
+                        </span>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Schedule Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b;">
+                    <i class="fas fa-calendar" style="color: #8b5cf6;"></i> Schedule
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Due Date</div>
+                        <div style="font-weight: 500;">${dueDate}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Created</div>
+                        <div style="font-weight: 500;">${createdDate}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Timeline Card -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 15px 0; font-size: 16px; color: #1e293b;">
+                    <i class="fas fa-history" style="color: #6b7280;"></i> Progress
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    ${task.started_at ? `
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Started At</div>
+                        <div style="font-weight: 500;">${new Date(task.started_at).toLocaleString()}</div>
+                    </div>
+                    ` : ''}
+                    ${task.completed_date ? `
+                    <div>
+                        <div style="font-size: 12px; color: #64748b;">Completed</div>
+                        <div style="font-weight: 500;">${new Date(task.completed_date).toLocaleDateString()}</div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            ${task.completed_notes ? `
+            <!-- Completion Notes -->
+            <div style="background: #f0fdf4; border-radius: 12px; padding: 20px; margin-top: 20px; border: 1px solid #86efac;">
+                <h4 style="margin: 0 0 10px 0; font-size: 16px; color: #166534;">
+                    <i class="fas fa-check-circle" style="color: #16a34a;"></i> Completion Notes
+                </h4>
+                <p style="margin: 0; color: #166534;">${task.completed_notes}</p>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function closeMechanicTaskDetailsModal() {
+    const modal = document.getElementById('mechanicTaskDetailsModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
 
 function displayVehicles(vehicles) {
     const vehicleList = document.querySelector('.vehicle-list');
@@ -1902,16 +3751,30 @@ function loadVehicleAssignments() {
 
 // Add to your fleet.js
 function openAssignMechanicModal(id, vehicleName, issue) {
+    console.log('Opening assign mechanic modal for ID:', id);
+    
+    const modal = document.getElementById('assignMechanicModal');
+    if (!modal) {
+        console.error('Assign mechanic modal not found');
+        return;
+    }
+    
     document.getElementById('maintenanceId').value = id;
     document.getElementById('modalVehicleName').textContent = vehicleName;
     document.getElementById('modalIssue').textContent = issue;
     
-    // Set default due date (7 days from now)
+    // Set default due date (3 days from now for emergencies)
     const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 7);
+    dueDate.setDate(dueDate.getDate() + 3);
     document.getElementById('dueDate').value = dueDate.toISOString().split('T')[0];
     
-    document.getElementById('assignMechanicModal').style.display = 'flex';
+    // Clear any previous notes
+    const notesField = document.getElementById('maintenanceNotes');
+    if (notesField) {
+        notesField.value = '';
+    }
+    
+    modal.style.display = 'flex';
 }
 
 function closeAssignMechanicModal() {
@@ -2922,7 +4785,6 @@ function displayTripHistory(trips) {
 // ============================================
 // DISPATCH SCHEDULE FUNCTIONS
 // ============================================
-
 function loadDispatchSchedule() {
     const scheduleList = document.querySelector('.schedule-list');
     if (!scheduleList) return;
@@ -3124,6 +4986,7 @@ function filterData(filterId, value) {
 
 function searchFleet(term) {
     console.log('Searching fleet:', term);
+    applyVehicleFilters();
 }
 
 function updateVehicleAvailability() {
@@ -3613,7 +5476,97 @@ function closeMaintenanceDetailsModal() {
 // ============================================
 // STYLES
 // ============================================
+// Add this INSIDE your existing DOMContentLoaded event
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Fleet dashboard loaded');
+    
+    // Load all data
+    loadFleetData();
+    
+    // Initialize UI
+    setupEventListeners();
+    initTabs();
+    
+    // Start real-time updates
+    startRealTimeUpdates();
+    
+    // Load role-specific data - ONLY for drivers
+    const userRole = document.body.dataset.userRole;
+    if (userRole === 'driver') {
+        loadDriverAssignment();
+        loadDriverStats();
+        loadDriverTrips();
+    }
+    
+    // ===== ADD THIS SECTION =====
+    // Load vehicles into reservation filter
+    loadReservationVehicleFilter();
+    
+    // Add filter event listeners
+    const statusFilter = document.getElementById('reservation-status-filter');
+    const vehicleFilter = document.getElementById('reservation-vehicle-filter');
+    // Add this INSIDE your existing DOMContentLoaded event (around where you added the reservation filters)
 
+// Vehicle filter event listeners
+const typeFilter = document.getElementById('vehicleTypeFilter');
+const searchInput = document.getElementById('searchFleet');
+
+if (typeFilter) {
+    typeFilter.addEventListener('change', applyVehicleFilters);
+    console.log('✅ Vehicle type filter listener added');
+}
+
+if (statusFilter) {
+    statusFilter.addEventListener('change', applyVehicleFilters);
+    console.log('✅ Vehicle status filter listener added');
+}
+
+if (searchInput) {
+    searchInput.addEventListener('input', debouncedSearch);
+    console.log('✅ Vehicle search listener added');
+}
+    
+    if (statusFilter) {
+        statusFilter.addEventListener('change', filterReservations);
+        console.log('✅ Status filter listener added');
+    } else {
+        console.warn('❌ Status filter element not found - check ID="reservation-status-filter"');
+    }
+    
+    if (vehicleFilter) {
+        vehicleFilter.addEventListener('change', filterReservations);
+        console.log('✅ Vehicle filter listener added');
+    } else {
+        console.warn('❌ Vehicle filter element not found - check ID="reservation-vehicle-filter"');
+    }
+    // ===== END ADDED SECTION =====
+    
+    const activeTab = document.querySelector('.tab.active');
+    
+    // Check if overview tab is active and user is not driver
+    if (userRole !== 'driver' && activeTab && activeTab.dataset.tab === 'overview') {
+        console.log('Overview tab active on load, loading trip history...');
+        setTimeout(loadTripHistory, 1000);
+    }
+    
+    // Reservations tab listener
+    const reservationsTab = document.querySelector('.tab[data-tab="reservations"]');
+    if (reservationsTab) {
+        reservationsTab.addEventListener('click', function() {
+            console.log('Reservations tab clicked - loading verifications');
+            setTimeout(loadVehicleReservations, 100);
+            setTimeout(loadPendingVerifications, 200);
+        });
+    } else {
+        console.log('Reservations tab not found - user is likely driver or mechanic');
+    }
+    
+    // Check if reservations tab is active on page load
+    if (activeTab && activeTab.dataset.tab === 'reservations' && reservationsTab) {
+        console.log('Reservations tab active on load');
+        setTimeout(loadPendingVerifications, 500);
+    }
+});
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {

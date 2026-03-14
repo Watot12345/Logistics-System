@@ -19,34 +19,45 @@ $page_title = 'Dashboard | Logistics System';
 $page_css = 'assets/css/style.css';
 include 'includes/header.php';
 $shipments = getActiveShipments($pdo, 10);
-function getActiveShipments($pdo, $limit = 5) {
-    $query = "SELECT s.*,
-                     u.full_name as driver_name,
-                     a.asset_name as vehicle_name,
-                     a.asset_condition as vehicle_condition
-              FROM shipments s
-              LEFT JOIN users u ON s.driver_id = u.id
-              LEFT JOIN assets a ON s.vehicle_id = a.id
-              WHERE s.shipment_status IN ('pending', 'in_transit')
+
+function getShipmentProgress($shipment) {
+    // Check if the key exists, use 'status' instead of 'shipment_status'
+    $status = isset($shipment['status']) ? $shipment['status'] : 'pending';
+    
+    if ($status == 'delivered') return 100;
+    if ($status == 'in-progress') return 60;
+    if ($status == 'scheduled') return 20;
+    if ($status == 'pending') return 10;
+    return 0;
+}
+function getActiveShipments($pdo, $limit = 10) {
+    $query = "SELECT 
+                ds.*,
+                u.full_name as driver_name,
+                a.asset_name as vehicle_name,
+                a.asset_condition as vehicle_condition,
+                vr.customer_name,
+                vr.delivery_address,
+                vr.purpose
+              FROM dispatch_schedule ds
+              LEFT JOIN users u ON ds.driver_id = u.id
+              LEFT JOIN assets a ON ds.vehicle_id = a.id
+              LEFT JOIN vehicle_reservations vr ON ds.reservation_id = vr.id
+              WHERE ds.status IN ('scheduled', 'in-progress', 'delivered', 'pending')
               ORDER BY 
                   CASE 
-                      WHEN s.shipment_status = 'in_transit' THEN 1
-                      WHEN s.shipment_status = 'pending' THEN 2
+                      WHEN ds.status = 'in-progress' THEN 1
+                      WHEN ds.status = 'scheduled' THEN 2
+                      WHEN ds.status = 'pending' THEN 3
+                      WHEN ds.status = 'delivered' THEN 4
                   END,
-                  s.departure_time ASC
+                  ds.scheduled_date ASC
               LIMIT :limit";
     
     $stmt = $pdo->prepare($query);
     $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-function getShipmentProgress($shipment) {
-    if ($shipment['shipment_status'] == 'delivered') return 100;
-    if ($shipment['shipment_status'] == 'in_transit') return 60;
-    if ($shipment['shipment_status'] == 'pending') return 20;
-    return 0;
 }
 
 
@@ -190,45 +201,41 @@ try {
 } catch (PDOException $e) {
     $alerts = [];
 }
-
-// Count assets + alerts for total
-$totalItems = count($assets) + count($alerts);
-
-// Initialize counts
+// Calculate lifecycle stages based on actual asset condition
 $lifecycleCounts = [
-    'Operational' => 0,
-    'Maintenance - Pending' => 0,
-    'Maintenance - Overdue' => 0,
-    'Maintenance - Done' => 0,
-    'End-of-Life' => 0,
+    'Operational (70-100%)' => 0,
+    'Maintenance Needed (40-69%)' => 0,
+    'Critical (10-39%)' => 0,
+    'End-of-Life (0-9%)' => 0,
     'Retired' => 0
 ];
 
-// Count assets per stage
 foreach ($assets as $asset) {
-    $stage = $asset['lifecycle_stage'] ?? 'Operational';
-    if (isset($lifecycleCounts[$stage])) {
-        $lifecycleCounts[$stage]++;
+    $condition = intval($asset['asset_condition'] ?? 0);
+    
+    if ($condition >= 70) {
+        $lifecycleCounts['Operational (70-100%)']++;
+    } elseif ($condition >= 40) {
+        $lifecycleCounts['Maintenance Needed (40-69%)']++;
+    } elseif ($condition >= 10) {
+        $lifecycleCounts['Critical (10-39%)']++;
+    } elseif ($condition > 0) {
+        $lifecycleCounts['End-of-Life (0-9%)']++;
+    } else {
+        $lifecycleCounts['Retired']++;
     }
 }
 
-// Count maintenance alerts by stage
-$now = new DateTime();
+// Also count maintenance alerts for additional context
 foreach ($alerts as $alert) {
-    if ($alert['status'] === 'done') {
-        $lifecycleCounts['Maintenance - Done']++;
-    } elseif ($alert['status'] === 'pending') {
-        $dueDate = new DateTime($alert['due_date']);
-        if ($dueDate < $now) {
-            $lifecycleCounts['Maintenance - Overdue']++;
-        } else {
-            $lifecycleCounts['Maintenance - Pending']++;
-        }
+    if ($alert['status'] === 'pending' || $alert['status'] === 'in_progress') {
+        // These are already counted in assets, but we could add a separate alert count
     }
 }
 
 // Prepare data for UI
 $lifecycleData = [];
+$totalItems = count($assets);
 foreach ($lifecycleCounts as $stage => $count) {
     $percentage = ($totalItems > 0) ? round(($count / $totalItems) * 100) : 0;
     $lifecycleData[] = [
@@ -425,15 +432,6 @@ if ($user_role === 'admin') {
             </div>
             
             <div class="header-right">
-                <button class="header-btn">
-                    <i class="fas fa-bell"></i>
-                    <span class="notification-badge"></span>
-                </button>
-
-                <button class="header-btn">
-                    <i class="fas fa-envelope"></i>
-                </button>
-
                 <div class="divider"></div>
                 <div class="user-info-header">
                     <span class="user-name-header">
@@ -731,13 +729,6 @@ if ($user_role === 'admin') {
                                           </button>
 
                                     <?php if ($alert['status'] === 'pending'): ?>
-                                        <form method="POST" style="display:inline;" onsubmit="return confirm('Mark this alert as completed?');">
-                                            <input type="hidden" name="action" value="complete_alert">
-                                            <input type="hidden" name="alert_id" value="<?php echo $alert['id']; ?>">
-                                            <button type="submit" style="padding:6px 10px; margin-right:5px; background:#28a745; color:white; border:none; border-radius:4px; cursor:pointer;">
-                                                <i class="fas fa-check"></i> Complete
-                                            </button>
-                                        </form>
                                     <?php endif; ?>
 
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this alert?');">
@@ -1038,32 +1029,152 @@ $completed_maintenance = $pdo->query("
             
  
         
-        <!-- Asset Lifecycle Summary -->
-        <div class="card card-full">
-            <div class="card-header">
-                <h2><i class="fas fa-chart-pie"></i> Asset Lifecycle Summary</h2>
-                <span class="card-badge"><?php echo $totalItems; ?> Current Status</span>
-            </div>
-            <div class="card-body">
-                <div class="asset-lifecycle-list" style="display: flex; flex-direction: column; gap: 12px;">
-                    <?php if (!empty($lifecycleData)): ?>
-                        <?php foreach ($lifecycleData as $item): ?>
-                            <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span style="font-size: 13px; color: #475569;"><?php echo htmlspecialchars($item['stage']); ?></span>
-                                    <span style="font-size: 13px; font-weight: 600; color: #1e293b;"><?php echo $item['count']; ?> assets</span>
-                                </div>
-                                <div style="height: 6px; background-color: #e2e8f0; border-radius: 999px; overflow: hidden;">
-                                    <div style="height: 100%; width: <?php echo $item['percentage']; ?>%; background: linear-gradient(90deg, #2563eb, #3b82f6); border-radius: 999px;"></div>
-                                </div>
+        <!-- Asset Lifecycle Summary - Dynamic based on condition -->
+<div class="card card-full">
+    <div class="card-header">
+        <h2><i class="fas fa-chart-pie"></i> Asset Lifecycle Summary</h2>
+        <span class="card-badge"><?php echo count($assets); ?> Total Assets</span>
+    </div>
+    <div class="card-body">
+        <?php
+        if (empty($assets)) {
+            echo '<div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
+                    <i class="fas fa-box-open" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+                    <p>No assets available to display lifecycle summary.</p>
+                    <p style="font-size: 13px; margin-top: 8px;">Add assets to see their lifecycle distribution.</p>
+                  </div>';
+        } else {
+            // First, get all asset IDs that have active maintenance alerts
+            $assetsWithMaintenance = [];
+            foreach ($alerts as $alert) {
+                // Match asset by name (assuming asset_name in alerts matches asset_name in assets)
+                $assetName = $alert['asset_name'];
+                foreach ($assets as $asset) {
+                    if ($asset['asset_name'] == $assetName) {
+                        $assetsWithMaintenance[$asset['id']] = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Calculate lifecycle stages based on actual asset condition
+            $lifecycleStages = [
+                'Operational (70-100%)' => 0,
+                'Maintenance Needed (Condition 40-69% or Has Alert)' => 0,
+                'Critical (10-39%)' => 0,
+                'End-of-Life (1-9%)' => 0,
+                'Retired (0%)' => 0
+            ];
+            
+            foreach ($assets as $asset) {
+                $condition = intval($asset['asset_condition'] ?? 0);
+                $assetId = $asset['id'];
+                
+                // Check if this asset has an active maintenance alert
+                $hasMaintenanceAlert = isset($assetsWithMaintenance[$assetId]);
+                
+                // If asset has a maintenance alert, put it in Maintenance category regardless of condition
+                if ($hasMaintenanceAlert) {
+                    $lifecycleStages['Maintenance Needed (Condition 40-69% or Has Alert)']++;
+                }
+                // Otherwise, categorize based on condition
+                else {
+                    if ($condition >= 70) {
+                        $lifecycleStages['Operational (70-100%)']++;
+                    } elseif ($condition >= 40) {
+                        $lifecycleStages['Maintenance Needed (Condition 40-69% or Has Alert)']++;
+                    } elseif ($condition >= 10) {
+                        $lifecycleStages['Critical (10-39%)']++;
+                    } elseif ($condition > 0) {
+                        $lifecycleStages['End-of-Life (1-9%)']++;
+                    } else {
+                        $lifecycleStages['Retired (0%)']++;
+                    }
+                }
+            }
+            
+            // Filter out stages with zero count
+            $activeStages = array_filter($lifecycleStages, function($count) {
+                return $count > 0;
+            });
+            
+            // Calculate percentages for visual bars
+            $totalAssets = count($assets);
+            
+            if (empty($activeStages)) {
+                echo '<p style="text-align: center; padding: 20px; color: #94a3b8;">No lifecycle data available</p>';
+            } else {
+                ?>
+                
+                <div class="asset-lifecycle-list" style="display: flex; flex-direction: column; gap: 16px;">
+                    <?php foreach ($activeStages as $stage => $count): 
+                        $percentage = round(($count / $totalAssets) * 100, 1);
+                        
+                        // Determine color based on stage
+                        $barColor = '#2563eb'; // Default blue
+                        if (strpos($stage, 'Operational') !== false) {
+                            $barColor = '#10b981'; // Green
+                        } elseif (strpos($stage, 'Maintenance') !== false) {
+                            $barColor = '#f59e0b'; // Orange
+                        } elseif (strpos($stage, 'Critical') !== false) {
+                            $barColor = '#ef4444'; // Red
+                        } elseif (strpos($stage, 'End-of-Life') !== false) {
+                            $barColor = '#6b7280'; // Gray
+                        } elseif (strpos($stage, 'Retired') !== false) {
+                            $barColor = '#1e293b'; // Dark gray
+                        }
+                    ?>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="font-size: 14px; font-weight: 500; color: #1e293b;">
+                                    <?php echo htmlspecialchars($stage); ?>
+                                </span>
+                                <span style="font-size: 14px; font-weight: 600; color: #475569;">
+                                    <?php echo $count; ?> assets (<?php echo $percentage; ?>%)
+                                </span>
                             </div>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <p style="text-align:center;">No assets available</p>
+                            <div style="height: 8px; background-color: #e2e8f0; border-radius: 999px; overflow: hidden;">
+                                <div style="height: 100%; width: <?php echo $percentage; ?>%; background: <?php echo $barColor; ?>; border-radius: 999px;"></div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                
+                <!-- Add a quick stats footer -->
+                <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; color: #64748b; font-size: 13px; flex-wrap: wrap; gap: 10px;">
+                    <?php if (isset($lifecycleStages['Operational (70-100%)']) && $lifecycleStages['Operational (70-100%)'] > 0): ?>
+                        <span><i class="fas fa-check-circle" style="color: #10b981;"></i> Operational: <?php echo $lifecycleStages['Operational (70-100%)']; ?></span>
+                    <?php endif; ?>
+                    <?php if (isset($lifecycleStages['Maintenance Needed (Condition 40-69% or Has Alert)']) && $lifecycleStages['Maintenance Needed (Condition 40-69% or Has Alert)'] > 0): ?>
+                        <span><i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i> Maintenance: <?php echo $lifecycleStages['Maintenance Needed (Condition 40-69% or Has Alert)']; ?></span>
+                    <?php endif; ?>
+                    <?php if (isset($lifecycleStages['Critical (10-39%)']) && $lifecycleStages['Critical (10-39%)'] > 0): ?>
+                        <span><i class="fas fa-times-circle" style="color: #ef4444;"></i> Critical: <?php echo $lifecycleStages['Critical (10-39%)']; ?></span>
+                    <?php endif; ?>
+                    <?php if (isset($lifecycleStages['End-of-Life (1-9%)']) && $lifecycleStages['End-of-Life (1-9%)'] > 0): ?>
+                        <span><i class="fas fa-ban" style="color: #6b7280;"></i> End-of-Life: <?php echo $lifecycleStages['End-of-Life (1-9%)']; ?></span>
+                    <?php endif; ?>
+                    <?php if (isset($lifecycleStages['Retired (0%)']) && $lifecycleStages['Retired (0%)'] > 0): ?>
+                        <span><i class="fas fa-skull-crossbones" style="color: #1e293b;"></i> Retired: <?php echo $lifecycleStages['Retired (0%)']; ?></span>
                     <?php endif; ?>
                 </div>
-            </div>
-        </div>
+                
+                <!-- Add note about maintenance alerts if any -->
+                <?php 
+                $maintenanceCount = count($alerts);
+                if ($maintenanceCount > 0): 
+                ?>
+                <div style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 8px; font-size: 13px; color: #92400e;">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Note:</strong> <?php echo $maintenanceCount; ?> asset(s) have active maintenance alerts and are included in the Maintenance category.
+                </div>
+                <?php endif; ?>
+            <?php 
+            }
+        } 
+        ?>
+    </div>
+</div>
         
         <!-- Digital Document Repository -->
         <div class="card card-full">
@@ -1225,9 +1336,7 @@ $completed_maintenance = $pdo->query("
         <h2><i class="fas fa-truck"></i> Project Logistics Tracker</h2>
         <span class="card-badge">Active shipments</span>
         <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
-        <button class="btn-sm" style="margin-left: auto;" onclick="openAddModal()">
-            <i class="fas fa-plus"></i> Add New
-        </button>
+        
         <?php endif; ?>
     </div>
     <div class="card-body">
@@ -1241,87 +1350,107 @@ $completed_maintenance = $pdo->query("
             
             if (!empty($shipments)) {
                 foreach ($shipments as $shipment) {
-                    $progress = getShipmentProgress($shipment);
-                    
-                    $status_class = 'status-good';
-                    if ($shipment['shipment_status'] == 'in_transit') {
-                        $status_class = 'status-warning';
-                    } elseif ($shipment['shipment_status'] == 'pending' || $shipment['shipment_status'] == 'delayed') {
-                        $status_class = 'status-critical';
-                    }
-                    
-                    if ($shipment['shipment_status'] == 'delivered' && !empty($shipment['actual_arrival'])) {
-                        $time_display = 'Delivered: ' . date('M d, H:i', strtotime($shipment['actual_arrival']));
-                    } elseif (!empty($shipment['estimated_arrival'])) {
-                        $time_display = 'ETA: ' . date('M d, H:i', strtotime($shipment['estimated_arrival']));
-                    } elseif (!empty($shipment['departure_time'])) {
-                        $time_display = 'Departed: ' . date('M d, H:i', strtotime($shipment['departure_time']));
-                    } else {
-                        $time_display = 'Created: ' . date('M d, H:i', strtotime($shipment['created_at']));
-                    }
-                    
-                    $location = !empty($shipment['current_location']) ? $shipment['current_location'] : 'Not started';
-                    ?>
-                    <div class="shipment-item" data-id="<?php echo $shipment['shipment_id']; ?>" 
-                         style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-                        <div style="flex: 1;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
-                                <span style="font-weight: 600; font-size: 14px; color: #1e293b;">
-                                    #<?php echo $shipment['shipment_id']; ?>
-                                </span>
-                                <?php if (!empty($shipment['driver_name'])): ?>
-                                <span style="font-size: 12px; color: #64748b;">
-                                    <i class="fas fa-user-tie" style="margin-right: 2px;"></i>
-                                    <?php echo htmlspecialchars($shipment['driver_name']); ?>
-                                </span>
-                                <?php endif; ?>
-                                <?php if (!empty($shipment['vehicle_name'])): ?>
-                                <span style="font-size: 12px; color: #64748b;">
-                                    <i class="fas fa-truck" style="margin-right: 2px;"></i>
-                                    <?php echo htmlspecialchars($shipment['vehicle_name']); ?>
-                                </span>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div style="font-size: 13px; color: #64748b; margin-top: 4px;">
-                                <i class="fas fa-map-marker-alt" style="margin-right: 4px; font-size: 11px;"></i>
-                                <?php echo htmlspecialchars($location); ?>
-                            </div>
-                            
-                            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
-                                <i class="far fa-clock" style="margin-right: 4px;"></i>
-                                <?php echo $time_display; ?>
-                            </div>
+                        $progress = getShipmentProgress($shipment);
 
-                            <?php if ($shipment['shipment_status'] != 'delivered'): ?>
-                            <div style="margin-top: 8px; width: 100%; height: 4px; background-color: #e2e8f0; border-radius: 2px;">
-                                <div style="width: <?php echo $progress; ?>%; height: 100%; background-color: <?php 
-                                    echo $progress >= 60 ? '#10b981' : ($progress >= 20 ? '#f59e0b' : '#ef4444'); 
-                                ?>; border-radius: 2px;"></div>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px;">
-                            <span class="status-badge <?php echo $status_class; ?>" 
-                                  style="padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; display: inline-block; white-space: nowrap;">
-                                <?php echo ucfirst(str_replace('_', ' ', $shipment['shipment_status'])); ?>
-                            </span>
-                            
-                            <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
-                            <div class="action-buttons" style="display: flex; gap: 4px;">
-                                <button class="btn-icon" onclick="openEditModal(<?php echo $shipment['shipment_id']; ?>)" 
-                                        style="color: #3b82f6; background: none; border: none; cursor: pointer; padding: 4px;" title="Edit">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn-icon" onclick="deleteShipment(<?php echo $shipment['shipment_id']; ?>)" 
-                                        style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 4px;" title="Delete">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
+$status_class = 'status-good';
+if ($shipment['status'] == 'in-progress') {
+    $status_class = 'status-warning';
+} elseif ($shipment['status'] == 'scheduled' || $shipment['status'] == 'pending') {
+    $status_class = 'status-info';
+} elseif ($shipment['status'] == 'delivered') {
+    $status_class = 'status-success';
+}
+
+if ($shipment['status'] == 'delivered' && !empty($shipment['end_date'])) {
+    $time_display = 'Delivered: ' . date('M d, Y', strtotime($shipment['end_date']));
+} elseif (!empty($shipment['start_time'])) {
+    $time_display = 'Scheduled: ' . date('M d, H:i', strtotime($shipment['scheduled_date'] . ' ' . $shipment['start_time']));
+} else {
+    $time_display = 'Scheduled: ' . date('M d', strtotime($shipment['scheduled_date']));
+}
+
+$location = !empty($shipment['delivery_address']) ? $shipment['delivery_address'] : 'Address not specified';
+                    ?>
+                 <div class="shipment-item" data-id="<?php echo $shipment['id']; ?>" 
+     style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 8px;">
+    <div style="flex: 1;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+            <span style="font-weight: 600; font-size: 14px; color: #1e293b;">
+                #DS-<?php echo str_pad($shipment['id'], 4, '0', STR_PAD_LEFT); ?>
+            </span>
+            <?php if (!empty($shipment['driver_name'])): ?>
+            <span style="font-size: 12px; color: #64748b;">
+                <i class="fas fa-user-tie" style="margin-right: 2px;"></i>
+                <?php echo htmlspecialchars($shipment['driver_name']); ?>
+            </span>
+            <?php else: ?>
+            <span style="font-size: 12px; color: #f59e0b;">
+                <i class="fas fa-exclamation-triangle"></i> No driver assigned
+            </span>
+            <?php endif; ?>
+            
+            <?php if (!empty($shipment['vehicle_name'])): ?>
+            <span style="font-size: 12px; color: #64748b;">
+                <i class="fas fa-truck" style="margin-right: 2px;"></i>
+                <?php echo htmlspecialchars($shipment['vehicle_name']); ?>
+            </span>
+            <?php else: ?>
+            <span style="font-size: 12px; color: #f59e0b;">
+                <i class="fas fa-exclamation-triangle"></i> No vehicle assigned
+            </span>
+            <?php endif; ?>
+        </div>
+        
+        <div style="font-size: 13px; color: #64748b; margin-top: 4px;">
+            <i class="fas fa-map-marker-alt" style="margin-right: 4px; font-size: 11px;"></i>
+            <?php echo htmlspecialchars($shipment['delivery_address'] ?? 'Address not specified'); ?>
+            <?php if (!empty($shipment['customer_name'])): ?>
+            <span style="margin-left: 8px; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11px;">
+                <?php echo htmlspecialchars($shipment['customer_name']); ?>
+            </span>
+            <?php endif; ?>
+        </div>
+        
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
+            <i class="far fa-clock" style="margin-right: 4px;"></i>
+            <?php echo $time_display; ?>
+            <?php if (!empty($shipment['shift'])): ?>
+            <span style="margin-left: 8px; text-transform: capitalize;">(<?php echo $shipment['shift']; ?> shift)</span>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($shipment['status'] != 'delivered'): ?>
+        <div style="margin-top: 8px; width: 100%; height: 4px; background-color: #e2e8f0; border-radius: 2px;">
+            <div style="width: <?php echo $progress; ?>%; height: 100%; background-color: <?php 
+                echo $progress >= 60 ? '#10b981' : ($progress >= 20 ? '#f59e0b' : '#ef4444'); 
+            ?>; border-radius: 2px;"></div>
+        </div>
+        <?php endif; ?>
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px;">
+        <span class="status-badge <?php echo $status_class; ?>" 
+              style="padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; display: inline-block; white-space: nowrap;">
+            <?php echo ucfirst(str_replace('-', ' ', $shipment['status'])); ?>
+        </span>
+        
+        <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
+        <div class="action-buttons" style="display: flex; gap: 4px;">
+            <button class="btn-icon" onclick="openViewModal(<?php echo $shipment['id']; ?>)" 
+                    style="color: #3b82f6; background: none; border: none; cursor: pointer; padding: 8px 12px; background-color: #e6f0ff; border-radius: 4px; font-size: 12px;" 
+                    title="View Details">
+                <i class="fas fa-eye"></i> View
+            </button>
+            <?php if ($_SESSION['role'] === 'admin'): ?>
+            <button class="btn-icon" onclick="deleteDispatch(<?php echo $shipment['id']; ?>)" 
+                    style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 8px; background-color: #fee2e2; border-radius: 4px;" title="Delete">
+                <i class="fas fa-trash"></i>
+            </button>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
                     <?php
                 }
             } else {
@@ -1330,9 +1459,6 @@ $completed_maintenance = $pdo->query("
                     <i class="fas fa-truck" style="font-size: 40px; color: #cbd5e1; margin-bottom: 10px;"></i>
                     <p style="color: #64748b; margin: 0;">No active shipments found</p>
                     <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
-                    <button class="btn-sm" style="margin-top: 10px;" onclick="openAddModal()">
-                        <i class="fas fa-plus"></i> Add Your First Shipment
-                    </button>
                     <?php endif; ?>
                 </div>
                 <?php
@@ -1347,183 +1473,29 @@ $completed_maintenance = $pdo->query("
         </div>
     </div>
 </div>
-
-<!-- ADD MODAL -->
-<div id="addModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
-    <div class="modal-content" style="background: white; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header" style="padding: 20px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between;">
-            <h3 style="font-size: 18px;"><i class="fas fa-plus-circle"></i> Add New Shipment</h3>
-            <button class="close-btn" onclick="closeModal('addModal')" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+<!-- View Shipment Modal -->
+<div id="viewModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
+    <div class="modal-content" style="background: white; border-radius: 16px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <div class="modal-header" style="padding: 20px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0;">
+            <h3 style="font-size: 18px;"><i class="fas fa-eye"></i> Shipment Details</h3>
+            <button class="close-btn" onclick="closeModal('viewModal')" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
         </div>
-        <form id="addForm" onsubmit="submitAddForm(event)">
-            <div class="modal-body" style="padding: 24px;">
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Customer Name *</label>
-                    <input type="text" name="customer_name" required placeholder="Enter customer name" 
-                           style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                </div>
-                
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Delivery Address *</label>
-                    <textarea name="delivery_address" required rows="2" placeholder="Enter delivery address" 
-                              style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;"></textarea>
-                </div>
-                
-                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Driver</label>
-                        <select name="driver_id" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                            <option value="">-- Select Driver --</option>
-                            <?php 
-                            // Fetch drivers
-                            $drivers = $pdo->query("SELECT id, full_name FROM users WHERE role = 'driver' AND status = 'active'")->fetchAll(PDO::FETCH_ASSOC);
-                            foreach ($drivers as $driver): ?>
-                                <option value="<?php echo $driver['id']; ?>"><?php echo htmlspecialchars($driver['full_name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Vehicle</label>
-                        <select name="vehicle_id" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                            <option value="">-- Select Vehicle --</option>
-                            <?php 
-                            $vehicles = $pdo->query("SELECT id, asset_name FROM assets WHERE asset_type = 'vehicle'")->fetchAll(PDO::FETCH_ASSOC);
-                            foreach ($vehicles as $vehicle): ?>
-                                <option value="<?php echo $vehicle['id']; ?>"><?php echo htmlspecialchars($vehicle['asset_name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Status</label>
-                        <select name="shipment_status" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                            <option value="pending">Pending</option>
-                            <option value="in_transit">In Transit</option>
-                            <option value="delayed">Delayed</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Current Location</label>
-                        <input type="text" name="current_location" placeholder="Current location" 
-                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                    </div>
-                </div>
-                
-                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Departure Time</label>
-                        <input type="datetime-local" name="departure_time" 
-                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Estimated Arrival</label>
-                        <input type="datetime-local" name="estimated_arrival" 
-                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                    </div>
-                </div>
-            </div>
-            
-            <div class="modal-footer" style="padding: 20px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; justify-content: flex-end;">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('addModal')" 
-                        style="padding: 10px 20px; background: #e2e8f0; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
-                <button type="submit" class="btn btn-primary" 
-                        style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer;">Create Shipment</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- EDIT MODAL -->
-<div id="editModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000;">
-    <div class="modal-content" style="background: white; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header" style="padding: 20px 24px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; display: flex; align-items: center; justify-content: space-between;">
-            <h3 style="font-size: 18px;"><i class="fas fa-edit"></i> Edit Shipment</h3>
-            <button class="close-btn" onclick="closeModal('editModal')" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
-        </div>
-        <form id="editForm" onsubmit="submitEditForm(event)">
-            <input type="hidden" name="shipment_id" id="edit_shipment_id">
-            <input type="hidden" name="old_status" id="old_status">
-            
-            <div class="modal-body" style="padding: 24px;">
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Status</label>
-                    <select name="shipment_status" id="edit_status" onchange="toggleArrivalField()" 
-                            style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                        <option value="pending">Pending</option>
-                        <option value="in_transit">In Transit</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="delayed">Delayed</option>
-                    </select>
-                </div>
-                
-                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Driver</label>
-                        <select name="driver_id" id="edit_driver_id" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                            <option value="">-- Select Driver --</option>
-                            <?php foreach ($drivers as $driver): ?>
-                                <option value="<?php echo $driver['id']; ?>"><?php echo htmlspecialchars($driver['full_name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Vehicle</label>
-                        <select name="vehicle_id" id="edit_vehicle_id" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                            <option value="">-- Select Vehicle --</option>
-                            <?php foreach ($vehicles as $vehicle): ?>
-                                <option value="<?php echo $vehicle['id']; ?>"><?php echo htmlspecialchars($vehicle['asset_name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Current Location</label>
-                    <input type="text" name="current_location" id="edit_location" placeholder="Current location" 
-                           style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                </div>
-                
-                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Departure Time</label>
-                        <input type="datetime-local" name="departure_time" id="edit_departure" 
-                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Estimated Arrival</label>
-                        <input type="datetime-local" name="estimated_arrival" id="edit_estimated" 
-                               style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                    </div>
-                </div>
-                
-                <div class="form-group" id="actual_arrival_group" style="display: none; margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px;">Actual Arrival Time</label>
-                    <input type="datetime-local" name="actual_arrival" id="edit_actual" 
-                           style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
-                    <small style="color: #666; display: block; margin-top: 5px;">Leave empty to use current time</small>
-                </div>
-            </div>
-            
-            <div class="modal-footer" style="padding: 20px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; justify-content: flex-end;">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')" 
-                        style="padding: 10px 20px; background: #e2e8f0; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
-                <button type="submit" class="btn btn-primary" 
-                        style="padding: 10px 20px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; border-radius: 8px; cursor: pointer;">Update Shipment</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-
-
         
+        <div class="modal-body" style="padding: 24px;">
+            <div id="shipmentDetails" style="display: flex; flex-direction: column; gap: 20px;">
+                <!-- Details will be populated by JavaScript -->
+                <div style="text-align: center; padding: 40px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #667eea;"></i>
+                    <p style="margin-top: 10px; color: #666;">Loading shipment details...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal-footer" style="padding: 20px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; justify-content: flex-end;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('viewModal')" style="padding: 8px 16px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+        </div>
+    </div>
+</div>
         <!-- Employee Activity Logs (admin only) -->
         <?php if ($user_role === 'admin'): ?>
         <div class="card card-full">
@@ -1724,7 +1696,328 @@ function deleteShipment(shipmentId) {
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
+// Function to open view modal
+// Function to open view modal
+// Function to open view modal
+function openViewModal(dispatchId) {
+    const modal = document.getElementById('viewModal');
+    const detailsContainer = document.getElementById('shipmentDetails');
+    
+    // Show loading state
+    detailsContainer.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #667eea;"></i>
+            <p style="margin-top: 10px; color: #666;">Loading dispatch details...</p>
+        </div>
+    `;
+    
+    // Show modal
+    modal.style.display = 'flex';
+    
+    // Log the URL we're fetching
+    const url = 'api/get_dispatch_schedule.php?id=' + dispatchId;
+    console.log('Fetching URL:', url);
+    
+    // Fetch dispatch data
+    fetch(url)
+    .then(response => {
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers.get('content-type'));
+        return response.text(); // Get as text first to debug
+    })
+    .then(text => {
+        console.log('Raw response text:', text.substring(0, 500)); // Log first 500 chars
+        
+        try {
+            const data = JSON.parse(text);
+            if (data.success) {
+                displayDispatchDetails(data.data);
+            } else {
+                detailsContainer.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ef4444;">
+                        <i class="fas fa-exclamation-circle" style="font-size: 24px;"></i>
+                        <p style="margin-top: 10px;">Failed to load dispatch details: ${data.error || 'Unknown error'}</p>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            console.error('JSON parse error:', e);
+            detailsContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #ef4444;">
+                    <i class="fas fa-exclamation-circle" style="font-size: 24px;"></i>
+                    <p style="margin-top: 10px;">Error parsing server response</p>
+                    <p style="font-size: 12px; margin-top: 10px; background: #fee; padding: 10px; border-radius: 4px; text-align: left; white-space: pre-wrap; max-height: 200px; overflow: auto;">${this.escapeHtml(text)}</p>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Fetch error:', error);
+        detailsContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #ef4444;">
+                <i class="fas fa-exclamation-circle" style="font-size: 24px;"></i>
+                <p style="margin-top: 10px;">An error occurred while loading details</p>
+                <p style="font-size: 12px; margin-top: 10px;">${error.message}</p>
+            </div>
+        `;
+    });
+}
 
+// Helper function to escape HTML for display
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Function to display dispatch details in the modal
+function displayDispatchDetails(dispatch) {
+    const detailsContainer = document.getElementById('shipmentDetails');
+    
+    // Format dates
+    const createdDate = dispatch.created_at ? new Date(dispatch.created_at).toLocaleString() : 'N/A';
+    const scheduledDate = dispatch.scheduled_date ? new Date(dispatch.scheduled_date).toLocaleDateString() : 'Not scheduled';
+    
+    // Format time if available
+    let scheduleDisplay = scheduledDate;
+    if (dispatch.start_time) {
+        scheduleDisplay += ' at ' + dispatch.start_time;
+        if (dispatch.end_time) {
+            scheduleDisplay += ' - ' + dispatch.end_time;
+        }
+    }
+    
+    // Get status class
+    let statusClass = 'status-info';
+    if (dispatch.status === 'in_progress') {
+        statusClass = 'status-warning';
+    } else if (dispatch.status === 'completed') {
+        statusClass = 'status-success';
+    } else if (dispatch.status === 'scheduled') {
+        statusClass = 'status-info';
+    } else if (dispatch.status === 'cancelled') {
+        statusClass = 'status-critical';
+    }
+    
+    // Calculate progress
+    let progress = 0;
+    if (dispatch.status === 'completed') progress = 100;
+    else if (dispatch.status === 'in_progress') progress = 60;
+    else if (dispatch.status === 'scheduled') progress = 20;
+    
+    // Format status text
+    let statusText = dispatch.status || 'Unknown';
+    statusText = statusText.replace('_', ' ');
+    
+    // Build HTML
+    detailsContainer.innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <!-- Dispatch ID -->
+            <div style="grid-column: span 2; background: #f8fafc; padding: 16px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 14px; color: #64748b;">Dispatch #</div>
+                <div style="font-size: 24px; font-weight: 600; color: #1e293b;">DS-${String(dispatch.id).padStart(4, '0')}</div>
+                ${dispatch.reservation_id ? `<div style="font-size: 12px; color: #666; margin-top: 4px;">Reservation ID: #${dispatch.reservation_id}</div>` : ''}
+            </div>
+            
+            <!-- Status -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Status</div>
+                <div><span class="status-badge ${statusClass}" style="padding: 4px 12px; border-radius: 20px; font-size: 13px; text-transform: capitalize;">${statusText}</span></div>
+            </div>
+            
+            <!-- Progress -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Progress</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="flex: 1; height: 8px; background: #e2e8f0; border-radius: 4px;">
+                        <div style="width: ${progress}%; height: 100%; background: ${progress >= 60 ? '#10b981' : (progress >= 20 ? '#f59e0b' : '#ef4444')}; border-radius: 4px;"></div>
+                    </div>
+                    <span style="font-size: 13px; font-weight: 600;">${progress}%</span>
+                </div>
+            </div>
+            
+            <!-- Driver -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Driver</div>
+                <div style="font-weight: 500;">
+                    ${dispatch.driver_name ? 
+                      `<i class="fas fa-user-tie" style="color: #3b82f6; margin-right: 6px;"></i>${dispatch.driver_name}` : 
+                      '<span style="color: #f59e0b;">Not assigned</span>'}
+                </div>
+                ${dispatch.driver_id ? `<div style="font-size: 11px; color: #666;">Driver ID: ${dispatch.driver_id}</div>` : ''}
+            </div>
+            
+            <!-- Vehicle -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Vehicle</div>
+                <div style="font-weight: 500;">
+                    ${dispatch.vehicle_name ? 
+                      `<i class="fas fa-truck" style="color: #10b981; margin-right: 6px;"></i>${dispatch.vehicle_name}` : 
+                      '<span style="color: #f59e0b;">Not assigned</span>'}
+                </div>
+                ${dispatch.vehicle_condition ? `<div style="font-size: 11px; color: #666;">Condition: ${dispatch.vehicle_condition}%</div>` : ''}
+                ${dispatch.vehicle_id ? `<div style="font-size: 11px; color: #666;">Vehicle ID: ${dispatch.vehicle_id}</div>` : ''}
+            </div>
+            
+            <!-- Customer Info -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Customer</div>
+                <div style="font-weight: 500;">${dispatch.customer_name || 'Not specified'}</div>
+                ${dispatch.department ? `<div style="font-size: 11px; color: #666;">${dispatch.department}</div>` : ''}
+            </div>
+            
+            <!-- Purpose -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Purpose</div>
+                <div>${dispatch.purpose || 'Not specified'}</div>
+            </div>
+            
+            <!-- Delivery Address -->
+            <div style="grid-column: span 2; background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Delivery Address</div>
+                <div><i class="fas fa-map-marker-alt" style="color: #ef4444; margin-right: 6px;"></i>${dispatch.delivery_address || 'Not specified'}</div>
+            </div>
+            
+            <!-- Schedule -->
+            <div style="grid-column: span 2; background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Schedule</div>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div><i class="far fa-calendar" style="margin-right: 4px;"></i>${scheduleDisplay}</div>
+                    ${dispatch.shift ? `<div><i class="fas fa-clock" style="margin-right: 4px;"></i>Shift: ${dispatch.shift}</div>` : ''}
+                </div>
+            </div>
+            
+            <!-- Dates -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Created</div>
+                <div><i class="far fa-calendar-alt" style="margin-right: 4px;"></i>${createdDate}</div>
+            </div>
+            
+            ${dispatch.start_date ? `
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Start Date</div>
+                <div><i class="fas fa-play" style="margin-right: 4px;"></i>${new Date(dispatch.start_date).toLocaleDateString()}</div>
+            </div>
+            ` : ''}
+            
+            ${dispatch.end_date ? `
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">End Date</div>
+                <div><i class="fas fa-stop" style="margin-right: 4px;"></i>${new Date(dispatch.end_date).toLocaleDateString()}</div>
+            </div>
+            ` : ''}
+            
+            <!-- Notes -->
+            ${dispatch.notes ? `
+            <div style="grid-column: span 2; background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Notes</div>
+                <div style="color: #475569;">${dispatch.notes}</div>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Function to display shipment details in the modal
+function displayShipmentDetails(shipment) {
+    const detailsContainer = document.getElementById('shipmentDetails');
+    
+    // Format dates
+    const createdDate = shipment.created_at ? new Date(shipment.created_at).toLocaleString() : 'N/A';
+    const departureDate = shipment.departure_time ? new Date(shipment.departure_time).toLocaleString() : 'Not departed';
+    const estimatedDate = shipment.estimated_arrival ? new Date(shipment.estimated_arrival).toLocaleString() : 'Not set';
+    const actualDate = shipment.actual_arrival ? new Date(shipment.actual_arrival).toLocaleString() : 'Not arrived';
+    
+    // Get status class
+    const statusClass = shipment.shipment_status === 'delivered' ? 'status-good' : 
+                       (shipment.shipment_status === 'in_transit' ? 'status-warning' : 'status-critical');
+    
+    // Calculate progress
+    let progress = 0;
+    if (shipment.shipment_status === 'delivered') progress = 100;
+    else if (shipment.shipment_status === 'in_transit') progress = 60;
+    else if (shipment.shipment_status === 'pending') progress = 20;
+    
+    // Build HTML
+    detailsContainer.innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <!-- Shipment ID -->
+            <div style="grid-column: span 2; background: #f8fafc; padding: 16px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 14px; color: #64748b;">Shipment #</div>
+                <div style="font-size: 24px; font-weight: 600; color: #1e293b;">${shipment.shipment_id}</div>
+            </div>
+            
+            <!-- Status -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Status</div>
+                <div><span class="status-badge ${statusClass}" style="padding: 4px 12px; border-radius: 20px; font-size: 13px;">${shipment.shipment_status.replace('_', ' ')}</span></div>
+            </div>
+            
+            <!-- Progress -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Progress</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="flex: 1; height: 8px; background: #e2e8f0; border-radius: 4px;">
+                        <div style="width: ${progress}%; height: 100%; background: ${progress >= 60 ? '#10b981' : (progress >= 20 ? '#f59e0b' : '#ef4444')}; border-radius: 4px;"></div>
+                    </div>
+                    <span style="font-size: 13px; font-weight: 600;">${progress}%</span>
+                </div>
+            </div>
+            
+            <!-- Driver -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Driver</div>
+                <div style="font-weight: 500;">${shipment.driver_name || 'Not assigned'}</div>
+            </div>
+            
+            <!-- Vehicle -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Vehicle</div>
+                <div style="font-weight: 500;">${shipment.vehicle_name || 'Not assigned'}</div>
+                ${shipment.vehicle_condition ? `<div style="font-size: 11px; color: #666;">Condition: ${shipment.vehicle_condition}%</div>` : ''}
+            </div>
+            
+            <!-- Current Location -->
+            <div style="grid-column: span 2; background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Current Location</div>
+                <div style="font-weight: 500;"><i class="fas fa-map-marker-alt" style="color: #ef4444; margin-right: 6px;"></i>${shipment.current_location || 'Not started'}</div>
+            </div>
+            
+            <!-- Dates -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Created</div>
+                <div><i class="far fa-calendar-alt" style="margin-right: 4px;"></i>${createdDate}</div>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Departure</div>
+                <div><i class="fas fa-plane-departure" style="margin-right: 4px;"></i>${departureDate}</div>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Estimated Arrival</div>
+                <div><i class="far fa-clock" style="margin-right: 4px;"></i>${estimatedDate}</div>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Actual Arrival</div>
+                <div><i class="fas fa-flag-checkered" style="margin-right: 4px;"></i>${actualDate}</div>
+            </div>
+            
+            <!-- Additional Info -->
+            ${shipment.notes ? `
+            <div style="grid-column: span 2; background: #f8fafc; padding: 16px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Notes</div>
+                <div style="color: #475569;">${shipment.notes}</div>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
 function showAlert(type, message) {
     const alertContainer = document.getElementById('alertContainer');
     const alertClass = type === 'success' ? 'alert-success' : 'alert-error';

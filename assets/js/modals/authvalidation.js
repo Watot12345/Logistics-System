@@ -105,7 +105,84 @@
         return false;
     }
 }
-        
+        // Add to your authvalidation.js file
+
+// Handle login form submission with loading state
+document.getElementById('loginFormElement')?.addEventListener('submit', function(e) {
+    const submitBtn = document.getElementById('loginSubmitBtn');
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Verifying...';
+    submitBtn.disabled = true;
+});
+
+// Handle verification form submission
+document.getElementById('verificationFormElement')?.addEventListener('submit', function(e) {
+    const submitBtn = document.getElementById('verifyBtn');
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Verifying code...';
+    submitBtn.disabled = true;
+});
+
+// Auto-focus and auto-submit when 6 digits entered
+document.querySelector('input[name="verification_code"]')?.addEventListener('input', function(e) {
+    if (this.value.length === 6) {
+        document.getElementById('verifyBtn').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Verifying...';
+        document.getElementById('verifyBtn').disabled = true;
+        document.getElementById('verificationFormElement').submit();
+    }
+});
+
+// Resend code function
+function resendCode(userId) {
+    const resendBtn = document.getElementById('resendBtn');
+    resendBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Sending...';
+    resendBtn.disabled = true;
+    
+    fetch('../includes/resend_verification.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_id: userId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('New verification code sent to your email!');
+            resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
+            resendBtn.disabled = false;
+            
+            // Start countdown
+            startResendCountdown();
+        } else {
+            alert('Failed to send code. Please try again.');
+            resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
+            resendBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error sending code');
+        resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
+        resendBtn.disabled = false;
+    });
+}
+
+// Resend countdown
+function startResendCountdown() {
+    let seconds = 60;
+    const resendBtn = document.getElementById('resendBtn');
+    
+    const timer = setInterval(() => {
+        seconds--;
+        if (seconds > 0) {
+            resendBtn.innerHTML = `<i class="fas fa-clock mr-1"></i> Resend in ${seconds}s`;
+            resendBtn.disabled = true;
+        } else {
+            clearInterval(timer);
+            resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
+            resendBtn.disabled = false;
+        }
+    }, 1000);
+}
         // Check password strength
         document.getElementById('signupPassword')?.addEventListener('input', function() {
             const password = this.value;
