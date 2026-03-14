@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Mar 10, 2026 at 11:45 AM
+-- Generation Time: Mar 11, 2026 at 04:43 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -110,8 +110,8 @@ CREATE TABLE `dispatch_schedule` (
 --
 
 INSERT INTO `dispatch_schedule` (`id`, `reservation_id`, `vehicle_id`, `driver_id`, `scheduled_date`, `shift`, `status`, `notes`, `created_at`) VALUES
-(31, 20, 26, 5, '2026-03-10', 'night', 'completed', '\n[2026-03-10 17:54:25] Status changed to in-progress - Location: START at START\n[2026-03-10 17:55:18] Location update: AHSFASF\n[2026-03-10 17:55:47] Status changed to delivered - Location: ASFASF at ASFASF\n[2026-03-10 17:56:05] Status changed to awaiting_verification - Location: DISPATCHCCNETER at DISPATCHCCNETER\n2026-03-10 18:00:20: Return verified', '2026-03-10 09:52:48'),
-(32, 21, 25, 5, '2026-03-10', 'night', 'completed', '\n[2026-03-10 18:17:50] Status changed to in-progress - Location: DISPATCH CENTER at DISPATCH CENTER\n[2026-03-10 18:18:44] Location update: PAMPANGA\n[2026-03-10 18:19:15] Status changed to delivered - Location: Bulakan at Bulakan\n[2026-03-10 18:19:37] Status changed to awaiting_verification - Location: Dispatch center at Dispatch center\n2026-03-10 18:19:58: Return verified', '2026-03-10 10:16:20');
+(37, 23, 25, 5, '2026-03-11', 'morning', 'completed', '\n[2026-03-11 21:30:20] Status changed to in-progress - Location: Dispatch center\n[2026-03-11 21:30:41] Location update: [2026-03-11 13:30:41] Location update: nlex\n[2026-03-11 21:43:18] Status changed to delivered - Location: Bulakan\n[2026-03-11 21:43:32] Status changed to awaiting_verification - Location: Dispatch center\n2026-03-11 21:43:51: Return verified', '2026-03-11 13:29:48'),
+(38, 24, 25, NULL, '2026-03-11', 'night', 'scheduled', NULL, '2026-03-11 15:10:45');
 
 -- --------------------------------------------------------
 
@@ -132,13 +132,6 @@ CREATE TABLE `documents` (
   `expiry_date` date DEFAULT NULL,
   `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `documents`
---
-
-INSERT INTO `documents` (`id`, `title`, `document_type`, `file_name`, `file_path`, `file_size`, `description`, `asset_id`, `uploaded_by`, `expiry_date`, `uploaded_at`) VALUES
-(9, 'Vehicle registration', 'registration', 'Untitled document(3).docx', 'uploads/documents/1772857349_69aba80509b1e.docx', 10034, 'waffwa', 26, 2, '2026-03-08', '2026-03-07 04:22:29');
 
 -- --------------------------------------------------------
 
@@ -207,6 +200,44 @@ INSERT INTO `maintenance_alerts` (`id`, `asset_name`, `issue`, `issue_type`, `pr
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `password_resets`
+--
+
+CREATE TABLE `password_resets` (
+  `id` int(11) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `token` varchar(64) NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `used` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `password_resets`
+--
+
+INSERT INTO `password_resets` (`id`, `email`, `token`, `expires_at`, `used`, `created_at`) VALUES
+(11, 'asierra389@gmail.com', 'cdc6860a7406a014212b024d2b000f03ece5037ab8f82163fd50d0cbde542061', '2026-03-11 13:04:27', 1, '2026-03-11 11:04:27');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `po_status_history`
+--
+
+CREATE TABLE `po_status_history` (
+  `id` int(11) NOT NULL,
+  `po_id` int(11) NOT NULL,
+  `old_status` enum('draft','pending','approved','rejected','completed','cancelled') NOT NULL,
+  `new_status` enum('draft','pending','approved','rejected','completed','cancelled') NOT NULL,
+  `changed_by` int(11) NOT NULL,
+  `changed_at` datetime NOT NULL,
+  `notes` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `price_history`
 --
 
@@ -251,9 +282,14 @@ CREATE TABLE `purchase_orders` (
 
 INSERT INTO `purchase_orders` (`id`, `po_number`, `supplier_id`, `order_date`, `expected_delivery`, `actual_delivery`, `status`, `priority`, `subtotal`, `tax_amount`, `shipping_cost`, `total_amount`, `notes`, `approved_by`, `approved_at`, `created_by`, `created_at`, `updated_at`) VALUES
 (1, 'PO-2026-03-0001', 1, '2026-03-05', '2026-03-13', NULL, 'approved', 'high', 100.00, 10.00, 0.00, 110.00, 'wegweg\nwegwege', 2, '2026-03-07 11:31:13', 2, '2026-03-05 10:07:09', '2026-03-07 03:31:13'),
-(2, 'PO-2026-03-0002', 1, '2026-03-07', '2026-03-14', NULL, 'pending', 'low', 100.00, 10.00, 0.00, 110.00, 'b.jk/l\nilnkj', NULL, NULL, 2, '2026-03-07 02:15:58', '2026-03-07 02:15:58'),
+(2, 'PO-2026-03-0002', 1, '2026-03-07', '2026-03-14', NULL, 'approved', 'low', 100.00, 10.00, 0.00, 110.00, 'b.jk/l\nilnkj\n[2026-03-11 16:21:43] Status changed from \'pending\' to \'approved\' by Joshua sierra on 2026-03-11 09:21:43', 1, '2026-03-11 16:21:43', 2, '2026-03-07 02:15:58', '2026-03-11 08:21:43'),
 (3, 'PO-2026-03-0003', 6, '2026-03-09', '2026-03-13', NULL, 'approved', 'high', 6700.00, 670.00, 0.00, 7370.00, 'dgbsdg\ngsdgsdg', 2, '2026-03-07 11:31:35', 2, '2026-03-07 02:37:41', '2026-03-07 03:31:35'),
-(4, 'PO-2026-03-0004', 6, '2026-03-07', '2026-03-14', NULL, 'rejected', 'normal', 100.00, 10.00, 0.00, 110.00, 'sgsdg\nsdgsdg', NULL, NULL, 2, '2026-03-07 02:52:32', '2026-03-07 03:31:56');
+(4, 'PO-2026-03-0004', 6, '2026-03-07', '2026-03-14', NULL, 'rejected', 'normal', 100.00, 10.00, 0.00, 110.00, 'sgsdg\nsdgsdg', NULL, NULL, 2, '2026-03-07 02:52:32', '2026-03-07 03:31:56'),
+(5, 'PO-2026-03-0005', 1, '2026-03-12', '2026-03-12', NULL, 'rejected', 'low', 400.00, 40.00, 0.00, 440.00, 'sfasfas\nfsffsd\n[2026-03-11 16:22:07] Status changed from \'pending\' to \'rejected\' by Joshua sierra on 2026-03-11 09:22:07', NULL, NULL, 1, '2026-03-11 08:13:50', '2026-03-11 08:22:07'),
+(6, 'PO-2026-03-0006', 10, '2026-03-11', '2026-03-13', NULL, 'approved', 'normal', 100.00, 10.00, 0.00, 110.00, 'sdffaf\n23523\n[2026-03-11 21:49:32] Status changed from \'pending\' to \'approved\' by Joshua arncel sierra on 2026-03-11 14:49:32', 2, '2026-03-11 21:49:32', 2, '2026-03-11 13:46:11', '2026-03-11 13:49:32'),
+(7, 'PO-2026-03-0007', 5, '2026-03-11', '2026-03-12', NULL, 'rejected', 'urgent', 100.00, 10.00, 0.00, 110.00, 'wfwef\nweffewf\n[2026-03-11 21:56:54] Status changed from \'pending\' to \'rejected\' by Joshua arncel sierra on 2026-03-11 14:56:54', NULL, NULL, 2, '2026-03-11 13:54:22', '2026-03-11 13:56:54'),
+(8, 'PO-2026-03-0008', 1, '2026-03-11', '2026-03-12', NULL, 'approved', 'high', 100.00, 10.00, 0.00, 110.00, 'sadfddsf\nawfas\n[2026-03-11 22:03:35] Status changed from \'pending\' to \'approved\' by Joshua arncel sierra on 2026-03-11 15:03:35', 2, '2026-03-11 22:03:35', 2, '2026-03-11 14:01:40', '2026-03-11 14:03:35'),
+(9, 'PO-2026-03-0009', 2, '2026-03-11', '2026-03-12', NULL, 'pending', 'high', 200.00, 20.00, 0.00, 220.00, 'afas', NULL, NULL, 2, '2026-03-11 14:07:02', '2026-03-11 14:07:02');
 
 -- --------------------------------------------------------
 
@@ -281,7 +317,13 @@ INSERT INTO `purchase_order_items` (`id`, `po_id`, `item_id`, `quantity`, `unit_
 (1, 1, 3, 1, 100.00, 100.00, 0, 'pending', NULL),
 (2, 2, 5, 1, 100.00, 100.00, 0, 'pending', NULL),
 (3, 3, 4, 67, 100.00, 6700.00, 0, 'pending', NULL),
-(4, 4, 5, 1, 100.00, 100.00, 0, 'pending', NULL);
+(4, 4, 5, 1, 100.00, 100.00, 0, 'pending', NULL),
+(5, 5, 6, 1, 400.00, 400.00, 0, 'pending', NULL),
+(6, 6, 6, 1, 100.00, 100.00, 0, 'pending', NULL),
+(7, 7, 5, 1, 100.00, 100.00, 0, 'pending', NULL),
+(8, 8, 6, 1, 100.00, 100.00, 0, 'pending', NULL),
+(9, 9, 6, 1, 100.00, 100.00, 0, 'pending', NULL),
+(10, 9, 6, 1, 100.00, 100.00, 0, 'pending', NULL);
 
 -- --------------------------------------------------------
 
@@ -326,8 +368,7 @@ CREATE TABLE `shipments` (
 --
 
 INSERT INTO `shipments` (`shipment_id`, `customer_name`, `delivery_address`, `order_id`, `vehicle_id`, `driver_id`, `shipment_status`, `departure_time`, `estimated_arrival`, `actual_arrival`, `current_location`, `created_at`) VALUES
-(16, 'ASFASF', 'ASDFS', 20, 26, NULL, 'delivered', '2026-03-10 17:52:00', '2026-03-11 19:52:00', '2026-03-10 18:00:20', 'DISPATCHCCNETER', '2026-03-10 09:52:48'),
-(17, 'avr', 'bulakan', 21, 25, NULL, 'delivered', '2026-03-10 18:15:00', '2026-03-11 20:15:00', '2026-03-10 18:19:58', 'Dispatch center', '2026-03-10 10:16:20');
+(20, 'fasdf', 'safsf', 24, 25, NULL, 'pending', '2026-03-11 23:10:00', '2026-03-13 01:10:00', NULL, NULL, '2026-03-11 15:10:45');
 
 -- --------------------------------------------------------
 
@@ -353,9 +394,7 @@ CREATE TABLE `shipment_delays` (
 --
 
 INSERT INTO `shipment_delays` (`id`, `shipment_id`, `driver_id`, `route_name`, `delay_reason`, `delay_minutes`, `delay_duration`, `delay_type`, `reported_at`, `delay_unit`) VALUES
-(9, '30', 5, 'TAGUIG PATEROS', 'TRAFFIC', NULL, '2 HOURS', 'traffic', '2026-03-10 09:35:53', 'minutes'),
-(10, '31', 5, 'ASDFS', 'TRAFFIC', NULL, '2 HOURS', 'traffic', '2026-03-10 09:55:37', 'minutes'),
-(11, '32', 5, 'bulakan', 'trafffic ', NULL, '2 hours', 'other', '2026-03-10 10:18:25', 'minutes');
+(12, '34', 5, 'BULAKAN', 'traffic', NULL, '5 hours', 'traffic', '2026-03-11 12:47:25', 'minutes');
 
 -- --------------------------------------------------------
 
@@ -464,7 +503,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `employee_id`, `username`, `email`, `password`, `full_name`, `phone`, `avatar_url`, `role`, `status`, `department`, `join_date`, `last_login`, `created_at`, `updated_at`) VALUES
-(1, 'EMP5675', 'asierra389@gmail.com', 'asierra389@gmail.com', '$2y$10$zJBe22LYnUvaLoapWU1hi.1Slr.BWaFbjBBzxKL1vP3L/KxKyj3zC', 'Joshua sierra', NULL, NULL, 'employee', 'active', NULL, NULL, NULL, '2026-03-01 04:34:35', '2026-03-01 04:34:35'),
+(1, 'EMP5675', 'asierra389@gmail.com', 'asierra389@gmail.com', '$2y$10$v57d0CBXI3srRILj1VvRWOXup6YN/WrysTfqaR/GfS7s6w8QpWcUG', 'Joshua sierra', NULL, NULL, 'employee', 'active', NULL, NULL, NULL, '2026-03-01 04:34:35', '2026-03-11 11:11:19'),
 (2, 'EMP4112', 'joshua', 'asierr389@gmail.com', '$2y$10$KBnZdY6N5bExhyI.Y3JS1eFPRsIhp5TyW6FPy.cIy1XpsCcKNfTnW', 'Joshua arncel sierra', NULL, NULL, 'admin', 'active', NULL, NULL, NULL, '2026-03-01 04:38:42', '2026-03-01 04:39:48'),
 (3, 'EMP0332', 'jon jon', 'jonjon@gmail.com', '$2y$10$m4vGr.M1zM/n/Wx3Ql0PEuU6bKpZGIGSyWyopxODFa4EKDNX.ngba', 'jon jon delecruz', NULL, NULL, 'dispatcher', 'active', NULL, NULL, NULL, '2026-03-07 05:04:33', '2026-03-07 05:05:44'),
 (4, 'EMP1455', 'jay jay', 'jayjay@gmail.com', '$2y$10$CjuhB.fHsZhIPwDKjYla0u2cI1XyO4FCAKsOW02j5D6lsfy0YalMK', 'jay jay dela santos', NULL, NULL, 'fleet_manager', 'active', NULL, NULL, NULL, '2026-03-07 05:05:21', '2026-03-07 05:05:54'),
@@ -498,7 +537,8 @@ INSERT INTO `user_activity_logs` (`id`, `user_id`, `document_id`, `action_type`,
 (10, 2, 9, 'upload', '2026-03-07 12:22:29'),
 (11, 2, 9, 'download', '2026-03-07 12:22:45'),
 (12, 2, 10, 'upload', '2026-03-07 12:22:48'),
-(13, 2, 9, 'download', '2026-03-07 12:23:11');
+(13, 2, 9, 'download', '2026-03-07 12:23:11'),
+(14, 3, 9, 'download', '2026-03-11 16:11:40');
 
 -- --------------------------------------------------------
 
@@ -546,8 +586,8 @@ CREATE TABLE `vehicle_reservations` (
 --
 
 INSERT INTO `vehicle_reservations` (`id`, `vehicle_id`, `requester_id`, `customer_name`, `delivery_address`, `department`, `purpose`, `start_date`, `end_date`, `start_time`, `end_time`, `status`, `notes`, `created_at`, `updated_at`) VALUES
-(20, 26, 3, 'ASFASF', 'ASDFS', 'SDFS', 'FDFDSF', '2026-03-10', '2026-03-11', '17:52:00', '19:52:00', 'completed', NULL, '2026-03-10 09:52:46', '2026-03-10 10:00:20'),
-(21, 25, 3, 'avr', 'bulakan', 'fsfds', 'utensils', '2026-03-10', '2026-03-11', '18:15:00', '20:15:00', 'completed', NULL, '2026-03-10 10:16:12', '2026-03-10 10:19:58');
+(23, 25, 3, 'ABC ORG.', 'BULAKAN', 'Logistics', 'TABLES', '2026-03-11', '2026-03-12', '20:04:00', '22:04:00', 'completed', NULL, '2026-03-11 12:05:33', '2026-03-11 13:43:51'),
+(24, 25, 2, 'fasdf', 'safsf', 'sfaf', 'sdfsf', '2026-03-11', '2026-03-13', '23:10:00', '01:10:00', 'approved', NULL, '2026-03-11 15:10:28', '2026-03-11 15:10:45');
 
 -- --------------------------------------------------------
 
@@ -614,6 +654,23 @@ ALTER TABLE `maintenance_alerts`
   ADD KEY `idx_assigned_mechanic` (`assigned_mechanic`),
   ADD KEY `idx_status` (`status`),
   ADD KEY `idx_issue_type` (`issue_type`);
+
+--
+-- Indexes for table `password_resets`
+--
+ALTER TABLE `password_resets`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `email` (`email`),
+  ADD KEY `token` (`token`);
+
+--
+-- Indexes for table `po_status_history`
+--
+ALTER TABLE `po_status_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_po_id` (`po_id`),
+  ADD KEY `idx_changed_at` (`changed_at`),
+  ADD KEY `po_status_history_ibfk_2` (`changed_by`);
 
 --
 -- Indexes for table `price_history`
@@ -746,7 +803,7 @@ ALTER TABLE `categories`
 -- AUTO_INCREMENT for table `dispatch_schedule`
 --
 ALTER TABLE `dispatch_schedule`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=39;
 
 --
 -- AUTO_INCREMENT for table `documents`
@@ -767,6 +824,18 @@ ALTER TABLE `maintenance_alerts`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
+-- AUTO_INCREMENT for table `password_resets`
+--
+ALTER TABLE `password_resets`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+
+--
+-- AUTO_INCREMENT for table `po_status_history`
+--
+ALTER TABLE `po_status_history`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `price_history`
 --
 ALTER TABLE `price_history`
@@ -776,13 +845,13 @@ ALTER TABLE `price_history`
 -- AUTO_INCREMENT for table `purchase_orders`
 --
 ALTER TABLE `purchase_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `purchase_order_items`
 --
 ALTER TABLE `purchase_order_items`
-  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `receiving_history`
@@ -794,13 +863,13 @@ ALTER TABLE `receiving_history`
 -- AUTO_INCREMENT for table `shipments`
 --
 ALTER TABLE `shipments`
-  MODIFY `shipment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `shipment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `shipment_delays`
 --
 ALTER TABLE `shipment_delays`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `shipment_tracking`
@@ -830,7 +899,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `user_activity_logs`
 --
 ALTER TABLE `user_activity_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `user_sessions`
@@ -842,7 +911,7 @@ ALTER TABLE `user_sessions`
 -- AUTO_INCREMENT for table `vehicle_reservations`
 --
 ALTER TABLE `vehicle_reservations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- Constraints for dumped tables
@@ -868,6 +937,13 @@ ALTER TABLE `documents`
 --
 ALTER TABLE `maintenance_alerts`
   ADD CONSTRAINT `maintenance_alerts_ibfk_1` FOREIGN KEY (`assigned_mechanic`) REFERENCES `users` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `po_status_history`
+--
+ALTER TABLE `po_status_history`
+  ADD CONSTRAINT `po_status_history_ibfk_1` FOREIGN KEY (`po_id`) REFERENCES `purchase_orders` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `po_status_history_ibfk_2` FOREIGN KEY (`changed_by`) REFERENCES `users` (`id`);
 
 --
 -- Constraints for table `price_history`
