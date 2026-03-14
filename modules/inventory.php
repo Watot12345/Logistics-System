@@ -224,13 +224,6 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
                 </div>
                 
                 <div class="header-right">
-                    <button class="header-btn">
-                        <i class="fas fa-bell"></i>
-                        <span class="notification-badge"></span>
-                    </button>
-                    <button class="header-btn">
-                        <i class="fas fa-envelope"></i>
-                    </button>
                     <div class="divider"></div>
                     <div class="user-info-header">
                         <span class="user-name-header">

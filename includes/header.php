@@ -85,7 +85,7 @@ if ($show_dashboard):
             <?php endif; ?>
             
             <!-- Purchase Orders - visible to admin, employee -->
-            <?php if (in_array($_SESSION['role'], ['admin', 'employee'])): ?>
+            <?php if (in_array($_SESSION['role'], ['admin', 'employee','dispatcher', 'fleet_manager'])): ?>
             <li class="nav-item">
                 <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'orders.php' : 'modules/orders.php'; ?>" 
                    class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'orders.php') ? 'active' : ''; ?>">
@@ -96,7 +96,7 @@ if ($show_dashboard):
             <?php endif; ?>
             
             <!-- Fleet Management - visible to admin, fleet_manager, driver, dispatcher -->
-            <?php if (in_array($_SESSION['role'], ['admin', 'fleet_manager', 'driver', 'dispatcher'])): ?>
+            <?php if (in_array($_SESSION['role'], ['admin', 'fleet_manager', 'driver', 'dispatcher', 'employee'])): ?>
             <li class="nav-item">
                 <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'fleet.php' : 'modules/fleet.php'; ?>" 
                    class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'fleet.php') ? 'active' : ''; ?>">

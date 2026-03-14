@@ -13,7 +13,15 @@
     margin-top: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
+/* Hide dispatcher elements by default, show them via JS when needed */
+.dispatcher-only {
+    display: none;
+}
 
+/* Show driver elements by default, hide them via JS when dispatcher logs in */
+.driver-only {
+    display: block;
+}
 .location-current {
     display: flex;
     align-items: center;

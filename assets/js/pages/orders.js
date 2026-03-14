@@ -262,7 +262,7 @@ function addItem() {
         </td>
         <td><input type="number" class="item-qty" value="1" min="1" onchange="calculateItemTotal(this)"></td>
         <td><input type="number" class="item-price" value="0" step="0.01" onchange="calculateItemTotal(this)"></td>
-        <td class="item-total">$0.00</td>
+        <td class="item-total">₱0.00</td>
         <td><button type="button" class="remove-item" onclick="removeItem(this)"><i class="fas fa-times"></i></button></td>
     `;
     
@@ -284,23 +284,23 @@ function calculateItemTotal(input) {
     const price = parseFloat(row.querySelector('.item-price').value) || 0;
     const total = qty * price;
     
-    row.querySelector('.item-total').textContent = '$' + total.toFixed(2);
+    row.querySelector('.item-total').textContent = '₱' + total.toFixed(2);
     calculateGrandTotal();
 }
 
 function calculateGrandTotal() {
     let subtotal = 0;
     document.querySelectorAll('.item-total').forEach(cell => {
-        subtotal += parseFloat(cell.textContent.replace('$', '')) || 0;
+        subtotal += parseFloat(cell.textContent.replace('₱', '')) || 0;
     });
     
-    const tax = subtotal * 0.1; // 10% tax
+    const tax = subtotal * 0.12; // 10% tax
     const total = subtotal + tax;
     
     // Update the display
-    document.getElementById('subtotal').textContent = '$' + subtotal.toFixed(2);
-    document.getElementById('tax').textContent = '$' + tax.toFixed(2);
-    document.getElementById('total').textContent = '$' + total.toFixed(2);
+    document.getElementById('subtotal').textContent = '₱' + subtotal.toFixed(2);
+    document.getElementById('tax').textContent = '₱' + tax.toFixed(2);
+    document.getElementById('total').textContent = '₱' + total.toFixed(2);
     
     console.log('Totals calculated:', {subtotal, tax, total});
     
@@ -359,7 +359,7 @@ async function savePO() {
                 item_id: itemSelect.value,
                 quantity: parseFloat(qtyInput?.value) || 0,
                 unit_price: parseFloat(priceInput?.value) || 0,
-                total_price: parseFloat(row.querySelector('.item-total')?.textContent.replace('$', '')) || 0
+                total_price: parseFloat(row.querySelector('.item-total')?.textContent.replace('₱', '')) || 0
             });
             console.log(`Item ${index + 1}:`, items[items.length - 1]);
         }

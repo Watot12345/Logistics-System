@@ -6,7 +6,11 @@
     width: 100%;
     border-collapse: collapse;
 }
-
+.form-input[readonly] {
+    background-color: #f5f5f5;
+    color: #666;
+    cursor: not-allowed;
+}
 .purchase-orders-table th {
     text-align: left;
     padding: 12px 16px;

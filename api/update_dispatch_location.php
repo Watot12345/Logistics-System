@@ -19,12 +19,18 @@ if (!$input || !isset($input['schedule_id']) || !isset($input['current_location'
 }
 
 $schedule_id = $input['schedule_id'];
-$current_location = $input['current_location'];
+$location_name = $input['current_location']; // Now just the location name, e.g., "Manila"
 
 try {
+    // Get current Manila time
+    $manila_time = date('Y-m-d H:i:s');
+    
+    // Format the complete location string with timestamp
+    $location_with_timestamp = "[{$manila_time}] Location update: {$location_name}";
+    
     // Verify this schedule belongs to the logged-in driver
     $check = $pdo->prepare("
-        SELECT ds.*, vr.vehicle_id 
+        SELECT ds.*, vr.vehicle_id, vr.customer_name, vr.delivery_address
         FROM dispatch_schedule ds
         LEFT JOIN vehicle_reservations vr ON ds.reservation_id = vr.id
         WHERE ds.id = ? AND ds.driver_id = ?
@@ -41,26 +47,27 @@ try {
     $pdo->beginTransaction();
     
     // Update location in dispatch schedule notes
-    $update = $pdo->prepare("
+    $update_dispatch = $pdo->prepare("
         UPDATE dispatch_schedule 
-        SET notes = CONCAT(COALESCE(notes, ''), '\n[', NOW(), '] Location update: ', ?)
+        SET notes = CONCAT(COALESCE(notes, ''), ?)
         WHERE id = ?
     ");
     
-    $update->execute([$current_location, $schedule_id]);
+    // Add a newline before appending
+    $update_dispatch->execute(["\n" . $location_with_timestamp, $schedule_id]);
     
-    // Also update the corresponding shipment location if it exists
+    // Also update the corresponding shipment if it exists
     if ($schedule['vehicle_id']) {
         $update_shipment = $pdo->prepare("
             UPDATE shipments 
-            SET current_location = ? 
+            SET current_location = ?
             WHERE vehicle_id = ? 
-            AND shipment_status IN ('pending', 'in_transit')
+            AND shipment_status IN ('pending', 'in_transit', 'delivered')
             ORDER BY created_at DESC
             LIMIT 1
         ");
         
-        $update_shipment->execute([$current_location, $schedule['vehicle_id']]);
+        $update_shipment->execute([$location_with_timestamp, $schedule['vehicle_id']]);
     }
     
     $pdo->commit();

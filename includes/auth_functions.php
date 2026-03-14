@@ -2,7 +2,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 // includes/auth_functions.php - All forgot password functions
-require_once '../config/db.php';
+require_once __DIR__ . '/../config/db.php';
 
 // Site configuration
 define('SITE_URL', 'http://localhost/Logistics%20System/includes');
@@ -215,5 +215,188 @@ function resetPassword($token, $new_password, $pdo) {
     markTokenAsUsed($token, $pdo);
     
     return ['success' => true, 'message' => 'Password reset successful!'];
+}
+
+/**
+ * Send login verification email (for 2-step verification)
+ */
+function sendVerificationEmail($to_email, $full_name, $code) {
+    $mail = new PHPMailer(true);
+    
+    try {
+        // Server settings (same as your existing setup)
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USER;
+        $mail->Password   = str_replace(' ', '', SMTP_PASS);
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+        
+        // Recipients
+        $mail->setFrom(SMTP_USER, SMTP_FROM_NAME);
+        $mail->addAddress($to_email);
+        
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = 'Verify Your Login - ' . SMTP_FROM_NAME;
+        
+        $mail->Body = "
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+                .content { padding: 20px; background-color: #f9f9f9; text-align: center; }
+                .code-box { background: white; padding: 30px; border-radius: 10px; margin: 20px 0; border: 2px dashed #3b82f6; }
+                .verification-code { font-size: 48px; font-weight: bold; letter-spacing: 10px; color: #3b82f6; }
+                .warning { color: #d97706; font-size: 14px; }
+                .footer { text-align: center; padding: 20px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h2>🔐 Verify Your Login</h2>
+                </div>
+                <div class='content'>
+                    <p>Hello <strong>{$full_name}</strong>,</p>
+                    <p>Enter this code to complete your login:</p>
+                    
+                    <div class='code-box'>
+                        <div class='verification-code'>{$code}</div>
+                        <p style='color: #666; margin-top: 10px;'>This code expires in 10 minutes</p>
+                    </div>
+                    
+                    <p class='warning'>⚠️ If you didn't try to log in, ignore this email.</p>
+                </div>
+                <div class='footer'>
+                    <p>&copy; " . date('Y') . " " . SMTP_FROM_NAME . "</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        $mail->AltBody = "Your verification code is: $code\n\nThis code expires in 10 minutes.";
+        
+        $mail->send();
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Verification email failed: " . $mail->ErrorInfo);
+        return false;
+    }
+}
+
+/**
+ * Send login notification email (optional)
+ */
+function sendLoginNotificationEmail($to_email, $full_name, $user_agent, $ip_address) {
+    $mail = new PHPMailer(true);
+    
+    try {
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USER;
+        $mail->Password   = str_replace(' ', '', SMTP_PASS);
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+        
+        $mail->setFrom(SMTP_USER, SMTP_FROM_NAME);
+        $mail->addAddress($to_email);
+        
+        $mail->isHTML(true);
+        $mail->Subject = 'New Login Detected - ' . SMTP_FROM_NAME;
+        
+        $mail->Body = "
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; padding: 20px; text-align: center; }
+                .content { padding: 20px; background-color: #f9f9f9; }
+                .info-box { background: white; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3b82f6; }
+                .warning { color: #d97706; font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h2>🔐 New Login Alert</h2>
+                </div>
+                <div class='content'>
+                    <p>Hello <strong>{$full_name}</strong>,</p>
+                    <p>A new login was detected on your account.</p>
+                    
+                    <div class='info-box'>
+                        <p><strong>📅 Date & Time:</strong> " . date('F j, Y, g:i a') . "</p>
+                        <p><strong>💻 Browser/Device:</strong> {$user_agent}</p>
+                        <p><strong>🌍 IP Address:</strong> {$ip_address}</p>
+                    </div>
+                    
+                    <p class='warning'>⚠️ If this wasn't you, please secure your account immediately.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        $mail->send();
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Login notification email failed: " . $mail->ErrorInfo);
+        return false;
+    }
+}
+
+/**
+ * Get user's real IP address
+ */
+function getRealIP() {
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        return $_SERVER['HTTP_CLIENT_IP'];
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        return $_SERVER['HTTP_X_FORWARDED_FOR'];
+    } else {
+        return $_SERVER['REMOTE_ADDR'];
+    }
+}
+
+/**
+ * Log login attempt (optional - for tracking)
+ */
+function logLoginAttempt($pdo, $user_id, $email, $success = true) {
+    try {
+        // Create table if not exists
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS login_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                ip_address VARCHAR(45),
+                user_agent TEXT,
+                login_time DATETIME,
+                success BOOLEAN DEFAULT TRUE,
+                INDEX (user_id),
+                INDEX (login_time)
+            )
+        ");
+        
+        $ip = getRealIP();
+        $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO login_logs (user_id, email, ip_address, user_agent, login_time, success)
+            VALUES (?, ?, ?, ?, NOW(), ?)
+        ");
+        $stmt->execute([$user_id, $email, $ip, $user_agent, $success ? 1 : 0]);
+    } catch (PDOException $e) {
+        error_log("Failed to log login attempt: " . $e->getMessage());
+    }
 }
 ?>

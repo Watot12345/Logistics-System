@@ -64,24 +64,24 @@ public function addSupplier($data) {
 }
     // Get dashboard statistics
 public function getDashboardStats() {
-    // Current period (now)
+    // Current period (now) - EXCLUDE DELETED ITEMS
     $current = $this->conn->query("
         SELECT 
-            (SELECT COUNT(*) FROM inventory_items) as total_items,
+            (SELECT COUNT(*) FROM inventory_items WHERE deleted_at IS NULL) as total_items,
             (SELECT COUNT(*) FROM categories) as total_categories,
-            (SELECT COUNT(*) FROM inventory_items WHERE quantity <= reorder_level AND quantity > 0) as low_stock_items,
-            (SELECT COUNT(*) FROM inventory_items WHERE quantity <= 0) as out_of_stock_items,
-            (SELECT SUM(quantity * price) FROM inventory_items) as total_inventory_value,
-            (SELECT COUNT(DISTINCT supplier_id) FROM inventory_items) as active_suppliers
+            (SELECT COUNT(*) FROM inventory_items WHERE deleted_at IS NULL AND quantity <= reorder_level AND quantity > 0) as low_stock_items,
+            (SELECT COUNT(*) FROM inventory_items WHERE deleted_at IS NULL AND quantity <= 0) as out_of_stock_items,
+            (SELECT SUM(quantity * price) FROM inventory_items WHERE deleted_at IS NULL) as total_inventory_value,
+            (SELECT COUNT(DISTINCT supplier_id) FROM inventory_items WHERE deleted_at IS NULL) as active_suppliers
     ")->fetch(PDO::FETCH_ASSOC);
     
-    // Previous period (e.g., last month)
+    // Previous period (e.g., last month) - EXCLUDE DELETED ITEMS
     $firstOfMonth = date('Y-m-01');
     $previous = $this->conn->prepare("
         SELECT 
-            (SELECT COUNT(*) FROM inventory_items WHERE created_at < :firstOfMonth) as total_items,
+            (SELECT COUNT(*) FROM inventory_items WHERE deleted_at IS NULL AND created_at < :firstOfMonth) as total_items,
             (SELECT COUNT(*) FROM categories WHERE created_at < :firstOfMonth) as total_categories,
-            (SELECT SUM(quantity * price) FROM inventory_items WHERE created_at < :firstOfMonth) as total_inventory_value
+            (SELECT SUM(quantity * price) FROM inventory_items WHERE deleted_at IS NULL AND created_at < :firstOfMonth) as total_inventory_value
     ");
     $previous->execute([':firstOfMonth' => $firstOfMonth]);
     $previousData = $previous->fetch(PDO::FETCH_ASSOC);
@@ -127,17 +127,38 @@ public function getRecentAdditions($days = 7) {
     $stmt->execute();
     return $stmt->fetch(PDO::FETCH_ASSOC)['count'];
 }
-
+// Setup soft delete columns (call this once)
+public function setupSoftDelete() {
+    try {
+        // Check if columns exist
+        $checkDeletedAt = $this->conn->query("SHOW COLUMNS FROM inventory_items LIKE 'deleted_at'");
+        $checkDeletedBy = $this->conn->query("SHOW COLUMNS FROM inventory_items LIKE 'deleted_by'");
+        
+        if ($checkDeletedAt->rowCount() == 0) {
+            $this->conn->exec("ALTER TABLE inventory_items ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL");
+        }
+        
+        if ($checkDeletedBy->rowCount() == 0) {
+            $this->conn->exec("ALTER TABLE inventory_items ADD COLUMN deleted_by INT NULL DEFAULT NULL");
+        }
+        
+        return true;
+    } catch (PDOException $e) {
+        error_log("Setup soft delete error: " . $e->getMessage());
+        return false;
+    }
+}
 // Get low stock count
 public function getLowStockCount() {
     $query = "SELECT COUNT(*) as count FROM inventory_items 
-              WHERE quantity <= reorder_level AND quantity > 0";
+              WHERE deleted_at IS NULL 
+              AND quantity <= reorder_level AND quantity > 0";
     $stmt = $this->conn->prepare($query);
     $stmt->execute();
     return $stmt->fetch(PDO::FETCH_ASSOC)['count'];
 }
     // Get all inventory items with category and supplier info
-   public function getInventoryItems($page = 1, $limit = 10, $filter = 'all', $category = null, $supplier = null) {
+    public function getInventoryItems($page = 1, $limit = 10, $filter = 'all', $category = null, $supplier = null) {
     $offset = ($page - 1) * $limit;
     
     $query = "SELECT 
@@ -154,10 +175,11 @@ public function getLowStockCount() {
               LEFT JOIN categories c ON i.category_id = c.id
               LEFT JOIN suppliers s ON i.supplier_id = s.id";
     
-    // Apply filters
-    $whereConditions = [];
+    // Start building WHERE conditions
+    $whereConditions = ["i.deleted_at IS NULL"]; // Start with deleted_at condition
     $params = [];
     
+    // Apply filters
     if ($filter !== 'all') {
         if ($filter === 'in_stock') {
             $whereConditions[] = "i.quantity > i.reorder_level";
@@ -178,6 +200,7 @@ public function getLowStockCount() {
         $params[':supplier'] = $supplier;
     }
     
+    // Add WHERE clause if we have conditions
     if (!empty($whereConditions)) {
         $query .= " WHERE " . implode(' AND ', $whereConditions);
     }
@@ -199,39 +222,41 @@ public function getLowStockCount() {
 }
     
     // Get total count for pagination
-    public function getTotalCount($filter = 'all', $category = null) {
-        $query = "SELECT COUNT(*) as total FROM inventory_items i
-                  LEFT JOIN categories c ON i.category_id = c.id";
-        
-        $whereConditions = [];
-        if ($filter !== 'all') {
-            if ($filter === 'in_stock') {
-                $whereConditions[] = "i.quantity > i.reorder_level";
-            } elseif ($filter === 'low_stock') {
-                $whereConditions[] = "i.quantity <= i.reorder_level AND i.quantity > 0";
-            } elseif ($filter === 'out_of_stock') {
-                $whereConditions[] = "i.quantity <= 0";
-            }
+     public function getTotalCount($filter = 'all', $category = null) {
+    $query = "SELECT COUNT(*) as total FROM inventory_items i
+              LEFT JOIN categories c ON i.category_id = c.id";
+    
+    // Start with deleted_at condition
+    $whereConditions = ["i.deleted_at IS NULL"];
+    
+    if ($filter !== 'all') {
+        if ($filter === 'in_stock') {
+            $whereConditions[] = "i.quantity > i.reorder_level";
+        } elseif ($filter === 'low_stock') {
+            $whereConditions[] = "i.quantity <= i.reorder_level AND i.quantity > 0";
+        } elseif ($filter === 'out_of_stock') {
+            $whereConditions[] = "i.quantity <= 0";
         }
-        
-        if ($category && $category !== 'All Categories') {
-            $whereConditions[] = "c.category_name = :category";
-        }
-        
-        if (!empty($whereConditions)) {
-            $query .= " WHERE " . implode(' AND ', $whereConditions);
-        }
-        
-        $stmt = $this->conn->prepare($query);
-        
-        if ($category && $category !== 'All Categories') {
-            $stmt->bindParam(':category', $category);
-        }
-        
-        $stmt->execute();
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result['total'];
     }
+    
+    if ($category && $category !== 'All Categories') {
+        $whereConditions[] = "c.category_name = :category";
+    }
+    
+    if (!empty($whereConditions)) {
+        $query .= " WHERE " . implode(' AND ', $whereConditions);
+    }
+    
+    $stmt = $this->conn->prepare($query);
+    
+    if ($category && $category !== 'All Categories') {
+        $stmt->bindParam(':category', $category);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result['total'];
+}
     
     // Get single item by ID
     public function getItemById($id) {
@@ -511,39 +536,61 @@ public function getSupplierById($id) {
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
     // Delete inventory item
-    public function deleteItem($id) {
-        try {
-            $this->conn->beginTransaction();
-            
-            // Get item data for category count update
-            $item = $this->getItemById($id);
-            
-            if (!$item) {
-                throw new Exception("Item not found");
-            }
-            
-            // Delete item
-            $query = "DELETE FROM inventory_items WHERE id = :id";
-            $stmt = $this->conn->prepare($query);
-            $stmt->bindParam(':id', $id);
-            $stmt->execute();
-            
-            // Update category item count
-            if ($item && isset($item['category_id'])) {
-                $this->updateCategoryItemCount($item['category_id']);
-            }
-            
-            $this->conn->commit();
-            return ['success' => true, 'message' => 'Item deleted successfully'];
-            
-        } catch (Exception $e) {
-            if ($this->conn->inTransaction()) {
-                $this->conn->rollBack();
-            }
-            return ['success' => false, 'message' => 'Error deleting item: ' . $e->getMessage()];
+     // Replace your existing deleteItem with this
+public function deleteItem($id) {
+    try {
+        $this->conn->beginTransaction();
+        
+        // Get item data for category count update
+        $item = $this->getItemById($id);
+        
+        if (!$item) {
+            throw new Exception("Item not found");
         }
+        
+        // SOFT DELETE - just set deleted_at timestamp instead of actual delete
+        $query = "UPDATE inventory_items 
+                  SET deleted_at = NOW(), 
+                      deleted_by = :deleted_by 
+                  WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->bindParam(':deleted_by', $_SESSION['user_id']);
+        $stmt->execute();
+        
+        // Update category item count (still needed)
+        if ($item && isset($item['category_id'])) {
+            $this->updateCategoryItemCount($item['category_id']);
+        }
+        
+        $this->conn->commit();
+        return ['success' => true, 'message' => 'Item moved to trash successfully'];
+        
+    } catch (Exception $e) {
+        if ($this->conn->inTransaction()) {
+            $this->conn->rollBack();
+        }
+        return ['success' => false, 'message' => 'Error deleting item: ' . $e->getMessage()];
     }
+}
     
+// Restore soft-deleted item
+public function restoreItem($id) {
+    try {
+        $query = "UPDATE inventory_items 
+                  SET deleted_at = NULL, 
+                      deleted_by = NULL 
+                  WHERE id = :id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        
+        return ['success' => true, 'message' => 'Item restored successfully'];
+        
+    } catch (Exception $e) {
+        return ['success' => false, 'message' => 'Error restoring item: ' . $e->getMessage()];
+    }
+}
     // Get all categories
     public function getCategories() {
         $query = "SELECT * FROM categories ORDER BY category_name";
@@ -559,7 +606,30 @@ public function getSupplierById($id) {
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+    // Get deleted items
+public function getDeletedItems() {
+    $query = "SELECT 
+                i.*,
+                c.category_name,
+                c.color_class as category_color,
+                s.supplier_name,
+                u.full_name as deleted_by_name,
+                CASE 
+                    WHEN i.quantity <= 0 THEN 'out_of_stock'
+                    WHEN i.quantity <= i.reorder_level THEN 'low_stock'
+                    ELSE 'in_stock'
+                END as status
+              FROM inventory_items i
+              LEFT JOIN categories c ON i.category_id = c.id
+              LEFT JOIN suppliers s ON i.supplier_id = s.id
+              LEFT JOIN users u ON i.deleted_by = u.id
+              WHERE i.deleted_at IS NOT NULL
+              ORDER BY i.deleted_at DESC";
     
+    $stmt = $this->conn->prepare($query);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
     // Get low stock items
     public function getLowStockItems() {
         $query = "SELECT 
