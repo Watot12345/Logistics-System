@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $temp_user_id = $user_id;
     } else {
         // FIXED: Use PHP time instead of NOW()
-        $current_time = date('Y-m-d H:i:s');
+        $current_time = null;
         
         error_log("VERIFY - Current time: $current_time, Code: $code, User: $user_id");
         
