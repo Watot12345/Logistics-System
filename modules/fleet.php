@@ -8,6 +8,13 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 require_once '../config/db.php';
+$available_count = 0;
+$maintenance_count = 0;
+$on_route_count = 0;
+$total_count = 0;
+$real_available_count = 0;
+$real_maintenance_count = 0;
+$real_in_use_count = 0;
 $user_role = $_SESSION['role'];
 $can_manage_maintenance = in_array($user_role, ['admin', 'fleet_manager']);
 $can_view_maintenance = in_array($user_role, ['admin', 'fleet_manager', 'dispatcher', 'employee']);
@@ -112,10 +119,6 @@ $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
         echo "<!-- Alert: Vehicle='{$alert['asset_name']}', Status='{$alert['status']}', Priority='{$alert['priority']}' -->\n";
     }
 
-   // Calculate vehicle counts
-$real_available_count = 0;
-$real_maintenance_count = 0;
-$real_in_use_count = 0;
 
 foreach ($vehicles as $vehicle) {
     $is_maintenance = false;
