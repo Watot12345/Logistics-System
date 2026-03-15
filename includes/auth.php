@@ -136,47 +136,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             
             if ($user && password_verify($password, $user['password'])) {
                 
-                // Generate and send verification code
+                // Generate and save code
                 $verification_code = sprintf("%06d", random_int(0, 999999));
                 $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
                 
-                error_log("LOGIN - Saving code: $verification_code, expires: $expires for user {$user['id']}");
+                error_log("LOGIN - Saving code: $verification_code for user {$user['id']}");
                 
-                // Delete old codes for this user
+                // Delete old codes
                 $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
                 $stmt->execute([$user['id']]);
                 
                 // Save new code
-                $stmt = $pdo->prepare("
-                    INSERT INTO login_verifications (user_id, email, verification_code, expires_at)
-                    VALUES (?, ?, ?, ?)
-                ");
+                $stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
                 $stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
                 
-                // ============ FIXED EMAIL SENDING WITH TIMEOUT ============
-                $email_sent = false;
+                // ============ FIXED: DIRECT RESEND API CALL ============
+                // Send email using Resend API directly (works on Railway)
+                $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW'; // Your key
                 
-                // Try to send email but with timeout protection
-                if (function_exists('sendVerificationEmail')) {
-                    // Set maximum execution time for this operation
-                    set_time_limit(30);
-                    
-                    // Start output buffering to catch any errors
-                    ob_start();
-                    
-                    // Attempt to send with error suppression
-                    try {
-                        $email_sent = @sendVerificationEmail($user['email'], $user['full_name'], $verification_code);
-                    } catch (Exception $e) {
-                        error_log("Email exception: " . $e->getMessage());
-                        $email_sent = false;
-                    }
-                    
-                    // Clean output buffer
-                    ob_end_clean();
+                // Prepare email data
+                $data = [
+                    'from' => 'onboarding@resend.dev',
+                    'to' => [$user['email']],
+                    'subject' => '🔐 Your Login Verification Code',
+                    'html' => "
+                        <html>
+                        <body>
+                            <h2>Hello {$user['full_name']},</h2>
+                            <p>Your verification code is:</p>
+                            <h1 style='font-size: 48px; color: #3b82f6; letter-spacing: 5px;'>{$verification_code}</h1>
+                            <p>This code expires in 10 minutes.</p>
+                            <p style='color: #666;'>If you didn't try to log in, ignore this email.</p>
+                        </body>
+                        </html>
+                    ",
+                    'text' => "Your verification code is: {$verification_code}"
+                ];
+                
+                // Send via cURL
+                $ch = curl_init('https://api.resend.com/emails');
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Authorization: Bearer ' . $api_key,
+                    'Content-Type: application/json'
+                ]);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                
+                // Check if email was sent
+                $email_sent = ($httpCode === 200);
+                
+                if ($email_sent) {
+                    error_log("✅ Email sent to {$user['email']}");
+                } else {
+                    error_log("❌ Email failed: HTTP $httpCode - $response");
                 }
+                // ============ END FIX ============
                 
-                // ALWAYS show verification form - even if email fails
+                // ALWAYS show verification form
                 $showVerification = true;
                 $temp_user_id = $user['id'];
                 $temp_email = maskEmail($user['email']);
@@ -185,14 +207,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $message = "✓ Verification code sent to " . $temp_email;
                     $messageType = 'success';
                 } else {
-                    // FALLBACK: Show the code directly (TEMPORARY for production testing)
-                       $message = "⚠️ Unable to send verification code. Please try again.";
-    $messageType = 'error';
-                    
-                    // Also log it
-                     error_log("Failed to send verification email to {$user['email']}");
+                    // DON'T show the code - just show error
+                    $message = "⚠️ Unable to send verification code. Please try again or contact support.";
+                    $messageType = 'error';
                 }
-                // ============ END FIX ============
                  
             } else {
                 $message = 'Invalid username/email or password';

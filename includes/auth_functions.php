@@ -155,52 +155,8 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
     }
 }
 
-/**
- * Send login verification email using Resend (for Railway)
- */
-function sendVerificationEmailViaResend($to_email, $full_name, $code) {
-    $api_key = getenv('RESEND_API_KEY');
-    
-    if (!$api_key) {
-        error_log("RESEND_API_KEY not found in environment");
-        return false;
-    }
-    
-    try {
-        $resend = Resend::client($api_key);
-        
-        $result = $resend->emails->send([
-            'from' => 'onboarding@resend.dev',
-            'to' => [$to_email],
-            'subject' => '🔐 Your Login Verification Code',
-            'html' => "
-                <html>
-                <head>
-                    <style>
-                        body { font-family: Arial, sans-serif; }
-                        .code { font-size: 48px; font-weight: bold; letter-spacing: 10px; color: #3b82f6; text-align: center; padding: 30px; background: #f0f9ff; border-radius: 10px; }
-                    </style>
-                </head>
-                <body>
-                    <h2>Hello {$full_name},</h2>
-                    <p>Your verification code is:</p>
-                    <div class='code'>{$code}</div>
-                    <p>This code expires in 10 minutes.</p>
-                    <p style='color: #666;'>If you didn't try to log in, ignore this email.</p>
-                </body>
-                </html>
-            ",
-            'text' => "Your verification code is: {$code}\n\nThis code expires in 10 minutes."
-        ]);
-        
-        error_log("✅ Verification email sent via Resend to {$to_email}");
-        return true;
-        
-    } catch (Exception $e) {
-        error_log("❌ Resend failed: " . $e->getMessage());
-        return false;
-    }
-}
+
+
 
 /**
  * Send login notification email using Resend
@@ -360,80 +316,89 @@ function resetPassword($token, $new_password, $pdo) {
 }
 
 /**
- * Send login verification email - SMART VERSION (tries both)
+ * Send login verification email using Resend (FIXED - uses cURL)
  */
-function sendVerificationEmail($to_email, $full_name, $code) {
-    // Try Resend first (for Railway)
-    if (function_exists('sendVerificationEmailViaResend')) {
-        $result = sendVerificationEmailViaResend($to_email, $full_name, $code);
-        if ($result) {
-            return true;
-        }
-        error_log("Resend failed, falling back to PHPMailer");
+function sendVerificationEmailViaResend($to_email, $full_name, $code) {
+    $api_key = getenv('RESEND_API_KEY');
+    
+    // Fallback to hardcoded key if env not set (for testing)
+    if (!$api_key) {
+        $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW';
     }
     
-    // Fallback to original PHPMailer
-    $mail = new PHPMailer(true);
+    error_log("📧 Attempting to send email to: $to_email");
     
-    try {
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USER;
-        $mail->Password   = str_replace(' ', '', SMTP_PASS);
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-        $mail->Timeout    = 10; // Add timeout
-        
-        $mail->setFrom(SMTP_USER, SMTP_FROM_NAME);
-        $mail->addAddress($to_email);
-        
-        $mail->isHTML(true);
-        $mail->Subject = 'Verify Your Login - ' . SMTP_FROM_NAME;
-        
-        $mail->Body = "
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-                .content { padding: 20px; background-color: #f9f9f9; text-align: center; }
-                .code-box { background: white; padding: 30px; border-radius: 10px; margin: 20px 0; border: 2px dashed #3b82f6; }
-                .verification-code { font-size: 48px; font-weight: bold; letter-spacing: 10px; color: #3b82f6; }
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h2>🔐 Verify Your Login</h2>
-                </div>
-                <div class='content'>
-                    <p>Hello <strong>{$full_name}</strong>,</p>
-                    <p>Enter this code to complete your login:</p>
-                    
-                    <div class='code-box'>
-                        <div class='verification-code'>{$code}</div>
-                        <p style='color: #666; margin-top: 10px;'>This code expires in 10 minutes</p>
+    // Prepare email data
+    $data = [
+        'from' => 'onboarding@resend.dev',
+        'to' => [$to_email],
+        'subject' => '🔐 Your Login Verification Code',
+        'html' => "
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { padding: 20px; background-color: #f9f9f9; text-align: center; }
+                    .code-box { background: white; padding: 30px; border-radius: 10px; margin: 20px 0; border: 2px dashed #3b82f6; }
+                    .verification-code { font-size: 48px; font-weight: bold; letter-spacing: 10px; color: #3b82f6; }
+                    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>🔐 Verify Your Login</h2>
                     </div>
-                    
-                    <p style='color: #d97706;'>⚠️ If you didn't try to log in, ignore this email.</p>
+                    <div class='content'>
+                        <p>Hello <strong>{$full_name}</strong>,</p>
+                        <p>Enter this code to complete your login:</p>
+                        
+                        <div class='code-box'>
+                            <div class='verification-code'>{$code}</div>
+                            <p style='color: #666; margin-top: 10px;'>This code expires in 10 minutes</p>
+                        </div>
+                        
+                        <p style='color: #d97706; font-size: 14px;'>If you didn't try to log in, ignore this email.</p>
+                    </div>
+                    <div class='footer'>
+                        <p>&copy; " . date('Y') . " Logistics System</p>
+                    </div>
                 </div>
-            </div>
-        </body>
-        </html>
-        ";
-        
-        $mail->AltBody = "Your verification code is: $code\n\nThis code expires in 10 minutes.";
-        
-        $mail->send();
+            </body>
+            </html>
+        ",
+        'text' => "Your verification code is: {$code}\n\nThis code expires in 10 minutes.\n\nIf you didn't try to log in, ignore this email."
+    ];
+    
+    // Send via cURL (works without Composer)
+    $ch = curl_init('https://api.resend.com/emails');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $api_key,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    
+    // Log the result
+    if ($httpCode === 200) {
+        error_log("✅ Email sent successfully to {$to_email}");
         return true;
-        
-    } catch (Exception $e) {
-        error_log("Verification email failed: " . $mail->ErrorInfo);
+    } else {
+        error_log("❌ Email failed: HTTP {$httpCode}, Response: {$response}, Error: {$error}");
         return false;
     }
 }
+
 
 /**
  * Send login notification email - SMART VERSION
