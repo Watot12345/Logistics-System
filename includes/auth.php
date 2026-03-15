@@ -121,7 +121,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // Handle initial login
-// Handle initial login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'login') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -187,11 +186,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $messageType = 'success';
                 } else {
                     // FALLBACK: Show the code directly (TEMPORARY for production testing)
-                    $message = "⚠️ Use code: <strong>{$verification_code}</strong> (Email temporarily unavailable)";
-                    $messageType = 'warning';
+                       $message = "⚠️ Unable to send verification code. Please try again.";
+    $messageType = 'error';
                     
                     // Also log it
-                    error_log("2FA CODE for {$user['email']}: {$verification_code}");
+                     error_log("Failed to send verification email to {$user['email']}");
                 }
                 // ============ END FIX ============
                  
