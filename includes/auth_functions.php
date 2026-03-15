@@ -1,27 +1,33 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-// includes/auth_functions.php - All forgot password functions
+// includes/auth_functions.php - All authentication functions
 require_once __DIR__ . '/../config/db.php';
 
 // Site configuration
 define('SITE_URL', 'http://localhost/Logistics%20System/includes');
 define('SMTP_FROM_NAME', 'Logistics System');
 
-// Gmail SMTP configuration - YOUR ACTUAL CREDENTIALS
+// Gmail SMTP configuration (keep for localhost)
 define('SMTP_HOST', 'smtp.gmail.com');
 define('SMTP_PORT', 587);
-define('SMTP_USER', 'asierra389@gmail.com');  // YOUR Gmail
-define('SMTP_PASS', 'rvlk umip yixd zycm');   // YOUR App Password
+define('SMTP_USER', 'asierra389@gmail.com');
+define('SMTP_PASS', 'rvlk umip yixd zycm');
 
 // Include PHPMailer
 require_once __DIR__ . '/../src/PHPMailer.php';
 require_once __DIR__ . '/../src/SMTP.php';
 require_once __DIR__ . '/../src/Exception.php';
 
+// Include Resend (if Composer is installed)
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+}
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
+
 // Create password_resets table if it doesn't exist
 try {
     $pdo->exec("
@@ -99,7 +105,6 @@ function validateResetToken($token, $pdo) {
     ];
 }
 
-
 /**
  * Mark token as used
  */
@@ -110,7 +115,134 @@ function markTokenAsUsed($token, $pdo) {
 }
 
 /**
- * Send password reset email
+ * Send password reset email using Resend (for Railway)
+ */
+function sendPasswordResetEmailViaResend($to_email, $raw_token) {
+    $reset_link = SITE_URL . "/reset_password.php?token=" . urlencode($raw_token);
+    $api_key = getenv('RESEND_API_KEY');
+    
+    if (!$api_key) {
+        error_log("RESEND_API_KEY not found");
+        return false;
+    }
+    
+    try {
+        $resend = Resend::client($api_key);
+        
+        $result = $resend->emails->send([
+            'from' => 'onboarding@resend.dev',
+            'to' => [$to_email],
+            'subject' => 'Reset Your Password - Logistics System',
+            'html' => "
+                <html>
+                <body>
+                    <h2>Password Reset Request</h2>
+                    <p>Click the button to reset your password:</p>
+                    <a href='{$reset_link}' style='display:inline-block; padding:12px 30px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px;'>Reset Password</a>
+                    <p><strong>Link expires in 1 hour.</strong></p>
+                </body>
+                </html>
+            ",
+            'text' => "Reset your password here: $reset_link"
+        ]);
+        
+        error_log("Password reset email sent via Resend to $to_email");
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Resend password reset failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Send login verification email using Resend (for Railway)
+ */
+function sendVerificationEmailViaResend($to_email, $full_name, $code) {
+    $api_key = getenv('RESEND_API_KEY');
+    
+    if (!$api_key) {
+        error_log("RESEND_API_KEY not found in environment");
+        return false;
+    }
+    
+    try {
+        $resend = Resend::client($api_key);
+        
+        $result = $resend->emails->send([
+            'from' => 'onboarding@resend.dev',
+            'to' => [$to_email],
+            'subject' => '🔐 Your Login Verification Code',
+            'html' => "
+                <html>
+                <head>
+                    <style>
+                        body { font-family: Arial, sans-serif; }
+                        .code { font-size: 48px; font-weight: bold; letter-spacing: 10px; color: #3b82f6; text-align: center; padding: 30px; background: #f0f9ff; border-radius: 10px; }
+                    </style>
+                </head>
+                <body>
+                    <h2>Hello {$full_name},</h2>
+                    <p>Your verification code is:</p>
+                    <div class='code'>{$code}</div>
+                    <p>This code expires in 10 minutes.</p>
+                    <p style='color: #666;'>If you didn't try to log in, ignore this email.</p>
+                </body>
+                </html>
+            ",
+            'text' => "Your verification code is: {$code}\n\nThis code expires in 10 minutes."
+        ]);
+        
+        error_log("✅ Verification email sent via Resend to {$to_email}");
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("❌ Resend failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Send login notification email using Resend
+ */
+function sendLoginNotificationEmailViaResend($to_email, $full_name, $user_agent, $ip_address) {
+    $api_key = getenv('RESEND_API_KEY');
+    
+    if (!$api_key) return false;
+    
+    try {
+        $resend = Resend::client($api_key);
+        
+        $result = $resend->emails->send([
+            'from' => 'onboarding@resend.dev',
+            'to' => [$to_email],
+            'subject' => '🔐 New Login Detected',
+            'html' => "
+                <html>
+                <body>
+                    <h2>Hello {$full_name},</h2>
+                    <p>A new login was detected on your account:</p>
+                    <p><strong>Date & Time:</strong> " . date('F j, Y, g:i a') . "</p>
+                    <p><strong>Browser:</strong> {$user_agent}</p>
+                    <p><strong>IP Address:</strong> {$ip_address}</p>
+                    <p style='color: #d97706;'>If this wasn't you, secure your account immediately.</p>
+                </body>
+                </html>
+            "
+        ]);
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Resend notification failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+// ============ KEEP YOUR ORIGINAL PHPMailer FUNCTIONS ============
+
+/**
+ * Send password reset email (original PHPMailer version)
  */
 function sendPasswordResetEmail($to_email, $raw_token) {
     $reset_link = SITE_URL . "/reset_password.php?token=" . urlencode($raw_token);
@@ -135,7 +267,6 @@ function sendPasswordResetEmail($to_email, $raw_token) {
         $mail->isHTML(true);
         $mail->Subject = 'Reset Your Password - ' . SMTP_FROM_NAME;
         
-        // HTML email body
         $mail->Body = "
         <html>
         <head>
@@ -182,7 +313,7 @@ function sendPasswordResetEmail($to_email, $raw_token) {
 }
 
 /**
- * Handle forgot password request
+ * Handle forgot password request - SMART VERSION (tries both)
  */
 function handleForgotPassword($email, $pdo) {
     // Check if user exists
@@ -192,7 +323,18 @@ function handleForgotPassword($email, $pdo) {
     
     if ($user) {
         $raw_token = generateResetToken($email, $pdo);
-        sendPasswordResetEmail($email, $raw_token);
+        
+        // Try Resend first (for Railway), fallback to PHPMailer
+        if (function_exists('sendPasswordResetEmailViaResend')) {
+            $sent = sendPasswordResetEmailViaResend($email, $raw_token);
+        } else {
+            $sent = sendPasswordResetEmail($email, $raw_token);
+        }
+        
+        if (!$sent) {
+            // Fallback to original
+            sendPasswordResetEmail($email, $raw_token);
+        }
     }
     
     return "If an account exists with this email, you will receive a reset link.";
@@ -218,13 +360,22 @@ function resetPassword($token, $new_password, $pdo) {
 }
 
 /**
- * Send login verification email (for 2-step verification)
+ * Send login verification email - SMART VERSION (tries both)
  */
 function sendVerificationEmail($to_email, $full_name, $code) {
+    // Try Resend first (for Railway)
+    if (function_exists('sendVerificationEmailViaResend')) {
+        $result = sendVerificationEmailViaResend($to_email, $full_name, $code);
+        if ($result) {
+            return true;
+        }
+        error_log("Resend failed, falling back to PHPMailer");
+    }
+    
+    // Fallback to original PHPMailer
     $mail = new PHPMailer(true);
     
     try {
-        // Server settings (same as your existing setup)
         $mail->isSMTP();
         $mail->Host       = SMTP_HOST;
         $mail->SMTPAuth   = true;
@@ -232,12 +383,11 @@ function sendVerificationEmail($to_email, $full_name, $code) {
         $mail->Password   = str_replace(' ', '', SMTP_PASS);
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = SMTP_PORT;
+        $mail->Timeout    = 10; // Add timeout
         
-        // Recipients
         $mail->setFrom(SMTP_USER, SMTP_FROM_NAME);
         $mail->addAddress($to_email);
         
-        // Content
         $mail->isHTML(true);
         $mail->Subject = 'Verify Your Login - ' . SMTP_FROM_NAME;
         
@@ -251,8 +401,6 @@ function sendVerificationEmail($to_email, $full_name, $code) {
                 .content { padding: 20px; background-color: #f9f9f9; text-align: center; }
                 .code-box { background: white; padding: 30px; border-radius: 10px; margin: 20px 0; border: 2px dashed #3b82f6; }
                 .verification-code { font-size: 48px; font-weight: bold; letter-spacing: 10px; color: #3b82f6; }
-                .warning { color: #d97706; font-size: 14px; }
-                .footer { text-align: center; padding: 20px; color: #666; }
             </style>
         </head>
         <body>
@@ -269,10 +417,7 @@ function sendVerificationEmail($to_email, $full_name, $code) {
                         <p style='color: #666; margin-top: 10px;'>This code expires in 10 minutes</p>
                     </div>
                     
-                    <p class='warning'>⚠️ If you didn't try to log in, ignore this email.</p>
-                </div>
-                <div class='footer'>
-                    <p>&copy; " . date('Y') . " " . SMTP_FROM_NAME . "</p>
+                    <p style='color: #d97706;'>⚠️ If you didn't try to log in, ignore this email.</p>
                 </div>
             </div>
         </body>
@@ -291,9 +436,18 @@ function sendVerificationEmail($to_email, $full_name, $code) {
 }
 
 /**
- * Send login notification email (optional)
+ * Send login notification email - SMART VERSION
  */
 function sendLoginNotificationEmail($to_email, $full_name, $user_agent, $ip_address) {
+    // Try Resend first
+    if (function_exists('sendLoginNotificationEmailViaResend')) {
+        $result = sendLoginNotificationEmailViaResend($to_email, $full_name, $user_agent, $ip_address);
+        if ($result) {
+            return true;
+        }
+    }
+    
+    // Fallback to original
     $mail = new PHPMailer(true);
     
     try {
