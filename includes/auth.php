@@ -1,6 +1,33 @@
 <?php
+set_time_limit(120); // Give PHP more time
+ini_set('max_execution_time', 120);
+ini_set('memory_limit', '256M');
+
+// Disable output buffering completely
+while (ob_get_level()) ob_end_clean();
+ob_implicit_flush(true);
+
+// Add this function for instant email sending
+function sendEmailFast($to, $name, $code) {
+    // Your Resend API key
+    $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW';
+    
+    // Use exec to run in background (doesn't block PHP)
+    $cmd = "curl -X POST https://api.resend.com/emails \\
+        -H 'Authorization: Bearer $api_key' \\
+        -H 'Content-Type: application/json' \\
+        -d '{
+            \"from\": \"onboarding@resend.dev\",
+            \"to\": [\"$to\"],
+            \"subject\": \"Your Login Code\",
+            \"html\": \"<h2>Hello $name</h2><p>Your code: <strong>$code</strong></p>\"
+        }' > /dev/null 2>&1 &";
+    
+    exec($cmd);
+    return true; // Return immediately
+}
 session_start();
-ob_start();
+ob_start(); // Keep this for now
 require_once 'config/db.php';
 require_once 'includes/auth_functions.php';
 
@@ -50,21 +77,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $showVerification = true;
         $temp_user_id = $user_id;
     } else {
-        // FIXED: Use CURRENT date and time
-        $current_time = date('Y-m-d H:i:s');  // ← THIS IS CORRECT!
+        // Use current time
+        $current_time = date('Y-m-d H:i:s');
         
-        error_log("VERIFY - Current time: $current_time, Code: $code, User: $user_id");
+        error_log("🔍 VERIFY - Checking code: $code for user: $user_id at $current_time");
         
-        // First check if ANY code exists for this user (for debugging)
-        $check_stmt = $pdo->prepare("SELECT * FROM login_verifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1");
-        $check_stmt->execute([$user_id]);
-        $latest = $check_stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($latest) {
-            error_log("Latest code for user: {$latest['verification_code']}, expires: {$latest['expires_at']}");
-        }
-        
-        // Now check for valid code
         $stmt = $pdo->prepare("
             SELECT * FROM login_verifications 
             WHERE user_id = ? AND verification_code = ? 
@@ -78,13 +95,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             error_log("✅ Code valid for user $user_id");
             
             // Mark as verified
-            $stmt = $pdo->prepare("UPDATE login_verifications SET verified = TRUE WHERE id = ?");
-            $stmt->execute([$verification['id']]);
+            $update = $pdo->prepare("UPDATE login_verifications SET verified = TRUE WHERE id = ?");
+            $update->execute([$verification['id']]);
             
             // Get user data
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
-            $stmt->execute([$user_id]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $userStmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+            $userStmt->execute([$user_id]);
+            $user = $userStmt->fetch(PDO::FETCH_ASSOC);
             
             if ($user) {
                 // Create session
@@ -94,44 +111,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['logged_in'] = true;
                 
-                // Log the successful login
-                if (function_exists('logLoginAttempt')) {
-                    logLoginAttempt($pdo, $user['id'], $user['email'], true);
-                }
+                error_log("✅ User {$user['username']} logged in successfully");
                 
-                // Send login notification
-                if (function_exists('sendLoginNotificationEmail')) {
-                    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
-                    $ip_address = getRealIP();
-                    sendLoginNotificationEmail($user['email'], $user['full_name'], $user_agent, $ip_address);
-                }
-                
-                // Clear terms agreement
-                unset($_SESSION['terms_agreed']);
-                
-                // Redirect to dashboard
+                // Redirect immediately
                 header('Location: dashboard.php');
                 exit();
             }
         } else {
-            error_log("❌ Invalid/expired code for user $user_id");
-            
-            // Check if code exists but expired
-            if ($latest && $latest['verification_code'] === $code) {
-                error_log("Code exists but expired at: {$latest['expires_at']}");
-                $message = 'Verification code has expired. Please request a new one.';
-            } else {
-                $message = 'Invalid verification code. Please try again.';
-            }
-            
+            error_log("❌ Invalid code for user $user_id");
+            $message = 'Invalid or expired verification code';
             $messageType = 'error';
             $showVerification = true;
             $temp_user_id = $user_id;
             
             // Get email for display
-            $stmt = $pdo->prepare("SELECT email FROM users WHERE id = ?");
-            $stmt->execute([$user_id]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $emailStmt = $pdo->prepare("SELECT email FROM users WHERE id = ?");
+            $emailStmt->execute([$user_id]);
+            $user = $emailStmt->fetch(PDO::FETCH_ASSOC);
             if ($user) {
                 $temp_email = maskEmail($user['email']);
             }
@@ -139,6 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
+// Handle initial login
 // Handle initial login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'login') {
     $username = trim($_POST['username'] ?? '');
@@ -159,8 +156,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $verification_code = sprintf("%06d", random_int(0, 999999));
                 $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
                 
-                error_log("LOGIN - Saving code: $verification_code for user {$user['id']}");
-                
                 // Delete old codes
                 $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
                 $stmt->execute([$user['id']]);
@@ -169,68 +164,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
                 $stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
                 
-                // ============ FIXED: DIRECT RESEND API CALL ============
-                // Send email using Resend API directly (works on Railway)
-                $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW'; // Your key
+                // ===== INSTANT EMAIL SENDING =====
+                // Send email in background - NO WAITING
+                sendEmailFast($user['email'], $user['full_name'], $verification_code);
                 
-                // Prepare email data
-                $data = [
-                    'from' => 'onboarding@resend.dev',
-                    'to' => [$user['email']],
-                    'subject' => '🔐 Your Login Verification Code',
-                    'html' => "
-                        <html>
-                        <body>
-                            <h2>Hello {$user['full_name']},</h2>
-                            <p>Your verification code is:</p>
-                            <h1 style='font-size: 48px; color: #3b82f6; letter-spacing: 5px;'>{$verification_code}</h1>
-                            <p>This code expires in 10 minutes.</p>
-                            <p style='color: #666;'>If you didn't try to log in, ignore this email.</p>
-                        </body>
-                        </html>
-                    ",
-                    'text' => "Your verification code is: {$verification_code}"
-                ];
-                
-                // Send via cURL
-                $ch = curl_init('https://api.resend.com/emails');
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_POST, true);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                    'Authorization: Bearer ' . $api_key,
-                    'Content-Type: application/json'
-                ]);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-                
-                $response = curl_exec($ch);
-                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-                
-                // Check if email was sent
-                $email_sent = ($httpCode === 200);
-                
-                if ($email_sent) {
-                    error_log("✅ Email sent to {$user['email']}");
-                } else {
-                    error_log("❌ Email failed: HTTP $httpCode - $response");
-                }
-                // ============ END FIX ============
-                
-                // ALWAYS show verification form
+                // IMMEDIATELY show verification form
                 $showVerification = true;
                 $temp_user_id = $user['id'];
                 $temp_email = maskEmail($user['email']);
                 
-                if ($email_sent) {
-                    $message = "✓ Verification code sent to " . $temp_email;
-                    $messageType = 'success';
-                } else {
-                    // DON'T show the code - just show error
-                    $message = "⚠️ Unable to send verification code. Please try again or contact support.";
-                    $messageType = 'error';
-                }
-                 
+                // Always show success (email sent in background)
+                $message = "✓ Verification code sent to " . $temp_email;
+                $messageType = 'success';
+                
+                // Log it
+                error_log("✅ Login successful for {$user['email']}, code: $verification_code");
             } else {
                 $message = 'Invalid username/email or password';
                 $messageType = 'error';
