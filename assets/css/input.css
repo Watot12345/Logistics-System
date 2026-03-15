@@ -328,7 +328,9 @@ input[type="checkbox"] {
     height: 1rem;
     cursor: pointer;
 }
-
+.bg-yellow-100 { background-color: #fef3c7; }
+.text-yellow-700 { color: #b45309; }
+.border-l-4.border-yellow-500 { border-left-color: #f59e0b; }
 input[type="checkbox"]:checked {
     background-color: #3b82f6;
     border-color: #3b82f6;

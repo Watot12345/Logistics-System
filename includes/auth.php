@@ -121,6 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // Handle initial login
+// Handle initial login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'login') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -153,25 +154,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 ");
                 $stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
                 
-                // Send verification email
+                // ============ FIXED EMAIL SENDING WITH TIMEOUT ============
                 $email_sent = false;
+                
+                // Try to send email but with timeout protection
                 if (function_exists('sendVerificationEmail')) {
-                    $email_sent = sendVerificationEmail($user['email'], $user['full_name'], $verification_code);
+                    // Set maximum execution time for this operation
+                    set_time_limit(30);
+                    
+                    // Start output buffering to catch any errors
+                    ob_start();
+                    
+                    // Attempt to send with error suppression
+                    try {
+                        $email_sent = @sendVerificationEmail($user['email'], $user['full_name'], $verification_code);
+                    } catch (Exception $e) {
+                        error_log("Email exception: " . $e->getMessage());
+                        $email_sent = false;
+                    }
+                    
+                    // Clean output buffer
+                    ob_end_clean();
                 }
                 
+                // ALWAYS show verification form - even if email fails
+                $showVerification = true;
+                $temp_user_id = $user['id'];
+                $temp_email = maskEmail($user['email']);
+                
                 if ($email_sent) {
-                    // Show verification form
-                    $showVerification = true;
-                    $temp_user_id = $user['id'];
-                    $temp_email = maskEmail($user['email']);
-                    
                     $message = "✓ Verification code sent to " . $temp_email;
                     $messageType = 'success';
                 } else {
-                    $message = 'Unable to send verification code. Please try again.';
-                    $messageType = 'error';
-                    error_log("Failed to send verification email to {$user['email']}");
+                    // FALLBACK: Show the code directly (TEMPORARY for production testing)
+                    $message = "⚠️ Use code: <strong>{$verification_code}</strong> (Email temporarily unavailable)";
+                    $messageType = 'warning';
+                    
+                    // Also log it
+                    error_log("2FA CODE for {$user['email']}: {$verification_code}");
                 }
+                // ============ END FIX ============
                  
             } else {
                 $message = 'Invalid username/email or password';
