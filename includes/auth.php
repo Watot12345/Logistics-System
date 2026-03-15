@@ -39,6 +39,7 @@ $temp_user_id = null;
 $temp_email = null;
 
 // Handle verification code submission
+// Handle verification code submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'verify') {
     $code = trim($_POST['verification_code'] ?? '');
     $user_id = $_POST['user_id'] ?? '';
@@ -49,11 +50,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $showVerification = true;
         $temp_user_id = $user_id;
     } else {
-        // FIXED: Use PHP time instead of NOW()
-        $current_time = null;
+        // FIXED: Use CURRENT date and time
+        $current_time = date('Y-m-d H:i:s');  // ← THIS IS CORRECT!
         
         error_log("VERIFY - Current time: $current_time, Code: $code, User: $user_id");
         
+        // First check if ANY code exists for this user (for debugging)
+        $check_stmt = $pdo->prepare("SELECT * FROM login_verifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1");
+        $check_stmt->execute([$user_id]);
+        $latest = $check_stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($latest) {
+            error_log("Latest code for user: {$latest['verification_code']}, expires: {$latest['expires_at']}");
+        }
+        
+        // Now check for valid code
         $stmt = $pdo->prepare("
             SELECT * FROM login_verifications 
             WHERE user_id = ? AND verification_code = ? 
@@ -104,7 +115,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
         } else {
             error_log("❌ Invalid/expired code for user $user_id");
-            $message = 'Invalid or expired verification code';
+            
+            // Check if code exists but expired
+            if ($latest && $latest['verification_code'] === $code) {
+                error_log("Code exists but expired at: {$latest['expires_at']}");
+                $message = 'Verification code has expired. Please request a new one.';
+            } else {
+                $message = 'Invalid verification code. Please try again.';
+            }
+            
             $messageType = 'error';
             $showVerification = true;
             $temp_user_id = $user_id;
