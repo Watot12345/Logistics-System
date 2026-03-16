@@ -1924,27 +1924,6 @@
 .btn-change:hover {
     background-color: #d97706 !important;
 }
-/* Responsive Design for Driver Stats */
-@media (max-width: 768px) {
-    .stats-mini-grid {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-    
-    .detail-row {
-        flex-direction: column;
-        gap: 4px;
-    }
-    
-    .detail-row strong {
-        min-width: auto;
-    }
-    
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
 /* Empty State Styles */
 .empty-state {
     text-align: center;
@@ -1969,6 +1948,11 @@
     font-size: 14px;
 }
 /* Responsive */
+/* ============================================
+   MOBILE RESPONSIVE MEDIA QUERIES
+   ============================================ */
+
+/* Large Tablets (max-width: 1200px) */
 @media (max-width: 1200px) {
     .dashboard-grid-4 {
         grid-template-columns: repeat(2, 1fr);
@@ -1977,8 +1961,14 @@
     .dashboard-grid-3 {
         grid-template-columns: repeat(2, 1fr);
     }
+    
+    .page-content {
+        margin-left: 240px;
+        width: calc(100% - 240px);
+    }
 }
 
+/* Small Tablets / Large Phones (max-width: 1024px) */
 @media (max-width: 1024px) {
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -1998,64 +1988,833 @@
     
     .reservation-info {
         flex: 1 1 100%;
+        margin-bottom: 12px;
     }
     
     .reservation-dates,
     .reservation-status {
         flex: 1;
     }
+    
+    .page-content {
+        margin-left: 200px;
+        width: calc(100% - 200px);
+    }
 }
 
+/* Mobile Devices (max-width: 768px) */
 @media (max-width: 768px) {
+    /* Layout & Spacing */
+    .page-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 16px;
+    }
+    
     .stats-grid {
         grid-template-columns: 1fr;
+        gap: 12px;
     }
     
     .dashboard-grid-4,
-    .dashboard-grid-3 {
+    .dashboard-grid-3,
+    .dashboard-grid {
         grid-template-columns: 1fr;
+        gap: 16px;
     }
     
+    /* Filter Bar */
     .filter-bar {
         flex-direction: column;
         align-items: stretch;
+        gap: 12px;
+    }
+    
+    .filter-group {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .filter-select {
+        width: 100%;
+    }
+    
+    .search-box {
+        width: 100%;
     }
     
     .search-box input {
         width: 100%;
     }
     
-    .vehicle-item {
+    /* Cards */
+    .card-header {
+        padding: 14px 16px;
         flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .card-header h2 {
+        font-size: 15px;
+    }
+    
+    .card-body {
+        padding: 16px;
+    }
+    
+    .card-footer {
+        padding: 14px 16px;
+    }
+    
+    .card-badge {
+        font-size: 11px;
+        padding: 3px 6px;
+    }
+    
+    /* Vehicle Items */
+    .vehicle-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
     }
     
     .vehicle-info {
-        flex: 1 1 100%;
+        width: 100%;
+        flex-wrap: wrap;
+    }
+    
+    .vehicle-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    .vehicle-details h3 {
+        font-size: 14px;
+    }
+    
+    .vehicle-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .vehicle-status {
+        width: 100%;
+        margin-left: 52px;
     }
     
     .vehicle-metrics {
-        flex: 1 1 100%;
-        margin-left: 60px;
+        width: 100%;
+        margin-left: 52px;
+        flex-wrap: wrap;
+        gap: 12px;
     }
     
+    /* Driver Items */
     .driver-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+    }
+    
+    .driver-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 14px;
+    }
+    
+    .driver-info {
+        width: 100%;
+    }
+    
+    .driver-info h3 {
+        font-size: 14px;
+    }
+    
+    .driver-meta {
         flex-wrap: wrap;
+        gap: 8px;
     }
     
     .driver-stats {
-        flex: 1 1 100%;
-        margin-left: 64px;
-    }
-    
-    .condition-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .schedule-item {
+        width: 100%;
+        margin-left: 0;
         flex-wrap: wrap;
+        gap: 12px;
+        justify-content: space-between;
+    }
+    
+    .driver-stat {
+        flex: 1;
+        min-width: 60px;
+    }
+    
+    .driver-stat .value {
+        font-size: 14px;
+    }
+    
+    /* Trip Items */
+    .trip-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+    }
+    
+    .trip-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+    
+    .trip-content {
+        width: 100%;
+    }
+    
+    .trip-route {
+        font-size: 13px;
+    }
+    
+    .trip-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .trip-stats {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: space-between;
+    }
+    
+    /* Reservation Items */
+    .reservation-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+    }
+    
+    .reservation-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .reservation-icon {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .reservation-details h3 {
+        font-size: 14px;
+    }
+    
+    .reservation-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .reservation-dates {
+        width: 100%;
+        font-size: 12px;
+    }
+    
+    .reservation-status {
+        width: 100%;
+    }
+    
+    .reservation-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    /* Schedule Items */
+    .schedule-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
     }
     
     .schedule-time {
         width: 100%;
+        text-align: left;
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+    
+    .schedule-content {
+        width: 100%;
+    }
+    
+    .schedule-title {
+        font-size: 13px;
+    }
+    
+    .schedule-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .schedule-assignee {
+        width: 100%;
+    }
+    
+    /* Assignment Items */
+    .assignment-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+    }
+    
+    .assignment-vehicle {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+    
+    .assignment-driver {
+        width: 100%;
+        margin-left: 44px;
+    }
+    
+    .assignment-date {
+        width: 100%;
+        margin-left: 44px;
+        font-size: 12px;
+    }
+    
+    .assignment-status {
+        width: 100%;
+        margin-left: 44px;
+    }
+    
+    /* Maintenance Items */
+    .maintenance-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+    }
+    
+    .maintenance-icon {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .maintenance-content {
+        width: 100%;
+    }
+    
+    .maintenance-title {
+        font-size: 13px;
+    }
+    
+    .maintenance-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .maintenance-due {
+        width: 100%;
+        text-align: left;
+        margin-top: 4px;
+    }
+    
+    /* Condition Grid */
+    .condition-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .condition-item {
+        padding: 14px;
+    }
+    
+    .condition-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    .condition-value {
+        font-size: 20px;
+    }
+    
+    /* Delay Items */
+    .delay-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+    }
+    
+    .delay-icon {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .delay-content {
+        width: 100%;
+    }
+    
+    .delay-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .delay-duration {
+        width: 100%;
+        margin-top: 4px;
+    }
+    
+    /* Activity Timeline */
+    .activity-timeline {
+        gap: 12px;
+    }
+    
+    .activity-item {
+        gap: 8px;
+    }
+    
+    .activity-content {
+        padding-bottom: 8px;
+    }
+    
+    .activity-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .activity-title {
+        font-size: 13px;
+    }
+    
+    .activity-time {
+        font-size: 11px;
+    }
+    
+    .activity-desc {
+        font-size: 12px;
+    }
+    
+    .activity-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    /* Location Components */
+    .location-card {
+        margin: 8px 0;
+    }
+    
+    .location-current {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 14px 16px;
+    }
+    
+    .current-info {
+        width: 100%;
+    }
+    
+    .current-text {
+        font-size: 14px;
+    }
+    
+    .type-badge {
+        align-self: flex-start;
+    }
+    
+    .history-section {
+        padding: 12px 16px;
+    }
+    
+    .history-dropdown {
+        font-size: 13px;
+        padding: 10px 12px;
+    }
+    
+    /* Buttons & Actions */
+    .btn {
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+    
+    .action-buttons {
+        gap: 8px;
+    }
+    
+    .header-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    /* Tabs */
+    .tabs {
+        padding: 0 12px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    
+    .tabs::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .tab {
+        padding: 10px 12px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    
+    /* Empty States */
+    .empty-state {
+        padding: 30px 16px;
+    }
+    
+    .empty-state i {
+        font-size: 40px;
+    }
+    
+    .empty-state h3 {
+        font-size: 16px;
+    }
+    
+    .empty-state p {
+        font-size: 13px;
+    }
+    
+    /* Driver Performance Stats */
+    .stats-mini-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .stat-mini {
+        padding: 14px;
+    }
+    
+    .stat-mini .value {
+        font-size: 24px;
+    }
+    
+    .stat-mini .label {
+        font-size: 11px;
+    }
+    
+    /* Assignment Details */
+    .assignment-details {
+        padding: 16px;
+    }
+    
+    .detail-row {
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 0;
+    }
+    
+    .detail-row strong {
+        min-width: auto;
+        font-size: 13px;
+    }
+    
+    .detail-row span {
+        font-size: 13px;
+    }
+    
+    /* Modal */
+    .modal-content {
+        margin: 20px 16px;
+        max-width: none;
+        width: auto;
+    }
+    
+    .modal-header h3 {
+        font-size: 16px;
+    }
+    
+    .modal-footer {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .modal-footer .btn {
+        width: 100%;
     }
 }
+
+/* Small Mobile Devices (max-width: 480px) */
+@media (max-width: 480px) {
+    .page-content {
+        padding: 12px;
+    }
+    
+    .card-header {
+        padding: 12px 14px;
+    }
+    
+    .card-header h2 {
+        font-size: 14px;
+    }
+    
+    .card-body {
+        padding: 14px;
+    }
+    
+    .stat-card {
+        padding: 16px;
+    }
+    
+    .stat-icon {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .stat-value {
+        font-size: 20px;
+    }
+    
+    .stat-label {
+        font-size: 13px;
+    }
+    
+    .vehicle-icon,
+    .driver-avatar,
+    .reservation-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+    
+    .vehicle-metrics {
+        gap: 8px;
+    }
+    
+    .vehicle-metric .value {
+        font-size: 13px;
+    }
+    
+    .driver-stats {
+        gap: 8px;
+    }
+    
+    .driver-stat .value {
+        font-size: 13px;
+    }
+    
+    .trip-stats {
+        gap: 8px;
+    }
+    
+    .trip-stat .value {
+        font-size: 13px;
+    }
+    
+    .badge,
+    .trip-status,
+    .availability-badge,
+    .reservation-badge {
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+    
+    .location-current {
+        padding: 12px 14px;
+    }
+    
+    .current-text {
+        font-size: 13px;
+    }
+    
+    .current-time {
+        font-size: 11px;
+    }
+    
+    .history-section {
+        padding: 10px 14px;
+    }
+    
+    .history-header {
+        font-size: 11px;
+    }
+    
+    .history-dropdown {
+        font-size: 12px;
+        padding: 8px 10px;
+    }
+    
+    .btn {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    
+    .stat-mini .value {
+        font-size: 22px;
+    }
+    
+    .stat-mini .label {
+        font-size: 10px;
+    }
+}
+
+/* Landscape Mode for Mobile Devices */
+@media (max-width: 768px) and (orientation: landscape) {
+    .dashboard-grid-4,
+    .dashboard-grid-3,
+    .dashboard-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .vehicle-item,
+    .driver-item,
+    .trip-item,
+    .reservation-item {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .modal-content {
+        max-width: 90%;
+        margin: 30px auto;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .page-content {
+        margin: 0;
+        padding: 20px;
+    }
+    
+    .btn,
+    .card-actions,
+    .filter-bar,
+    .tabs,
+    .action-buttons {
+        display: none !important;
+    }
+    
+    .card {
+        break-inside: avoid;
+        border: 1px solid #000;
+    }
+    
+    .stat-mini .value {
+        -webkit-text-fill-color: #000;
+        color: #000;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    @media (max-width: 768px) {
+        /* Add dark mode overrides if needed */
+        .card,
+        .vehicle-item,
+        .driver-item,
+        .trip-item,
+        .reservation-item,
+        .schedule-item,
+        .maintenance-item,
+        .delay-item,
+        .location-card {
+            background: #1e293b;
+            border-color: #334155;
+        }
+        
+        .card-header {
+            border-bottom-color: #334155;
+        }
+        
+        .card-footer {
+            background: #0f172a;
+            border-top-color: #334155;
+        }
+        
+        .vehicle-icon,
+        .driver-avatar,
+        .reservation-icon,
+        .trip-icon,
+        .maintenance-icon,
+        .delay-icon,
+        .condition-icon {
+            background: #334155;
+        }
+        
+        .vehicle-details h3,
+        .driver-info h3,
+        .trip-route,
+        .reservation-details h3,
+        .schedule-title,
+        .maintenance-title,
+        .delay-title,
+        .current-text {
+            color: #f1f5f9;
+        }
+        
+        .vehicle-meta,
+        .driver-meta,
+        .trip-meta,
+        .reservation-meta,
+        .schedule-meta,
+        .maintenance-meta,
+        .activity-meta,
+        .current-time,
+        .stat-label {
+            color: #94a3b8;
+        }
+        
+        .stat-mini {
+            background: #1e293b;
+            border-color: #334155;
+        }
+        
+        .stat-mini .value {
+            -webkit-text-fill-color: #f1f5f9;
+            color: #f1f5f9;
+        }
+    }
+}
+
+/* Touch Device Optimizations */
+@media (hover: none) and (pointer: coarse) {
+    .btn:hover,
+    .card-action-btn:hover,
+    .reservation-btn:hover,
+    .vehicle-item:hover,
+    .driver-item:hover,
+    .trip-item:hover {
+        transform: none;
+    }
+    
+    .btn:active,
+    .card-action-btn:active,
+    .reservation-btn:active {
+        transform: scale(0.98);
+    }
+    
+    select,
+    input,
+    button {
+        font-size: 16px !important; /* Prevents zoom on iOS */
+    }
+    
+    .filter-select,
+    .search-box input,
+    .history-dropdown {
+        font-size: 16px !important;
+    }
+}
+
+
+
