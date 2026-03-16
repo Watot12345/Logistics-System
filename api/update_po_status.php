@@ -1,4 +1,4 @@
-<?php
+z   <?php
 session_start();
 require_once '../config/db.php';
 
@@ -98,24 +98,19 @@ try {
     ");
     $stmt->execute([$notes_update, $po_id]);
     
-    // If you want to track status changes in a separate table (recommended for auditing)
-    // You can create this table if it doesn't exist
-    /*
     $stmt = $pdo->prepare("
         INSERT INTO po_status_history (po_id, old_status, new_status, changed_by, changed_at) 
         VALUES (?, ?, ?, ?, NOW())
     ");
     $stmt->execute([$po_id, $current_po['status'], $status, $_SESSION['user_id']]);
-    */
     
-    // If status is 'approved', you might want to add additional logic here
+    
+    
     if ($status === 'approved') {
-        // Optional: Send notification to requester
-        // Optional: Update inventory reservations if needed
-        // Optional: Create dispatch schedule if applicable
+        
     }
     
-    // Commit transaction
+   
     $pdo->commit();
     
     echo json_encode([
@@ -126,7 +121,7 @@ try {
     ]);
     
 } catch (PDOException $e) {
-    // Rollback transaction on error
+   
     $pdo->rollBack();
     
     error_log('Error updating PO status: ' . $e->getMessage());

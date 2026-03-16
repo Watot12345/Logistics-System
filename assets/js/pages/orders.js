@@ -1,8 +1,12 @@
 // assets/js/pages/orders.js
 
+// Global variables
+let categories = [];
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Orders.js loaded');
     setupEventListeners();
+    loadCategories(); // Load categories for new item form
     
     // Set active tab based on URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -22,6 +26,20 @@ document.addEventListener('DOMContentLoaded', function() {
         if (supplierFilter) supplierFilter.value = supplier;
     }
 });
+
+// Load categories for new item form
+async function loadCategories() {
+    try {
+        const response = await fetch('../api/get_categories.php');
+        if (response.ok) {
+            categories = await response.json();
+            console.log('Categories loaded:', categories);
+        }
+    } catch (error) {
+        console.error('Error loading categories:', error);
+        categories = [];
+    }
+}
 
 function setActiveTab(status) {
     document.querySelectorAll('.tab').forEach(tab => {
@@ -70,7 +88,6 @@ function setupEventListeners() {
             }, 500);
         });
         
-        // Enter key for search
         searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -78,8 +95,21 @@ function setupEventListeners() {
             }
         });
     }
+    
+    // Category selection for new item form
+    const categorySelect = document.getElementById('new_product_category');
+    if (categorySelect) {
+        categorySelect.addEventListener('change', function() {
+            if (this.value === 'new') {
+                document.getElementById('newCategoryInput').style.display = 'block';
+            } else {
+                document.getElementById('newCategoryInput').style.display = 'none';
+            }
+        });
+    }
 }
 
+// ===== FILTER FUNCTIONS =====
 function filterByStatus(status) {
     const urlParams = new URLSearchParams(window.location.search);
     const currentTab = urlParams.get('status') || 'pending';
@@ -106,121 +136,172 @@ function filterBySupplier(supplierId) {
     window.location.href = url;
 }
 
+// ===== SEARCH FUNCTION - THIS IS WHAT YOU NEED =====
 function filterBySearch(searchTerm) {
+    console.log('Searching for:', searchTerm);
+    
     if (!searchTerm.trim()) {
-        // If search is empty, remove it from URL
+        // Remove search from URL
         const urlParams = new URLSearchParams(window.location.search);
         urlParams.delete('search');
         window.location.href = '?' + urlParams.toString();
         return;
     }
     
+    // Get current tab
     const urlParams = new URLSearchParams(window.location.search);
     const currentTab = urlParams.get('status') || 'pending';
-    const statusFilter = urlParams.get('filter_status') || 'all';
-    const supplier = urlParams.get('supplier') || 'all';
     
-    let url = `?status=${currentTab}&filter_status=${statusFilter}&search=${encodeURIComponent(searchTerm)}`;
-    if (supplier !== 'all') url += `&supplier=${supplier}`;
-    
-    window.location.href = url;
+    // Redirect with search parameter
+    window.location.href = `?status=${currentTab}&search=${encodeURIComponent(searchTerm)}`;
 }
 
-function clearFilters() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const currentTab = urlParams.get('status') || 'pending';
-    window.location.href = `?status=${currentTab}`;
-}
-
-// Update PO Status function
-async function updatePOStatus(poId, newStatus) {
-    console.log(`Updating PO ${poId} to ${newStatus}...`);
+// ===== SETUP ON PAGE LOAD =====
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, setting up event listeners...');
     
-    let actionText = newStatus;
-    if (newStatus === 'approved') actionText = 'approve';
-    else if (newStatus === 'rejected') actionText = 'reject';
-    else if (newStatus === 'completed') actionText = 'mark as completed';
-    else if (newStatus === 'cancelled') actionText = 'cancel';
-    
-    if (!confirm(`Are you sure you want to ${actionText} this purchase order?`)) {
-        return;
+    // Setup search
+    const searchInput = document.getElementById('searchPO');
+    if (searchInput) {
+        console.log('Search input found');
+        let timeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                filterBySearch(this.value);
+            }, 500);
+        });
+    } else {
+        console.error('Search input not found!');
     }
+    
+    // Set active tab
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status') || 'pending';
+    document.querySelectorAll('.tab').forEach(tab => {
+        if (tab.dataset.tab === status) {
+            tab.classList.add('active');
+        }
+    });
+});
+
+
+
+// Update the search input event listener
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Orders.js loaded');
+    setupEventListeners();
+    
+    // Set active tab based on URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status') || 'pending';
+    setActiveTab(status);
+    
+    // Add search event listener with proper handling
+    const searchInput = document.getElementById('searchPO');
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                filterBySearch(this.value);
+            }, 500);
+        });
+        
+        // Also handle Enter key
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                clearTimeout(searchTimeout);
+                filterBySearch(this.value);
+            }
+        });
+    }
+});
+
+// ===== PO STATUS FUNCTIONS =====
+async function updatePOStatus(poId, newStatus) {
+    if (!confirm(`Are you sure you want to ${newStatus} this PO?`)) return;
     
     try {
         const response = await fetch('../api/update_po_status.php', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                po_id: poId,
-                status: newStatus
-            })
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({po_id: poId, status: newStatus})
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
         const result = await response.json();
-        console.log('Server response:', result);
-        
         if (result.success) {
-            alert(`Purchase order ${newStatus} successfully!`);
-            window.location.reload();
-        } else {
-            alert('Error updating PO: ' + (result.error || 'Unknown error'));
+            alert(`PO ${newStatus} successfully!`);
+            location.reload();
         }
     } catch (error) {
-        console.error('Error updating PO:', error);
-        alert('Error updating purchase order: ' + error.message);
+        console.error('Error:', error);
     }
 }
 
-// Modal functions
+// ===== MODAL FUNCTIONS =====
+function viewPO(poId) {
+    alert('View PO feature coming soon!');
+}
+
+// New item functions (simplified)
+function addNewItemForm() {
+    alert('Add new item feature coming soon!');
+}
+
+function saveNewItem() {
+    alert('Save new item feature coming soon!');
+}
+
+function cancelNewItem() {
+    document.getElementById('quickNewItemForm').style.display = 'none';
+}
+
+function addNewCategory() {
+    alert('Add category feature coming soon!');
+}
 function openPOModal() {
-    console.log('Opening modal...');
-    document.getElementById('poModal').classList.remove('modal-hidden');
-    document.getElementById('poModal').classList.add('modal-visible');
-    
-    // Load data after modal is visible
-    setTimeout(() => {
-        loadSuppliersForModal();
-        loadItemsForModal();
-    }, 200);
+    console.log('Opening PO modal...');
+    const modal = document.getElementById('poModal');
+    if (modal) {
+        modal.classList.remove('modal-hidden');
+        modal.classList.add('modal-visible');
+        
+        // Load data
+        setTimeout(() => {
+            loadSuppliersForModal();
+            loadItemsForModal();
+        }, 200);
+    } else {
+        console.error('Modal not found!');
+    }
 }
 
 function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('modal-visible');
-    document.getElementById(modalId).classList.add('modal-hidden');
+    console.log('Closing modal:', modalId);
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('modal-visible');
+        modal.classList.add('modal-hidden');
+    }
 }
 
+// ===== LOAD DATA FUNCTIONS =====
 async function loadSuppliersForModal() {
     try {
         console.log('Fetching suppliers...');
         const response = await fetch('../api/get_suppliers.php');
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
         const suppliers = await response.json();
-        console.log('Suppliers received:', suppliers);
+        console.log('Suppliers loaded:', suppliers);
         
-        // Find the supplier select in the modal
-        const select = document.querySelector('#poModal select.form-select:first-of-type');
-        
-        if (!select) {
-            console.error('❌ Supplier select not found!');
-            return;
+        const select = document.getElementById('modalSupplierSelect');
+        if (select) {
+            select.innerHTML = '<option value="">Select Supplier</option>' +
+                suppliers.map(s => `<option value="${s.id}">${s.supplier_name}</option>`).join('');
         }
-        
-        select.innerHTML = '<option value="">Select Supplier</option>' +
-            suppliers.map(s => `<option value="${s.id}">${s.supplier_name}</option>`).join('');
-        
-        console.log('✅ Supplier select updated with', suppliers.length, 'suppliers');
     } catch (error) {
-        console.error('❌ Error loading suppliers:', error);
+        console.error('Error loading suppliers:', error);
     }
 }
 
@@ -228,51 +309,106 @@ async function loadItemsForModal() {
     try {
         console.log('Fetching items...');
         const response = await fetch('../api/get_inventory_items.php');
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
         const items = await response.json();
-        console.log('Items received:', items);
+        console.log('Items loaded:', items);
         window.inventoryItems = items;
-        console.log('✅ Items stored globally');
     } catch (error) {
-        console.error('❌ Error loading items:', error);
+        console.error('Error loading items:', error);
     }
 }
 
+// ===== ITEM FUNCTIONS =====
 function addItem() {
+    console.log('Adding item row...');
     const tbody = document.querySelector('.items-table tbody');
     if (!tbody) {
-        console.error('Items table body not found!');
+        console.error('Table body not found!');
         return;
     }
     
     const row = document.createElement('tr');
-    
     row.innerHTML = `
         <td>
-            <select class="item-select" onchange="updateItemPrice(this)">
+            <select class="item-select" onchange="updateItemPrice(this)" style="width: 100%; padding: 8px;">
                 <option value="">Select Item</option>
                 ${window.inventoryItems?.map(item => 
                     `<option value="${item.id}" data-price="${item.price}">${item.item_name} (${item.sku})</option>`
-                ).join('') || '<option value="" disabled>No items available</option>'}
+                ).join('') || '<option disabled>No items available</option>'}
             </select>
         </td>
-        <td><input type="number" class="item-qty" value="1" min="1" onchange="calculateItemTotal(this)"></td>
-        <td><input type="number" class="item-price" value="0" step="0.01" onchange="calculateItemTotal(this)"></td>
+        <td><input type="number" class="item-qty" value="1" min="1" onchange="calculateItemTotal(this)" style="width: 80px;"></td>
+        <td><input type="number" class="item-price" value="0" step="0.01" onchange="calculateItemTotal(this)" style="width: 100px;"></td>
         <td class="item-total">₱0.00</td>
-        <td><button type="button" class="remove-item" onclick="removeItem(this)"><i class="fas fa-times"></i></button></td>
+        <td><button type="button" onclick="removeItem(this)" style="background:none; border:none; color:#e11d48;"><i class="fas fa-times"></i></button></td>
     `;
-    
     tbody.appendChild(row);
-    console.log('✅ New item row added');
+}
+
+function handleItemSelection(select) {
+    const row = select.closest('tr');
+    const newItemForm = row.querySelector('.new-item-form');
+    
+    if (select.value === '') {
+        newItemForm.style.display = 'block';
+    } else {
+        newItemForm.style.display = 'none';
+        updateItemPrice(select);
+    }
+}
+
+function showNewItemForm(button) {
+    const row = button.closest('tr');
+    const newItemForm = row.querySelector('.new-item-form');
+    newItemForm.style.display = 'block';
+}
+
+function saveInlineNewItem(button) {
+    const row = button.closest('tr');
+    const name = row.querySelector('.new-item-name').value;
+    const sku = row.querySelector('.new-item-sku').value;
+    const category = row.querySelector('.new-item-category').selectedOptions[0]?.text || 'Uncategorized';
+    const reorder = row.querySelector('.new-item-reorder').value;
+    
+    if (!name || !sku) {
+        alert('Please enter at least name and SKU');
+        return;
+    }
+    
+    // Mark this row as containing a new item
+    row.setAttribute('data-is-new', 'true');
+    const newItemData = {
+        name: name,
+        sku: sku,
+        category: row.querySelector('.new-item-category').value,
+        category_name: category,
+        reorder: reorder
+    };
+    
+    // Add hidden field with data
+    const hiddenField = document.createElement('input');
+    hiddenField.type = 'hidden';
+    hiddenField.className = 'new-item-data';
+    hiddenField.value = JSON.stringify(newItemData);
+    row.querySelector('td:first-child').appendChild(hiddenField);
+    
+    // Hide the form
+    row.querySelector('.new-item-form').style.display = 'none';
+    
+    // Update the display to show it's a new item
+    const displayDiv = document.createElement('div');
+    displayDiv.style.display = 'flex';
+    displayDiv.style.alignItems = 'center';
+    displayDiv.style.gap = '8px';
+    displayDiv.innerHTML = `
+        <span style="font-weight: 600; color: #2563eb;">NEW:</span>
+        <span>${name} (${sku})</span>
+        <small style="color: #666;">Category: ${category}</small>
+    `;
+    row.querySelector('td:first-child').insertBefore(displayDiv, row.querySelector('td:first-child').firstChild);
 }
 
 function updateItemPrice(select) {
-    const selected = select.options[select.selectedIndex];
-    const price = selected.dataset.price || 0;
+    const price = select.selectedOptions[0]?.dataset.price || 0;
     const row = select.closest('tr');
     row.querySelector('.item-price').value = price;
     calculateItemTotal(row.querySelector('.item-price'));
@@ -282,9 +418,7 @@ function calculateItemTotal(input) {
     const row = input.closest('tr');
     const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
     const price = parseFloat(row.querySelector('.item-price').value) || 0;
-    const total = qty * price;
-    
-    row.querySelector('.item-total').textContent = '₱' + total.toFixed(2);
+    row.querySelector('.item-total').textContent = '₱' + (qty * price).toFixed(2);
     calculateGrandTotal();
 }
 
@@ -294,15 +428,12 @@ function calculateGrandTotal() {
         subtotal += parseFloat(cell.textContent.replace('₱', '')) || 0;
     });
     
-    const tax = subtotal * 0.12; // 10% tax
+    const tax = subtotal * 0.12;
     const total = subtotal + tax;
     
-    // Update the display
     document.getElementById('subtotal').textContent = '₱' + subtotal.toFixed(2);
     document.getElementById('tax').textContent = '₱' + tax.toFixed(2);
     document.getElementById('total').textContent = '₱' + total.toFixed(2);
-    
-    console.log('Totals calculated:', {subtotal, tax, total});
     
     return {subtotal, tax, total};
 }
@@ -311,36 +442,110 @@ function removeItem(button) {
     if (document.querySelectorAll('.items-table tbody tr').length > 1) {
         button.closest('tr').remove();
         calculateGrandTotal();
-    } else {
-        alert('You must have at least one item');
     }
 }
 
+
+// ===== NEW ITEM FORM FUNCTIONS (for the separate form) =====
+function addNewItemForm() {
+    document.getElementById('quickNewItemForm').style.display = 'block';
+    document.getElementById('quickNewItemForm').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelNewItem() {
+    document.getElementById('quickNewItemForm').style.display = 'none';
+    document.getElementById('new_product_name').value = '';
+    document.getElementById('new_product_sku').value = '';
+    document.getElementById('new_product_category').value = '';
+    document.getElementById('new_product_price').value = '';
+    document.getElementById('new_product_stock').value = '0';
+    document.getElementById('new_product_reorder').value = '10';
+    document.getElementById('new_product_description').value = '';
+    document.getElementById('newCategoryInput').style.display = 'none';
+}
+
+function addNewCategory() {
+    const categoryName = document.getElementById('new_category_name').value.trim();
+    if (!categoryName) {
+        alert('Please enter a category name');
+        return;
+    }
+    
+    const select = document.getElementById('new_product_category');
+    const newOption = document.createElement('option');
+    newOption.value = 'temp_' + Date.now();
+    newOption.text = categoryName;
+    newOption.selected = true;
+    select.appendChild(newOption);
+    
+    document.getElementById('newCategoryInput').style.display = 'none';
+    document.getElementById('new_category_name').value = '';
+    
+    alert('Category added! You can now select it.');
+}
+
+function saveNewItem() {
+    const name = document.getElementById('new_product_name').value.trim();
+    const sku = document.getElementById('new_product_sku').value.trim();
+    const price = document.getElementById('new_product_price').value;
+    
+    if (!name || !sku || !price || price <= 0) {
+        alert('Please fill in all required fields (Name, SKU, Price)');
+        return;
+    }
+    
+    const tbody = document.querySelector('.items-table tbody');
+    const row = document.createElement('tr');
+    row.setAttribute('data-is-new', 'true');
+    
+    const category = document.getElementById('new_product_category').selectedOptions[0]?.text || 'Uncategorized';
+    const reorderLevel = document.getElementById('new_product_reorder').value;
+    
+    const newItemData = {
+        name: name,
+        sku: sku,
+        category: document.getElementById('new_product_category').value,
+        category_name: category,
+        reorder: reorderLevel,
+        description: document.getElementById('new_product_description').value
+    };
+    
+    row.innerHTML = `
+        <td>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-weight: 600; color: #2563eb;">NEW:</span>
+                <span>${name} (${sku})</span>
+            </div>
+            <small style="color: #666;">Category: ${category} | Reorder: ${reorderLevel}</small>
+            <input type="hidden" class="new-item-data" value='${JSON.stringify(newItemData)}'>
+        </td>
+        <td><input type="number" class="item-qty" value="1" min="1" onchange="calculateItemTotal(this)" style="width: 80px;"></td>
+        <td><input type="number" class="item-price" value="${price}" step="0.01" onchange="calculateItemTotal(this)" style="width: 100px;"></td>
+        <td class="item-total">₱${(parseFloat(price) * 1).toFixed(2)}</td>
+        <td><button type="button" class="remove-item" onclick="removeItem(this)"><i class="fas fa-times"></i></button></td>
+    `;
+    
+    tbody.appendChild(row);
+    cancelNewItem();
+    calculateGrandTotal();
+}
+
+// ===== SAVE PO FUNCTION =====
 async function savePO() {
     console.log('Saving PO...');
     
-    // Get form values using the correct IDs
     const supplier = document.getElementById('modalSupplierSelect').value;
     const orderDate = document.getElementById('orderDate').value;
     const priority = document.getElementById('priority').value;
     const deliveryDate = document.getElementById('expectedDelivery').value;
     const description = document.getElementById('poDescription').value;
-    const shippingAddress = document.getElementById('shippingAddress').value;
     const additionalNotes = document.getElementById('additionalNotes').value;
-    const department = document.getElementById('modalDepartmentSelect').value;
     
-    // Validate required fields
-    if (!supplier) {
-        alert('Please select a supplier');
+    if (!supplier || !orderDate) {
+        alert('Please select a supplier and order date');
         return;
     }
     
-    if (!orderDate) {
-        alert('Please select an order date');
-        return;
-    }
-    
-    // Get items from the table
     const items = [];
     const itemRows = document.querySelectorAll('.items-table tbody tr');
     
@@ -349,19 +554,37 @@ async function savePO() {
         return;
     }
     
-    itemRows.forEach((row, index) => {
-        const itemSelect = row.querySelector('.item-select');
-        const qtyInput = row.querySelector('.item-qty');
-        const priceInput = row.querySelector('.item-price');
-        
-        if (itemSelect && itemSelect.value) {
+    itemRows.forEach(row => {
+        if (row.getAttribute('data-is-new') === 'true') {
+            const newItemData = JSON.parse(row.querySelector('.new-item-data').value);
+            const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+            const price = parseFloat(row.querySelector('.item-price').value) || 0;
+            
             items.push({
-                item_id: itemSelect.value,
-                quantity: parseFloat(qtyInput?.value) || 0,
-                unit_price: parseFloat(priceInput?.value) || 0,
-                total_price: parseFloat(row.querySelector('.item-total')?.textContent.replace('₱', '')) || 0
+                is_new: true,
+                new_item_name: newItemData.name,
+                new_sku: newItemData.sku,
+                new_category: newItemData.category,
+                new_category_name: newItemData.category_name,
+                new_reorder_level: newItemData.reorder,
+                new_description: newItemData.description || '',
+                quantity: qty,
+                unit_price: price,
+                total_price: qty * price
             });
-            console.log(`Item ${index + 1}:`, items[items.length - 1]);
+        } else {
+            const itemSelect = row.querySelector('.item-select');
+            if (itemSelect && itemSelect.value) {
+                const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+                const price = parseFloat(row.querySelector('.item-price').value) || 0;
+                
+                items.push({
+                    item_id: itemSelect.value,
+                    quantity: qty,
+                    unit_price: price,
+                    total_price: qty * price
+                });
+            }
         }
     });
     
@@ -370,10 +593,7 @@ async function savePO() {
         return;
     }
     
-    // Calculate totals
     const totals = calculateGrandTotal();
-    
-    // Combine notes
     const combinedNotes = [description, additionalNotes].filter(n => n).join('\n');
     
     const poData = {
@@ -381,7 +601,6 @@ async function savePO() {
         order_date: orderDate,
         expected_delivery: deliveryDate || null,
         priority: priority,
-        department: department,
         subtotal: totals.subtotal,
         tax_amount: totals.tax,
         shipping_cost: 0,
@@ -409,16 +628,12 @@ async function savePO() {
         console.log('Server response:', result);
         
         if (result.success) {
-            alert(`PO ${result.po_number} created successfully!`);
+            alert(result.message || `PO ${result.po_number} created successfully!`);
             closeModal('poModal');
-            // Reset form
             document.getElementById('poForm').reset();
-            // Clear items table
             const tbody = document.querySelector('.items-table tbody');
             tbody.innerHTML = '';
-            // Add one empty row
             addItem();
-            // Reload the page to show new PO
             window.location.reload();
         } else {
             alert('Error creating PO: ' + (result.error || 'Unknown error'));
@@ -429,9 +644,7 @@ async function savePO() {
     }
 }
 
-// View PO function
 function viewPO(poId) {
     console.log('Viewing PO:', poId);
-    // You can implement this to show PO details
     alert('View PO feature coming soon!');
 }
