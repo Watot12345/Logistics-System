@@ -748,27 +748,23 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
                                 <span class="price">₱<?php echo number_format($item['price'], 2); ?></span>
                             </td>
                             <td>
-                                <?php
-                                $status_class = match($item['status'] ?? '') {
-                                    'low_stock' => 'low-stock',
-                                    'out_of_stock' => 'out-of-stock',
-                                    default => 'in-stock'
-                                };
-                                $status_icon = match($item['status'] ?? '') {
-                                    'low_stock' => 'exclamation-circle',
-                                    'out_of_stock' => 'times-circle',
-                                    default => 'check-circle'
-                                };
-                                $status_text = match($item['status'] ?? '') {
-                                    'low_stock' => 'Low Stock',
-                                    'out_of_stock' => 'Out of Stock',
-                                    default => 'In Stock'
-                                };
-                                ?>
-                                <span class="status-badge <?php echo $status_class; ?>">
-                                    <i class="fas fa-<?php echo $status_icon; ?>"></i>
-                                    <?php echo $status_text; ?>
-                                </span>
+                        
+<?php
+$status_class = match($item['status'] ?? 'in_stock') {
+    'low_stock' => 'low-stock',
+    'out_of_stock' => 'out-of-stock',
+    default => 'in-stock'
+};
+$status_icon = match($item['status'] ?? 'in_stock') {
+    'low_stock' => 'exclamation-circle',
+    'out_of_stock' => 'times-circle',
+    default => 'check-circle'
+};
+?>
+<span class="status-badge <?php echo $status_class; ?>">
+    <i class="fas fa-<?php echo $status_icon; ?>"></i>
+    <?php echo ucwords(str_replace('_', ' ', $item['status'] ?? 'In Stock')); ?>
+</span>
                             </td>
                             <td>
                                 <div class="action-group">
@@ -1129,7 +1125,10 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
                     <p class="detail-label">Last Updated</p>
                     <p class="detail-value" id="view_last_updated"></p>
                 </div>
-                
+<div class="stock-history" style="margin-top: 20px;">
+    <h4>Recent Stock Movements</h4>
+    <div id="stock_history"></div>
+</div>
                 <div class="modal-footer">
                     <button class="btn btn-outline" onclick="closeModal('viewModal')">Close</button>
                     <?php if ($isAdmin): ?>
@@ -1404,13 +1403,13 @@ function editSupplier(id) {
         }
         
         function getStatusBadge(status) {
-            const badges = {
-                'in_stock': '<span class="status-badge in-stock"><i class="fas fa-check-circle"></i> In Stock</span>',
-                'low_stock': '<span class="status-badge low-stock"><i class="fas fa-exclamation-circle"></i> Low Stock</span>',
-                'out_of_stock': '<span class="status-badge out-of-stock"><i class="fas fa-times-circle"></i> Out of Stock</span>'
-            };
-            return badges[status] || badges['in_stock'];
-        }
+    const badges = {
+        'in_stock': '<span class="status-badge in-stock"><i class="fas fa-check-circle"></i> In Stock</span>',
+        'low_stock': '<span class="status-badge low-stock"><i class="fas fa-exclamation-circle"></i> Low Stock</span>',
+        'out_of_stock': '<span class="status-badge out-of-stock"><i class="fas fa-times-circle"></i> Out of Stock</span>'
+    };
+    return badges[status] || badges['in_stock'];
+}
         
         function deleteItem(id) {
             <?php if ($isAdmin): ?>

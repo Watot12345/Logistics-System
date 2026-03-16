@@ -568,13 +568,9 @@ if ($user_role === 'admin') {
                                             <button class="btn-icon btn-edit" onclick="editAsset(<?php echo $asset['id']; ?>, '<?php echo addslashes($asset['asset_name']); ?>', '<?php echo $asset['asset_type']; ?>', '<?php echo $asset['status']; ?>', <?php echo $asset['asset_condition']; ?>)">
                                                 <i class="fas fa-edit"></i> Edit
                                             </button>
-                                            <form method="POST" action="" class="inline-form" onsubmit="return confirm('Delete this asset?');">
-                                                <input type="hidden" name="action" value="delete_asset">
-                                                <input type="hidden" name="asset_id" value="<?php echo $asset['id']; ?>">
-                                                <button type="submit" class="btn-icon btn-delete">
-                                                    <i class="fas fa-trash"></i> Delete
-                                                </button>
-                                            </form>
+                                            <button class="btn-icon btn-delete" onclick="deleteAsset(<?php echo $asset['id']; ?>, '<?php echo addslashes($asset['asset_name']); ?>')">
+    <i class="fas fa-trash"></i> Delete
+</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -730,14 +726,10 @@ if ($user_role === 'admin') {
 
                                     <?php if ($alert['status'] === 'pending'): ?>
                                     <?php endif; ?>
-
-                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this alert?');">
-                                        <input type="hidden" name="action" value="delete_alert">
-                                        <input type="hidden" name="alert_id" value="<?php echo $alert['id']; ?>">
-                                        <button type="submit" style="padding:6px 10px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer;">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </button>
-                                    </form>
+                                    <button onclick="deleteAlert(<?php echo $alert['id']; ?>, '<?php echo addslashes($alert['asset_name']); ?>')" 
+        style="padding:6px 10px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer;">
+    <i class="fas fa-trash"></i> Delete
+</button>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -1179,10 +1171,10 @@ $completed_maintenance = $pdo->query("
         <!-- Digital Document Repository -->
         <div class="card card-full">
     <div class="card-header">
-        <h2><i class="fas fa-folder"></i> Document Management Tracking & </h2>
+        <h2><i class="fas fa-folder"></i> Document Management Tracking  </h2>
         <div style="display: flex; gap: 10px; align-items: center;">
             <span class="card-badge"><?php echo $document_count ?? 0; ?> documents</span>
-            <?php if ($user_role === 'admin'): ?>
+            <?php if ($user_role === 'admin' || $user_role === 'employee'): ?>
             <button class="btn btn-primary" onclick="toggleDocumentForm()" style="padding: 8px 16px; font-size: 14px;">
                 <i class="fas fa-upload"></i> Upload Document
             </button>
@@ -1306,9 +1298,13 @@ $completed_maintenance = $pdo->query("
                     
                     <!-- Admin actions -->
                     <?php if ($user_role === 'admin'): ?>
-                    <button class="btn btn-danger" onclick="deleteDocument(<?php echo $doc['id']; ?>)" style="padding: 8px 12px;">
-                        <i class="fas fa-trash"></i>
-                    </button>
+<button class="btn-icon" onclick="deleteDocument(<?php echo $doc['id']; ?>, '<?php echo addslashes($doc['title']); ?>')" 
+        style="color: #ef4444; background: #fee2e2; border: none; cursor: pointer; padding: 8px 12px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s ease;"
+        onmouseover="this.style.backgroundColor='#fecaca'; this.style.transform='scale(1.02)';" 
+        onmouseout="this.style.backgroundColor='#fee2e2'; this.style.transform='scale(1)';"
+        title="Delete Document">
+    <i class="fas fa-trash"></i> 
+</button>
                     <?php endif; ?>
                 </div>
                 
@@ -1442,10 +1438,14 @@ $location = !empty($shipment['delivery_address']) ? $shipment['delivery_address'
                 <i class="fas fa-eye"></i> View
             </button>
             <?php if ($_SESSION['role'] === 'admin'): ?>
-            <button class="btn-icon" onclick="deleteDispatch(<?php echo $shipment['id']; ?>)" 
-                    style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 8px; background-color: #fee2e2; border-radius: 4px;" title="Delete">
-                <i class="fas fa-trash"></i>
-            </button>
+<!-- CORRECT Shipment Delete Button -->
+<button class="btn-icon" onclick="deleteDispatch(<?php echo $shipment['id']; ?>, 'DS-<?php echo str_pad($shipment['id'], 4, '0', STR_PAD_LEFT); ?>')" 
+        style="color: #ef4444; background: none; border: none; cursor: pointer; padding: 8px; background-color: #fee2e2; border-radius: 4px; transition: all 0.2s;"
+        onmouseover="this.style.backgroundColor='#fecaca'" 
+        onmouseout="this.style.backgroundColor='#fee2e2'"
+        title="Delete Dispatch">
+    <i class="fas fa-trash"></i>
+</button>
             <?php endif; ?>
         </div>
         <?php endif; ?>
@@ -1534,11 +1534,191 @@ $location = !empty($shipment['delivery_address']) ? $shipment['delivery_address'
         </div>
         <?php endif; ?>
     </div>
+    <!-- Universal Delete Confirmation Modal -->
+<div id="deleteModal" class="modal modal-hidden">
+    <div class="modal-content delete-modal">
+        <div class="delete-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <h3 class="delete-title" id="deleteModalTitle">Delete Item</h3>
+        <p class="delete-text" id="deleteModalMessage">Are you sure you want to delete this item? This action cannot be undone.</p>
+        
+        <!-- Hidden fields to store data for deletion -->
+        <input type="hidden" id="deleteAction" value="">
+        <input type="hidden" id="deleteId" value="">
+        <input type="hidden" id="deleteType" value="">
+        
+        <div class="delete-actions">
+            <button class="btn btn-outline" onclick="closeModal('deleteModal')">Cancel</button>
+            <button class="btn btn-primary" style="background: linear-gradient(135deg, #e11d48, #be123c);" onclick="confirmDelete()">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        </div>
+    </div>
+</div>
 </main>
 
 
 <!-- Admin CRUD JavaScript -->
 <script>
+// ===== UNIVERSAL DELETE FUNCTIONS =====
+let currentDeleteCallback = null;
+
+// Replace your existing closeModal function with this:
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('modal-hidden');
+        modal.classList.remove('modal-visible');
+        
+        // Quick reset for delete modal
+        if (modalId === 'deleteModal') {
+            document.getElementById('deleteAction').value = '';
+            document.getElementById('deleteId').value = '';
+            document.getElementById('deleteType').value = '';
+            currentDeleteCallback = null;
+        }
+    }
+}
+
+// Replace your existing showDeleteModal function with this:
+function showDeleteModal(options) {
+    // Get modal
+    const modal = document.getElementById('deleteModal');
+    
+    // Reset and set content
+    document.getElementById('deleteModalTitle').textContent = options.title || 'Delete Item';
+    document.getElementById('deleteModalMessage').textContent = options.message || 'Are you sure you want to delete this item? This action cannot be undone.';
+    document.getElementById('deleteAction').value = options.action || '';
+    document.getElementById('deleteId').value = options.id || '';
+    document.getElementById('deleteType').value = options.type || '';
+    currentDeleteCallback = options.onConfirm || null;
+    
+    // Show modal (simple fix)
+    modal.classList.remove('modal-hidden');
+    modal.classList.add('modal-visible');
+}
+
+function confirmDelete() {
+    const action = document.getElementById('deleteAction').value;
+    const id = document.getElementById('deleteId').value;
+    const type = document.getElementById('deleteType').value;
+    
+    // If custom callback exists, use it
+    if (currentDeleteCallback && typeof currentDeleteCallback === 'function') {
+        currentDeleteCallback(id, type);
+        closeModal('deleteModal');
+        return;
+    }
+    
+    // Otherwise, use default form submission
+    if (action && id) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="action" value="${action}">
+            <input type="hidden" name="${type}_id" value="${id}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+    
+    closeModal('deleteModal');
+}
+
+// ===== SPECIFIC DELETE FUNCTIONS FOR EACH MODULE =====
+
+// Delete Asset
+function deleteAsset(assetId, assetName) {
+    showDeleteModal({
+        title: 'Delete Asset',
+        message: `Are you sure you want to delete asset "${assetName}"? This action cannot be undone.`,
+        type: 'asset',
+        id: assetId,
+        action: 'delete_asset'
+    });
+}
+
+function deleteAlert(alertId, alertName) {
+    showDeleteModal({
+        title: 'Delete Maintenance Alert',
+        message: `Are you sure you want to delete the alert for "${alertName}"? This action cannot be undone.`,
+        type: 'alert',
+        id: alertId,
+        action: 'delete_alert'
+    });
+}
+
+// Replace your existing deleteDocument function with this:
+function deleteDocument(docId, docTitle) {
+    showDeleteModal({
+        title: 'Delete Document',
+        message: `Are you sure you want to delete "${docTitle}"? This action cannot be undone.`,
+        type: 'document',
+        id: docId,
+        action: 'delete_document'
+    });
+}
+
+// Delete Shipment/Dispatc
+// Replace your existing deleteDispatch function with this:
+function deleteDispatch(dispatchId, dispatchNumber) {
+    showDeleteModal({
+        title: 'Delete Dispatch',
+        message: `Are you sure you want to delete dispatch #${dispatchNumber}? This action cannot be undone.`,
+        type: 'dispatch',
+        id: dispatchId,
+        action: 'delete_dispatch',
+        onConfirm: function(id) {
+            // Show loading state
+            const deleteBtn = event?.target?.closest('button');
+            if (deleteBtn) {
+                const originalHtml = deleteBtn.innerHTML;
+                deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                deleteBtn.disabled = true;
+            }
+            
+            const formData = new FormData();
+            formData.append('id', id);
+            
+            fetch('backend/delete-shipment.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', 'Dispatch deleted successfully!');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showAlert('error', data.message || 'Failed to delete dispatch');
+                    if (deleteBtn) {
+                        deleteBtn.innerHTML = originalHtml;
+                        deleteBtn.disabled = false;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('error', 'An error occurred');
+                if (deleteBtn) {
+                    deleteBtn.innerHTML = originalHtml;
+                    deleteBtn.disabled = false;
+                }
+            });
+        }
+    });
+}
+
+// Override existing delete functions
+function oldDeleteDocument(documentId) {
+    // Replace with new unified version
+    const docCard = event.target.closest('.document-card');
+    const docTitle = docCard?.querySelector('h4')?.textContent || 'Document';
+    deleteDocument(documentId, docTitle);
+}
+
+
    function openAddModal() {
     document.getElementById('addModal').style.display = 'flex';
 }
@@ -1585,9 +1765,7 @@ function openEditModal(shipmentId) {
     });
 }
 
-function closeModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
-}
+
 
 function toggleArrivalField() {
     const status = document.getElementById('edit_status').value;
@@ -1696,9 +1874,6 @@ function deleteShipment(shipmentId) {
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
-// Function to open view modal
-// Function to open view modal
-// Function to open view modal
 function openViewModal(dispatchId) {
     const modal = document.getElementById('viewModal');
     const detailsContainer = document.getElementById('shipmentDetails');
@@ -2097,20 +2272,6 @@ function toggleDocumentForm() {
         form.style.display = 'none';
     }
 }
-
-function deleteDocument(documentId) {
-    if (confirm('Are you sure you want to delete this document?')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `
-            <input type="hidden" name="action" value="delete_document">
-            <input type="hidden" name="document_id" value="${documentId}">
-        `;
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
-
 // Auto-hide document form after successful upload
 <?php if (isset($message) && $message_type === 'success' && strpos($message, 'Document') !== false): ?>
 document.addEventListener('DOMContentLoaded', function() {
