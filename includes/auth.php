@@ -1,4 +1,13 @@
 <?php
+// ===== DEBUG CONFIGURATION =====
+// Set to true to bypass 2FA for testing, false for production with 2FA
+define('DEBUG_MODE', true); // Change to false for production
+
+// ===== SECURITY CONFIGURATION =====
+define('SESSION_TIMEOUT', 1800); // 30 minutes (in seconds) - change as needed
+define('MAX_LOGIN_ATTEMPTS', 5); // Maximum failed attempts before lockout
+define('LOCKOUT_TIME', 900); // 15 minutes lockout (in seconds)
+
 set_time_limit(120); // Give PHP more time
 ini_set('max_execution_time', 120);
 ini_set('memory_limit', '256M');
@@ -6,6 +15,35 @@ ini_set('memory_limit', '256M');
 // Disable output buffering completely
 while (ob_get_level()) ob_end_clean();
 ob_implicit_flush(true);
+
+// Start session FIRST before anything that uses $_SESSION
+session_start();
+ob_start(); // Keep this for now
+
+// ===== SESSION TIMEOUT CHECK =====
+function checkSessionTimeout() {
+    if (isset($_SESSION['user_id']) && isset($_SESSION['last_activity'])) {
+        $inactive_time = time() - $_SESSION['last_activity'];
+        
+        if ($inactive_time > SESSION_TIMEOUT) {
+            // Session expired due to inactivity
+            session_unset();
+            session_destroy();
+            
+            // Redirect to login page with timeout message
+            header('Location: auth.php?timeout=1');
+            exit();
+        }
+    }
+    
+    // Update last activity time (but not for AJAX requests or API calls)
+    if (!isset($_SERVER['HTTP_X_REQUESTED_WITH']) || strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) != 'xmlhttprequest') {
+        $_SESSION['last_activity'] = time();
+    }
+}
+
+// Now call the timeout check AFTER session is started
+checkSessionTimeout();
 
 // Add this function for instant email sending
 function sendEmailFast($to, $name, $code) {
@@ -26,10 +64,69 @@ function sendEmailFast($to, $name, $code) {
     exec($cmd);
     return true; // Return immediately
 }
-session_start();
-ob_start(); // Keep this for now
+
+// ===== LOGIN ATTEMPT TRACKING =====
+function trackLoginAttempt($pdo, $identifier, $success = false) {
+    $ip_address = $_SERVER['REMOTE_ADDR'];
+    $user_agent = $_SERVER['HTTP_USER_AGENT'];
+    $timestamp = date('Y-m-d H:i:s');
+    
+    // Log the attempt
+    $stmt = $pdo->prepare("INSERT INTO login_attempts (identifier, ip_address, user_agent, attempt_time, success) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$identifier, $ip_address, $user_agent, $timestamp, $success ? 1 : 0]);
+    
+    // Clean up old attempts (keep last 24 hours)
+    $cleanup = $pdo->prepare("DELETE FROM login_attempts WHERE attempt_time < DATE_SUB(NOW(), INTERVAL 1 DAY)");
+    $cleanup->execute();
+}
+
+function isLoginLocked($pdo, $identifier) {
+    $lockout_time = date('Y-m-d H:i:s', strtotime('-' . LOCKOUT_TIME . ' seconds'));
+    
+    // Count failed attempts from this identifier in the lockout period
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) as attempt_count 
+        FROM login_attempts 
+        WHERE identifier = ? 
+        AND attempt_time > ? 
+        AND success = FALSE
+    ");
+    $stmt->execute([$identifier, $lockout_time]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    return $result['attempt_count'] >= MAX_LOGIN_ATTEMPTS;
+}
+
+function getRemainingLockoutTime($pdo, $identifier) {
+    $lockout_time = date('Y-m-d H:i:s', strtotime('-' . LOCKOUT_TIME . ' seconds'));
+    
+    // Get the most recent failed attempt
+    $stmt = $pdo->prepare("
+        SELECT attempt_time 
+        FROM login_attempts 
+        WHERE identifier = ? 
+        AND attempt_time > ? 
+        AND success = FALSE
+        ORDER BY attempt_time DESC 
+        LIMIT 1
+    ");
+    $stmt->execute([$identifier, $lockout_time]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($result) {
+        $last_attempt = strtotime($result['attempt_time']);
+        $lockout_ends = $last_attempt + LOCKOUT_TIME;
+        $remaining = $lockout_ends - time();
+        
+        return $remaining > 0 ? $remaining : 0;
+    }
+    
+    return 0;
+}
+
 require_once 'config/db.php';
 require_once 'includes/auth_functions.php';
+
 
 // At the top of your auth.php, after session_start()
 if (isset($_GET['agreed']) && $_GET['agreed'] === 'true') {
@@ -65,7 +162,6 @@ $showVerification = false;
 $temp_user_id = null;
 $temp_email = null;
 
-// Handle verification code submission
 // Handle verification code submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'verify') {
     $code = trim($_POST['verification_code'] ?? '');
@@ -110,6 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $_SESSION['full_name'] = $user['full_name'];
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['logged_in'] = true;
+                $_SESSION['last_activity'] = time(); // Set initial activity time
                 
                 error_log("✅ User {$user['username']} logged in successfully");
                 
@@ -136,7 +233,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // Handle initial login
-// Handle initial login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'login') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -146,42 +242,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $messageType = 'error';
     } else {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ? OR email = ?");
-            $stmt->execute([$username, $username]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($user && password_verify($password, $user['password'])) {
-                
-                // Generate and save code
-                $verification_code = sprintf("%06d", random_int(0, 999999));
-                $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
-                
-                // Delete old codes
-                $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
-                $stmt->execute([$user['id']]);
-                
-                // Save new code
-                $stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
-                
-                // ===== INSTANT EMAIL SENDING =====
-                // Send email in background - NO WAITING
-                sendEmailFast($user['email'], $user['full_name'], $verification_code);
-                
-                // IMMEDIATELY show verification form
-                $showVerification = true;
-                $temp_user_id = $user['id'];
-                $temp_email = maskEmail($user['email']);
-                
-                // Always show success (email sent in background)
-                $message = "✓ Verification code sent to " . $temp_email;
-                $messageType = 'success';
-                
-                // Log it
-                error_log("✅ Login successful for {$user['email']}, code: $verification_code");
-            } else {
-                $message = 'Invalid username/email or password';
+            // ===== CHECK LOGIN ATTEMPTS =====
+            if (isLoginLocked($pdo, $username)) {
+                $remaining = getRemainingLockoutTime($pdo, $username);
+                $minutes = ceil($remaining / 60);
+                $message = "Too many failed login attempts. Please try again in {$minutes} minute" . ($minutes > 1 ? 's' : '');
                 $messageType = 'error';
+                
+                // Log the blocked attempt
+                trackLoginAttempt($pdo, $username, false);
+            } else {
+                // Only proceed with login check if not locked out
+                $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ? OR email = ?");
+                $stmt->execute([$username, $username]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($user && password_verify($password, $user['password'])) {
+                    // ===== SUCCESSFUL LOGIN =====
+                    // Log successful attempt
+                    trackLoginAttempt($pdo, $username, true);
+                    
+                    // ===== DEBUG MODE CHECK =====
+                    if (DEBUG_MODE) {
+                        // DEBUG MODE: Direct login without 2FA
+                        error_log("🔧 DEBUG MODE: Direct login for {$user['email']}");
+                        
+                        // Create session immediately
+                        $_SESSION['user_id'] = $user['id'];
+                        $_SESSION['username'] = $user['username'];
+                        $_SESSION['full_name'] = $user['full_name'];
+                        $_SESSION['role'] = $user['role'];
+                        $_SESSION['logged_in'] = true;
+                        $_SESSION['debug_mode'] = true;
+                        $_SESSION['last_activity'] = time();
+                        
+                        // Redirect to dashboard
+                        header('Location: dashboard.php');
+                        exit();
+                    } else {
+                        // PRODUCTION MODE: Normal 2FA flow
+                        // Generate and save code
+                        $verification_code = sprintf("%06d", random_int(0, 999999));
+                        $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+                        
+                        // Delete old codes
+                        $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
+                        $stmt->execute([$user['id']]);
+                        
+                        // Save new code
+                        $stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
+                        $stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
+                        
+                        // Send email in background
+                        sendEmailFast($user['email'], $user['full_name'], $verification_code);
+                        
+                        // Show verification form
+                        $showVerification = true;
+                        $temp_user_id = $user['id'];
+                        $temp_email = maskEmail($user['email']);
+                        
+                        $message = "✓ Verification code sent to " . $temp_email;
+                        $messageType = 'success';
+                        
+                        error_log("✅ Login successful for {$user['email']}, code: $verification_code");
+                    }
+                } else {
+                    // ===== FAILED LOGIN =====
+                    // Log failed attempt
+                    trackLoginAttempt($pdo, $username, false);
+                    
+                    $message = 'Invalid username/email or password';
+                    $messageType = 'error';
+                    
+                    // Check if this failed attempt triggers lockout
+                    if (isLoginLocked($pdo, $username)) {
+                        $remaining = getRemainingLockoutTime($pdo, $username);
+                        $minutes = ceil($remaining / 60);
+                        $message = "Too many failed attempts. Account locked for {$minutes} minute" . ($minutes > 1 ? 's' : '');
+                    }
+                }
             }
         } catch(PDOException $e) {
             $message = 'Login failed: ' . $e->getMessage();
@@ -229,7 +368,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $errors[] = 'Passwords do not match';
     }
     
-    // FIXED: Check terms agreement HERE (inside signup handling)
+    // Check terms agreement
     if (!isset($_SESSION['terms_agreed']) || $_SESSION['terms_agreed'] !== true) {
         $errors[] = 'You must agree to the Terms of Service and Privacy Policy';
     }
@@ -289,13 +428,22 @@ function maskEmail($email) {
     return $masked_name . '@' . $domain;
 }
 
+// Optional: Add a visual indicator in the login form for debug mode
+if (DEBUG_MODE) {
+    error_log("🔧 DEBUG MODE is ACTIVE - 2FA is bypassed");
+}
+
+// Handle session timeout message
+if (isset($_GET['timeout']) && $_GET['timeout'] == 1) {
+    $message = 'Your session has expired due to inactivity. Please login again.';
+    $messageType = 'info';
+}
+
 // Determine which form to show
 $activeForm = isset($_GET['form']) && $_GET['form'] === 'signup' ? 'signup' : 'login';
 if ($showVerification) {
     $activeForm = 'verify';
 }
-
-// Rest of your HTML remains exactly the same...
 ?>
 
 <!DOCTYPE html>
@@ -377,7 +525,7 @@ if ($showVerification) {
                     </div>
                     <div class="flex items-center">
                         <i class="fas fa-check-circle w-6 h-6 mr-3"></i>
-                        <span>Transport Analysis</span>
+                        <span>Easy account recovery</span>
                     </div>
                     <div class="flex items-center">
                         <i class="fas fa-check-circle w-6 h-6 mr-3"></i>
