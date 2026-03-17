@@ -1225,7 +1225,7 @@ if ($in_progress_count > 0 && $pending_count > 0): ?>
     </span>
 <?php endif; ?>
             <?php if ($can_manage_maintenance): ?>
-                <button class="btn btn-sm btn-primary" onclick="openCreateMaintenanceModal('<?php echo $vehicle['asset_name']; ?>')" title="Assign Maintenance">
+               <button class="btn btn-sm btn-primary" onclick="openCreateMaintenanceModal()">
     <i class="fas fa-wrench"></i> New Task
 </button>
             <?php endif; ?>
