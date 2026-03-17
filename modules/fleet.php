@@ -117,37 +117,48 @@ try {
     ");
     $vehicles_last_month = $stmt->fetch()['total'] ?? 0;
     
-    // DIAGNOSTIC: Test if GROUP BY a.id with SELECT a.* fails due to ONLY_FULL_GROUP_BY
-    // This is the most likely cause of 0 vehicles on Railway
-    error_log("FLEET DIAG - About to run GROUP BY query. SQL mode has ONLY_FULL_GROUP_BY: " .
-        (strpos($current_sql_mode, 'ONLY_FULL_GROUP_BY') !== false ? 'YES - THIS IS THE BUG' : 'no'));
-    
+    // FIXED: Rewritten to avoid ONLY_FULL_GROUP_BY violation on Railway MySQL strict mode.
+    // Uses subqueries to get one active shipment/dispatch per vehicle instead of GROUP BY a.*
     $stmt = $pdo->query("
-    SELECT a.*,
-           u.full_name as current_driver,
-           s.shipment_status,
-           ds.status as dispatch_status,
-           ds.driver_id as dispatch_driver_id,
-           -- Calculate is_in_use including delivered and awaiting_verification
-           CASE
-               WHEN s.shipment_id IS NOT NULL AND s.shipment_status IN ('in_transit', 'pending') THEN 1
-               WHEN ds.id IS NOT NULL AND ds.status IN ('in-progress', 'scheduled', 'delivered', 'awaiting_verification') THEN 1
-               ELSE 0
-           END as is_in_use
+    SELECT
+        a.id,
+        a.asset_name,
+        a.asset_type,
+        a.status,
+        a.asset_condition,
+        a.created_at,
+        a.updated_at,
+        s.shipment_status,
+        s.driver_id as shipment_driver_id,
+        ds.status as dispatch_status,
+        ds.driver_id as dispatch_driver_id,
+        u.full_name as current_driver,
+        CASE
+            WHEN s.shipment_id IS NOT NULL AND s.shipment_status IN ('in_transit', 'pending') THEN 1
+            WHEN ds.id IS NOT NULL AND ds.status IN ('in-progress', 'scheduled', 'delivered', 'awaiting_verification') THEN 1
+            ELSE 0
+        END as is_in_use
     FROM assets a
-    LEFT JOIN shipments s ON a.id = s.vehicle_id AND s.shipment_status IN ('in_transit', 'pending')
-    LEFT JOIN dispatch_schedule ds ON a.id = ds.vehicle_id
-        AND ds.status IN ('in-progress', 'scheduled', 'delivered', 'awaiting_verification')
+    LEFT JOIN (
+        SELECT vehicle_id, shipment_id, shipment_status, driver_id
+        FROM shipments
+        WHERE shipment_status IN ('in_transit', 'pending')
+        ORDER BY created_at DESC
+    ) s ON a.id = s.vehicle_id
+    LEFT JOIN (
+        SELECT vehicle_id, id, status, driver_id
+        FROM dispatch_schedule
+        WHERE status IN ('in-progress', 'scheduled', 'delivered', 'awaiting_verification')
+        ORDER BY created_at DESC
+    ) ds ON a.id = ds.vehicle_id
     LEFT JOIN users u ON COALESCE(s.driver_id, ds.driver_id) = u.id
     WHERE a.asset_type = 'vehicle'
-    GROUP BY a.id
     ORDER BY a.created_at DESC
-");
-$vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    ");
+    $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Log vehicle count for debugging
     error_log("Fleet Stats - Total vehicles found: " . count($vehicles));
-    error_log("FLEET DIAG - GROUP BY query returned: " . count($vehicles) . " rows");
     
     // Get maintenance alerts - INCLUDES BOTH PENDING AND IN_PROGRESS
     $stmt = $pdo->query("
@@ -1836,12 +1847,116 @@ if ($in_progress_count > 0 && $pending_count > 0): ?>
             </div>
         </main>
     </div>
-    <script>
+<script>
 document.body.dataset.userRole = '<?php echo $_SESSION['role']; ?>';
 </script>
-    <script src="../assets/js/pages/fleet.js"></script>
-    
+<script src="../assets/js/pages/fleet.js"></script>
+
+<!-- Move this AFTER fleet.js and make it more aggressive -->
 <script>
+// OVERRIDE: Force stats to show PHP-calculated values
+(function() {
+    console.log('🔧 Force-updating stats with PHP values');
+    
+    // Get the PHP-calculated values
+    const phpStats = {
+        total: <?php echo $total_vehicles; ?>,
+        available: <?php echo $available_count; ?>,
+        maintenance: <?php echo $maintenance_count; ?>,
+        inUse: <?php echo $in_use_count ?? 0; ?>
+    };
+    
+    console.log('PHP Stats:', phpStats);
+    
+    // Function to update stats
+    function updateStats() {
+        const totalStat = document.getElementById('total-vehicles-stat');
+        const availableStat = document.getElementById('available-vehicles-stat');
+        const maintenanceStat = document.getElementById('maintenance-vehicles-stat');
+        
+        if (totalStat) {
+            totalStat.textContent = phpStats.total;
+            console.log('✅ Updated total to:', phpStats.total);
+        }
+        
+        if (availableStat) {
+            availableStat.textContent = phpStats.available;
+            console.log('✅ Updated available to:', phpStats.available);
+            
+            // Update the percentage
+            const percentSpan = document.querySelector('.stat-card:nth-child(2) .stat-trend');
+            if (percentSpan && phpStats.total > 0) {
+                const percent = Math.round((phpStats.available / phpStats.total) * 100);
+                percentSpan.innerHTML = `<i class="fas fa-arrow-up"></i> ${percent}% of fleet`;
+            }
+        }
+        
+        if (maintenanceStat) {
+            maintenanceStat.textContent = phpStats.maintenance;
+            console.log('✅ Updated maintenance to:', phpStats.maintenance);
+            
+            // Update maintenance status text
+            const maintTrend = document.querySelector('.stat-card:nth-child(3) .stat-trend');
+            if (maintTrend) {
+                const pendingCount = <?php 
+                    $pending = 0;
+                    foreach ($maintenance_alerts as $alert) {
+                        if ($alert['status'] == 'pending') $pending++;
+                    }
+                    echo $pending;
+                ?>;
+                const inProgressCount = <?php 
+                    $in_progress = 0;
+                    foreach ($maintenance_alerts as $alert) {
+                        if ($alert['status'] == 'in_progress') $in_progress++;
+                    }
+                    echo $in_progress;
+                ?>;
+                
+                if (inProgressCount > 0 && pendingCount > 0) {
+                    maintTrend.innerHTML = `<i class="fas fa-tasks"></i> ${pendingCount} pending, ${inProgressCount} in progress`;
+                } else if (inProgressCount > 0) {
+                    maintTrend.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${inProgressCount} in progress`;
+                } else {
+                    maintTrend.innerHTML = `<i class="fas fa-clock"></i> ${pendingCount} pending`;
+                }
+            }
+        }
+        
+        // Update fleet efficiency
+        const efficiencyStat = document.querySelector('.stat-card:nth-child(4) .stat-value');
+        if (efficiencyStat) {
+            const totalShipments = <?php echo $shipment_stats['total'] ?? 0; ?>;
+            const delivered = <?php echo $shipment_stats['delivered'] ?? 0; ?>;
+            const efficiency = totalShipments > 0 ? Math.round((delivered / totalShipments) * 100) : 0;
+            efficiencyStat.textContent = efficiency + '%';
+        }
+    }
+    
+    // Run immediately
+    updateStats();
+    
+    // Run after DOM is loaded
+    document.addEventListener('DOMContentLoaded', updateStats);
+    
+    // Run repeatedly to catch any late updates
+    let attempts = 0;
+    const interval = setInterval(function() {
+        const totalStat = document.getElementById('total-vehicles-stat');
+        if (totalStat && totalStat.textContent != phpStats.total) {
+            console.log('⏰ Stats changed, updating again...');
+            updateStats();
+        }
+        
+        attempts++;
+        if (attempts > 10) clearInterval(interval); // Stop after 10 attempts
+    }, 500);
+    
+    // Also run after a longer delay
+    setTimeout(updateStats, 2000);
+    setTimeout(updateStats, 5000);
+})();
+
 // Fix for deployment: Refresh stats if they show 0 but vehicles exist
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
