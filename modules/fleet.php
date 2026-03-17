@@ -3,6 +3,11 @@ session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+// Disable caching for this page
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../index.php");
     exit();
@@ -17,6 +22,13 @@ function safe_js_string($str) {
 }
 
 require_once '../config/db.php';
+
+// Check if database connection exists
+if (!isset($pdo)) {
+    error_log("Fleet: Database connection not available");
+    die("Database connection error. Please check configuration.");
+}
+
 $available_count = 0;
 $maintenance_count = 0;
 $on_route_count = 0;
@@ -61,6 +73,9 @@ try {
         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     ");
     $shipment_stats = $stmt->fetch();
+    
+    // Log for debugging on deployment
+    error_log("Fleet Stats - Shipments found: " . ($shipment_stats['total'] ?? 0));
     
     // FIX: Initialize total_vehicles as 0 first (will calculate later)
     $total_vehicles = 0;
@@ -107,6 +122,9 @@ try {
     ORDER BY a.created_at DESC
 ");
 $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Log vehicle count for debugging
+    error_log("Fleet Stats - Total vehicles found: " . count($vehicles));
     
     // Get maintenance alerts - INCLUDES BOTH PENDING AND IN_PROGRESS
     $stmt = $pdo->query("
@@ -183,6 +201,9 @@ $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // FIX: Calculate total vehicles from the actual vehicles array
     $total_vehicles = count($vehicles);
+    
+    // Log final counts
+    error_log("Fleet Stats - Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count, Total: $total_vehicles");
 
     // FINAL DEBUG
     echo "<!-- FINAL COUNTS - Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count -->\n";
@@ -220,15 +241,25 @@ $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch (PDOException $e) {
     error_log("Fleet page error: " . $e->getMessage());
+    error_log("Fleet page error trace: " . $e->getTraceAsString());
+    
+    // Initialize all variables with safe defaults
     $total_vehicles = 0;
-    $available_vehicles = 0;
-    $maintenance_vehicles = 0;
-    $fleet_efficiency = 0;
+    $available_count = 0;
+    $maintenance_count = 0;
+    $in_use_count = 0;
+    $real_available_count = 0;
+    $real_maintenance_count = 0;
+    $real_in_use_count = 0;
     $vehicles = [];
     $maintenance_alerts = [];
     $drivers = [];
-    $recent_trips = [];
     $condition_stats = ['excellent' => 0, 'good' => 0, 'fair' => 0, 'poor' => 0];
+    
+    // Show error to admin users
+    if ($_SESSION['role'] === 'admin') {
+        echo "<!-- Database Error: " . htmlspecialchars($e->getMessage()) . " -->";
+    }
 }
 
 $page_title = 'Fleet Management | Logistics System';
@@ -286,7 +317,147 @@ include '../includes/header.php';
                     </div>
                 </div>
                 
-   <body data-user-role="<?php echo $_SESSION['role']; ?>">                     
+   <body data-user-role="<?php echo $_SESSION['role']; ?>">            
+           <!-- Statistics Cards - HIDDEN from drivers -->
+<?php if ($_SESSION['role'] !== 'driver' && $_SESSION['role'] !== 'mechanic'): ?>
+<!-- Debug Info (remove after fixing) -->
+<?php if ($_SESSION['role'] === 'admin'): ?>
+<div style="background: #fef3c7; border: 1px solid #fbbf24; padding: 10px; margin-bottom: 15px; border-radius: 8px; font-size: 12px;">
+    <strong>🔍 Debug Info:</strong> 
+    Total: <?php echo $total_vehicles; ?> | 
+    Available: <?php echo $available_count; ?> | 
+    Maintenance: <?php echo $maintenance_count; ?> | 
+    In Use: <?php echo $in_use_count ?? 0; ?>
+    <button onclick="location.reload()" style="margin-left: 10px; padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        <i class="fas fa-sync"></i> Refresh Stats
+    </button>
+</div>
+<?php endif; ?>
+
+<div class="stats-grid">
+    <?php
+    // Use the already calculated values from above
+    // $available_count, $maintenance_count, $in_use_count are already calculated!
+    
+    // Calculate vehicle growth
+    $vehicle_growth = $vehicles_this_month - ($vehicles_last_month ?? 0);
+    $growth_sign = $vehicle_growth >= 0 ? '+' : '';
+    
+    // Calculate real fleet efficiency (completed shipments vs total shipments)
+    $total_shipments_30d = $shipment_stats['total'] ?? 0;
+    $completed_shipments_30d = $shipment_stats['delivered'] ?? 0;
+    $real_efficiency = $total_shipments_30d > 0 ? round(($completed_shipments_30d / $total_shipments_30d) * 100) : 0;
+    
+    // Calculate previous month for trend
+    $prev_month_shipments = $pdo->query("
+        SELECT COUNT(*) as total, 
+               SUM(CASE WHEN shipment_status = 'delivered' THEN 1 ELSE 0 END) as delivered
+        FROM shipments 
+        WHERE created_at BETWEEN DATE_SUB(NOW(), INTERVAL 60 DAY) AND DATE_SUB(NOW(), INTERVAL 30 DAY)
+    ")->fetch();
+    $prev_efficiency = $prev_month_shipments['total'] > 0 ? round(($prev_month_shipments['delivered'] / $prev_month_shipments['total']) * 100) : 0;
+    $trend_class = $real_efficiency >= $prev_efficiency ? 'up' : 'down';
+    $trend_icon = $real_efficiency >= $prev_efficiency ? 'arrow-up' : 'arrow-down';
+    $trend_value = abs($real_efficiency - $prev_efficiency);
+    ?>
+    
+    <!-- Total Vehicles Card -->
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon blue">
+                <i class="fas fa-truck"></i>
+            </div>
+            <span class="stat-badge <?php echo $vehicle_growth >= 0 ? 'green' : 'red'; ?>">
+                <?php echo $growth_sign . $vehicle_growth; ?> this month
+            </span>
+        </div>
+        <p class="stat-label">Total Vehicles</p>
+        <p class="stat-value" id="total-vehicles-stat"><?php echo $total_vehicles; ?></p>
+        <div class="stat-trend">
+            <i class="fas fa-arrow-up"></i> Fleet total
+        </div>
+    </div>
+    
+    <!-- Available Vehicles Card -->
+    <?php
+// Determine colors based on available count
+// Use emerald/green if >0, amber if 0
+$available_icon_color = $available_count > 0 ? 'emerald' : 'amber';
+$badge_color = $available_count > 0 ? 'green' : 'amber';
+?>
+<div class="stat-card">
+    <div class="stat-header">
+        <div class="stat-icon <?php echo $available_icon_color; ?>">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <span class="stat-badge <?php echo $badge_color; ?>">
+            <?php echo $available_count; ?> available
+            <?php if ($available_count == 0): ?>
+                <i class="fas fa-exclamation-triangle" style="margin-left: 5px;"></i>
+            <?php endif; ?>
+        </span>
+    </div>
+    <p class="stat-label">Available Now</p>
+    <p class="stat-value" id="available-vehicles-stat"><?php echo $available_count; ?></p>
+    <div class="stat-trend">
+        <i class="fas fa-arrow-up"></i> <?php echo $total_vehicles > 0 ? round(($available_count/$total_vehicles)*100) : 0; ?>% of fleet
+    </div>
+</div>
+    
+    <!-- In Maintenance Card -->
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon amber">
+                <i class="fas fa-tools"></i>
+            </div>
+            <span class="stat-badge amber"><?php echo $maintenance_count; ?> in maintenance</span>
+        </div>
+        <p class="stat-label">In Maintenance</p>
+        <p class="stat-value" id="maintenance-vehicles-stat"><?php echo $maintenance_count; ?></p>
+        <div class="stat-trend down">
+           <?php
+// Count by status
+$pending_count = 0;
+$in_progress_count = 0;
+foreach ($maintenance_alerts as $alert) {
+    if ($alert['status'] == 'pending') $pending_count++;
+    if ($alert['status'] == 'in_progress') $in_progress_count++;
+}
+
+// Determine what to show
+if ($in_progress_count > 0 && $pending_count > 0) {
+    $status_text = $pending_count . ' pending, ' . $in_progress_count . ' in progress';
+    $icon = 'fa-tasks';
+} elseif ($in_progress_count > 0) {
+    $status_text = $in_progress_count . ' in progress';
+    $icon = 'fa-spinner fa-spin';
+} else {
+    $status_text = $pending_count . ' pending';
+    $icon = 'fa-clock';
+}
+?>
+<i class="fas <?php echo $icon; ?>"></i> <?php echo $status_text; ?>
+        </div>
+    </div>
+    
+    <!-- Fleet Efficiency Card -->
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon purple">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <span class="stat-badge <?php echo $trend_class == 'up' ? 'green' : 'amber'; ?>"><?php echo $real_efficiency; ?>% efficiency</span>
+        </div>
+        <p class="stat-label">Fleet Efficiency</p>
+        <p class="stat-value"><?php echo $real_efficiency; ?>%</p>
+        <div class="stat-trend <?php echo $trend_class; ?>">
+            <i class="fas fa-<?php echo $trend_icon; ?>"></i> <?php echo $trend_value; ?>% vs last month
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+                
                 <!-- Tabs -->
                 <div class="card" style="margin-bottom: 24px;">
                        <div class="tabs">
@@ -1605,131 +1776,6 @@ if ($in_progress_count > 0 && $pending_count > 0): ?>
 <?php endif; ?>
                 </div>
             </div>
-                   <!-- Statistics Cards - HIDDEN from drivers -->
-<?php if ($_SESSION['role'] !== 'driver' && $_SESSION['role'] !== 'mechanic'): ?>
-<div class="stats-grid">
-    <?php
-    // Use the already calculated values from above
-    // $available_count, $maintenance_count, $in_use_count are already calculated!
-    
-    // Calculate vehicle growth
-    $vehicle_growth = $vehicles_this_month - ($vehicles_last_month ?? 0);
-    $growth_sign = $vehicle_growth >= 0 ? '+' : '';
-    
-    // Calculate real fleet efficiency (completed shipments vs total shipments)
-    $total_shipments_30d = $shipment_stats['total'] ?? 0;
-    $completed_shipments_30d = $shipment_stats['delivered'] ?? 0;
-    $real_efficiency = $total_shipments_30d > 0 ? round(($completed_shipments_30d / $total_shipments_30d) * 100) : 0;
-    
-    // Calculate previous month for trend
-    $prev_month_shipments = $pdo->query("
-        SELECT COUNT(*) as total, 
-               SUM(CASE WHEN shipment_status = 'delivered' THEN 1 ELSE 0 END) as delivered
-        FROM shipments 
-        WHERE created_at BETWEEN DATE_SUB(NOW(), INTERVAL 60 DAY) AND DATE_SUB(NOW(), INTERVAL 30 DAY)
-    ")->fetch();
-    $prev_efficiency = $prev_month_shipments['total'] > 0 ? round(($prev_month_shipments['delivered'] / $prev_month_shipments['total']) * 100) : 0;
-    $trend_class = $real_efficiency >= $prev_efficiency ? 'up' : 'down';
-    $trend_icon = $real_efficiency >= $prev_efficiency ? 'arrow-up' : 'arrow-down';
-    $trend_value = abs($real_efficiency - $prev_efficiency);
-    ?>
-    
-    <!-- Total Vehicles Card -->
-    <div class="stat-card">
-        <div class="stat-header">
-            <div class="stat-icon blue">
-                <i class="fas fa-truck"></i>
-            </div>
-            <span class="stat-badge <?php echo $vehicle_growth >= 0 ? 'green' : 'red'; ?>">
-                <?php echo $growth_sign . $vehicle_growth; ?> this month
-            </span>
-        </div>
-        <p class="stat-label">Total Vehicles</p>
-        <p class="stat-value"><?php echo $total_vehicles; ?></p>
-        <div class="stat-trend">
-            <i class="fas fa-arrow-up"></i> Fleet total
-        </div>
-    </div>
-    
-    <!-- Available Vehicles Card -->
-    <?php
-// Determine colors based on available count
-// Use emerald/green if >0, amber if 0
-$available_icon_color = $available_count > 0 ? 'emerald' : 'amber';
-$badge_color = $available_count > 0 ? 'green' : 'amber';
-?>
-<div class="stat-card">
-    <div class="stat-header">
-        <div class="stat-icon <?php echo $available_icon_color; ?>">
-            <i class="fas fa-check-circle"></i>
-        </div>
-        <span class="stat-badge <?php echo $badge_color; ?>">
-            <?php echo $available_count; ?> available
-            <?php if ($available_count == 0): ?>
-                <i class="fas fa-exclamation-triangle" style="margin-left: 5px;"></i>
-            <?php endif; ?>
-        </span>
-    </div>
-    <p class="stat-label">Available Now</p>
-    <p class="stat-value"><?php echo $available_count; ?></p>
-    <div class="stat-trend">
-        <i class="fas fa-arrow-up"></i> <?php echo $total_vehicles > 0 ? round(($available_count/$total_vehicles)*100) : 0; ?>% of fleet
-    </div>
-</div>
-    
-    <!-- In Maintenance Card -->
-    <div class="stat-card">
-        <div class="stat-header">
-            <div class="stat-icon amber">
-                <i class="fas fa-tools"></i>
-            </div>
-            <span class="stat-badge amber"><?php echo $maintenance_count; ?> in maintenance</span>
-        </div>
-        <p class="stat-label">In Maintenance</p>
-        <p class="stat-value"><?php echo $maintenance_count; ?></p>
-        <div class="stat-trend down">
-           <?php
-// Count by status
-$pending_count = 0;
-$in_progress_count = 0;
-foreach ($maintenance_alerts as $alert) {
-    if ($alert['status'] == 'pending') $pending_count++;
-    if ($alert['status'] == 'in_progress') $in_progress_count++;
-}
-
-// Determine what to show
-if ($in_progress_count > 0 && $pending_count > 0) {
-    $status_text = $pending_count . ' pending, ' . $in_progress_count . ' in progress';
-    $icon = 'fa-tasks';
-} elseif ($in_progress_count > 0) {
-    $status_text = $in_progress_count . ' in progress';
-    $icon = 'fa-spinner fa-spin';
-} else {
-    $status_text = $pending_count . ' pending';
-    $icon = 'fa-clock';
-}
-?>
-<i class="fas <?php echo $icon; ?>"></i> <?php echo $status_text; ?>
-        </div>
-    </div>
-    
-    <!-- Fleet Efficiency Card -->
-    <div class="stat-card">
-        <div class="stat-header">
-            <div class="stat-icon purple">
-                <i class="fas fa-chart-line"></i>
-            </div>
-            <span class="stat-badge <?php echo $trend_class == 'up' ? 'green' : 'amber'; ?>"><?php echo $real_efficiency; ?>% efficiency</span>
-        </div>
-        <p class="stat-label">Fleet Efficiency</p>
-        <p class="stat-value"><?php echo $real_efficiency; ?>%</p>
-        <div class="stat-trend <?php echo $trend_class; ?>">
-            <i class="fas fa-<?php echo $trend_icon; ?>"></i> <?php echo $trend_value; ?>% vs last month
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
         </main>
     </div>
     <script>
@@ -1737,4 +1783,29 @@ document.body.dataset.userRole = '<?php echo $_SESSION['role']; ?>';
 </script>
     <script src="../assets/js/pages/fleet.js"></script>
     
+<script>
+// Fix for deployment: Refresh stats if they show 0 but vehicles exist
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        const totalVehicles = parseInt(document.getElementById('total-vehicles-stat')?.textContent || '0');
+        const availableVehicles = parseInt(document.getElementById('available-vehicles-stat')?.textContent || '0');
+        const maintenanceVehicles = parseInt(document.getElementById('maintenance-vehicles-stat')?.textContent || '0');
+        
+        console.log('Stats check - Total:', totalVehicles, 'Available:', availableVehicles, 'Maintenance:', maintenanceVehicles);
+        
+        // If all stats are 0 but we have vehicles in the table, reload the page once
+        if (totalVehicles === 0 && availableVehicles === 0 && maintenanceVehicles === 0) {
+            const vehicleItems = document.querySelectorAll('.vehicle-item');
+            if (vehicleItems.length > 0 && !sessionStorage.getItem('stats_reloaded')) {
+                console.log('Stats are 0 but vehicles exist. Reloading page...');
+                sessionStorage.setItem('stats_reloaded', 'true');
+                location.reload();
+            }
+        } else {
+            // Clear the reload flag if stats are showing correctly
+            sessionStorage.removeItem('stats_reloaded');
+        }
+    }, 1000);
+});
+</script>
 </body>
