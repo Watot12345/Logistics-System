@@ -33,8 +33,9 @@ $notes = $data['notes'] ?? '';
 try {
     // Verify this breakdown is assigned to this mechanic
     $check = $pdo->prepare("
-        SELECT * FROM emergency_breakdowns 
-        WHERE id = ? AND assigned_mechanic = ?
+        SELECT eb.*, eb.driver_id 
+        FROM emergency_breakdowns eb
+        WHERE eb.id = ? AND eb.assigned_mechanic = ?
     ");
     $check->execute([$breakdown_id, $mechanic_id]);
     
@@ -52,8 +53,7 @@ try {
         // Start working on the breakdown
         $stmt = $pdo->prepare("
             UPDATE emergency_breakdowns 
-            SET status = 'in_progress',
-                started_at = NOW()
+            SET status = 'in_progress'
             WHERE id = ?
         ");
         $stmt->execute([$breakdown_id]);
@@ -72,7 +72,7 @@ try {
                 $breakdown_id
             ]);
         } catch (Exception $e) {
-            // Notifications table might not exist
+            // Notifications table might not exist - ignore
         }
         
     } elseif ($action === 'complete') {
@@ -93,15 +93,16 @@ try {
             $notify = $pdo->prepare("
                 INSERT INTO notifications (user_id, message, type, related_id)
                 SELECT id, ?, 'breakdown_resolved', ?
-                FROM users WHERE role IN ('admin', 'fleet_manager', 'driver') AND id = ?
+                FROM users WHERE role IN ('admin', 'fleet_manager', 'driver') 
+                AND id IN (SELECT id FROM users WHERE role = 'driver' AND id = ?)
             ");
             $notify->execute([
                 "Breakdown #{$breakdown_id} has been resolved",
                 $breakdown_id,
-                $breakdown['driver_id']
+                $breakdown['driver_id'] ?? 0
             ]);
         } catch (Exception $e) {
-            // Notifications table might not exist
+            // Notifications table might not exist - ignore
         }
     } else {
         throw new Exception('Invalid action');
@@ -115,7 +116,9 @@ try {
     ]);
     
 } catch (Exception $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     error_log("Update breakdown status error: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([

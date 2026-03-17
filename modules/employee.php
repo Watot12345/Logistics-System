@@ -182,42 +182,18 @@ include '../includes/header.php';
                     </div>
                 </div>
 
-                <!-- LOGISTICS PORTAL TAB (New) -->
+                <!-- LOGISTICS PORTAL TAB (Fixed) -->
                 <div id="logisticsTab" class="tab-content" style="display: none;">
                     <div class="logistics-portal">
                         <!-- Header -->
                         <div class="logistics-header" style="background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; color: white;">
                             <h2 style="margin: 0;"><i class="fas fa-truck"></i> Logistics Department Portal</h2>
-                            <p style="margin: 5px 0 0; opacity: 0.9;">View logistics employees and submit requisitions to HR</p>
+                            <p style="margin: 5px 0 0; opacity: 0.9;">Submit and track employee requisitions to HR</p>
                         </div>
 
+                        <!-- Two Column Layout -->
                         <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                            <!-- Left Column: View Logistics Employees -->
-                            <div class="card" style="background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                                <div class="card-header" style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
-                                    <h3 style="margin: 0;"><i class="fas fa-users" style="color: #fbbf24;"></i> Current Logistics Employees</h3>
-                                </div>
-                                <div class="card-body" style="padding: 15px;">
-                                    <div style="margin-bottom: 15px;">
-                                        <select id="logisticsDept" class="filter-select" style="width: 70%; display: inline-block;">
-                                            <option value="Logistics">Logistics</option>
-                                            <option value="Warehouse">Warehouse</option>
-                                            <option value="Transportation">Transportation</option>
-                                            <option value="Supply Chain">Supply Chain</option>
-                                            <option value="Inventory">Inventory</option>
-                                        </select>
-                                        <button onclick="fetchLogisticsEmployees()" class="btn btn-primary" style="width: 28%;">
-                                            <i class="fas fa-search"></i> View
-                                        </button>
-                                    </div>
-                                    
-                                    <div id="logisticsEmployeeList" style="max-height: 400px; overflow-y: auto;">
-                                        <p class="text-muted" style="text-align: center; padding: 20px;">Select department to view employees</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Right Column: Submit Requisition -->
+                            <!-- Left Column: Submit Requisition -->
                             <div class="card" style="background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
                                 <div class="card-header" style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
                                     <h3 style="margin: 0;"><i class="fas fa-paper-plane" style="color: #fbbf24;"></i> Submit Requisition to HR</h3>
@@ -277,16 +253,16 @@ include '../includes/header.php';
                                     </form>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Recent Requisitions List -->
-                        <div class="card" style="background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-top: 20px;">
-                            <div class="card-header" style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
-                                <h3 style="margin: 0;"><i class="fas fa-clipboard-list" style="color: #fbbf24;"></i> Recent Requisitions from Logistics</h3>
-                            </div>
-                            <div class="card-body" style="padding: 15px;">
-                                <div id="requisitionsList" style="max-height: 300px; overflow-y: auto;">
-                                    <p class="text-muted" style="text-align: center; padding: 20px;">No requisitions found</p>
+                            <!-- Right Column: Recent Requisitions -->
+                            <div class="card" style="background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                                <div class="card-header" style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
+                                    <h3 style="margin: 0;"><i class="fas fa-clipboard-list" style="color: #fbbf24;"></i> Recent Requisitions</h3>
+                                </div>
+                                <div class="card-body" style="padding: 15px;">
+                                    <div id="requisitionsList" style="max-height: 500px; overflow-y: auto;">
+                                        <!-- Requisitions will appear here -->
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -311,7 +287,7 @@ include '../includes/header.php';
     const API_BASE = 'https://humanresource.up.railway.app/api';
     const API_KEY = 'logistic_system_2026_key_98765';
 
-    // Tab switching function
+    // Tab switching function - FIXED: Removed fetchLogisticsEmployees
     function switchTab(tab) {
         // Update tab buttons
         document.getElementById('tabEmployees').classList.remove('active');
@@ -328,52 +304,8 @@ include '../includes/header.php';
         } else if (tab === 'logistics') {
             document.getElementById('tabLogistics').classList.add('active');
             document.getElementById('logisticsTab').style.display = 'block';
-            // Load logistics employees by default
-            setTimeout(fetchLogisticsEmployees, 100);
+            // Load requisitions when switching to logistics tab
             fetchRequisitions();
-        }
-    }
-
-    // Fetch logistics employees from HR API
-    async function fetchLogisticsEmployees() {
-        const dept = document.getElementById('logisticsDept').value;
-        const listDiv = document.getElementById('logisticsEmployeeList');
-        
-        listDiv.innerHTML = '<p style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading employees...</p>';
-        updateApiResponse('⏳ Fetching employees from ' + dept + ' department...');
-
-        try {
-            const response = await fetch(`${API_BASE}/employees.php?department=${dept}&api_key=${API_KEY}`);
-            const data = await response.json();
-            
-            updateApiResponse(JSON.stringify(data, null, 2));
-
-            if (data.success && data.data?.employees?.length > 0) {
-                let html = '';
-                data.data.employees.forEach(emp => {
-                    const statusColor = emp.status === 'active' ? '#10b981' : '#f59e0b';
-                    html += `
-                        <div style="background: #f9fafb; padding: 12px; margin-bottom: 8px; border-radius: 5px; border-left: 3px solid #fbbf24;">
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <div>
-                                    <strong style="font-size: 14px;">${emp.full_name}</strong><br>
-                                    <small style="color: #6b7280;">${emp.position || 'Employee'}</small><br>
-                                    <small style="color: #6b7280;"><i class="fas fa-envelope"></i> ${emp.email}</small>
-                                </div>
-                                <span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">
-                                    ${emp.status || 'Active'}
-                                </span>
-                            </div>
-                        </div>
-                    `;
-                });
-                listDiv.innerHTML = html;
-            } else {
-                listDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;"><i class="fas fa-user-slash"></i> No employees found in this department</p>';
-            }
-        } catch (error) {
-            listDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: red;">Error loading employees</p>';
-            updateApiResponse(`Error: ${error.message}`);
         }
     }
 
@@ -434,39 +366,49 @@ include '../includes/header.php';
     async function fetchRequisitions() {
         const listDiv = document.getElementById('requisitionsList');
         
+        listDiv.innerHTML = '<p style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading requisitions...</p>';
+        
         try {
             const response = await fetch(`${API_BASE}/job-requisition.php?api_key=${API_KEY}`);
             const data = await response.json();
             
+            updateApiResponse(JSON.stringify(data, null, 2));
+
             if (data.success && data.data?.length > 0) {
                 // Filter for logistics department
                 const logisticsReqs = data.data.filter(req => 
                     ['Logistics', 'Warehouse', 'Transportation', 'Supply Chain', 'Inventory'].includes(req.department)
-                ).slice(0, 5); // Show only last 5
+                ).slice(0, 10); // Show last 10
                 
                 if (logisticsReqs.length > 0) {
                     let html = '';
                     logisticsReqs.forEach(req => {
                         const statusColor = req.status === 'approved' ? '#10b981' : 
-                                           req.status === 'pending' ? '#f59e0b' : '#3b82f6';
+                                           req.status === 'pending' ? '#f59e0b' : 
+                                           req.status === 'rejected' ? '#ef4444' : '#3b82f6';
                         const priorityColor = req.priority === 'high' ? '#ef4444' : 
                                             req.priority === 'medium' ? '#f59e0b' : '#10b981';
                         
                         html += `
-                            <div style="background: #f9fafb; padding: 12px; margin-bottom: 8px; border-radius: 5px; border-left: 3px solid #fbbf24;">
+                            <div style="background: #f9fafb; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #fbbf24; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <strong>${req.job_title}</strong> (${req.positions} position${req.positions > 1 ? 's' : ''})<br>
-                                        <small>${req.department} • Requested by: ${req.requested_by}</small><br>
-                                        <small style="color: ${priorityColor};">Priority: ${req.priority}</small>
-                                    </div>
-                                    <div style="text-align: right;">
-                                        <span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">
-                                            ${req.status}
-                                        </span>
-                                        <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
-                                            Needed: ${req.needed_by}
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                            <strong style="font-size: 16px;">${req.job_title}</strong>
+                                            <span style="background: ${statusColor}; color: white; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;">
+                                                ${req.status}
+                                            </span>
                                         </div>
+                                        <div style="color: #4b5563; font-size: 13px; margin-bottom: 5px;">
+                                            <i class="fas fa-building"></i> ${req.department} • 
+                                            <i class="fas fa-user"></i> ${req.requested_by}
+                                        </div>
+                                        <div style="display: flex; gap: 15px; font-size: 12px; color: #6b7280; flex-wrap: wrap;">
+                                            <span><i class="fas fa-users"></i> ${req.positions} position${req.positions > 1 ? 's' : ''}</span>
+                                            <span><i class="fas fa-calendar"></i> Needed: ${req.needed_by}</span>
+                                            <span style="color: ${priorityColor};"><i class="fas fa-flag"></i> ${req.priority}</span>
+                                        </div>
+                                        ${req.justification ? `<div style="margin-top: 8px; font-size: 12px; color: #6b7280; background: #f3f4f6; padding: 8px; border-radius: 4px;"><i class="fas fa-comment"></i> ${req.justification}</div>` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -474,19 +416,23 @@ include '../includes/header.php';
                     });
                     listDiv.innerHTML = html;
                 } else {
-                    listDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">No requisitions from logistics departments</p>';
+                    listDiv.innerHTML = '<p style="text-align: center; padding: 30px; color: #666;"><i class="fas fa-inbox fa-2x" style="display: block; margin-bottom: 10px;"></i>No requisitions from logistics departments</p>';
                 }
             } else {
-                listDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">No requisitions found</p>';
+                listDiv.innerHTML = '<p style="text-align: center; padding: 30px; color: #666;"><i class="fas fa-inbox fa-2x" style="display: block; margin-bottom: 10px;"></i>No requisitions found</p>';
             }
         } catch (error) {
-            listDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: red;">Error loading requisitions</p>';
+            listDiv.innerHTML = `<p style="text-align: center; padding: 20px; color: #ef4444;"><i class="fas fa-exclamation-circle"></i> Error loading requisitions: ${error.message}</p>`;
+            updateApiResponse(`Error: ${error.message}`);
         }
     }
 
     // Update API response display
     function updateApiResponse(content) {
-        document.getElementById('apiResponse').innerHTML = content;
+        const apiResponse = document.getElementById('apiResponse');
+        if (apiResponse) {
+            apiResponse.innerHTML = content;
+        }
     }
 
     // Toast notification
@@ -516,9 +462,14 @@ include '../includes/header.php';
     // Set default date for needed by
     window.addEventListener('load', function() {
         const dateInput = document.getElementById('reqNeededBy');
-        const today = new Date();
-        const nextMonth = new Date(today.setMonth(today.getMonth() + 1));
-        dateInput.valueAsDate = nextMonth;
+        if (dateInput) {
+            const today = new Date();
+            const nextMonth = new Date(today.setMonth(today.getMonth() + 1));
+            dateInput.valueAsDate = nextMonth;
+        }
+        
+        // Load requisitions if logistics tab is active (though it starts hidden)
+        // This will load when tab is switched
     });
     </script>
 
@@ -573,24 +524,6 @@ include '../includes/header.php';
         box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
 
-    #logisticsEmployeeList::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    #logisticsEmployeeList::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-    }
-
-    #logisticsEmployeeList::-webkit-scrollbar-thumb {
-        background: #fbbf24;
-        border-radius: 10px;
-    }
-
-    #logisticsEmployeeList::-webkit-scrollbar-thumb:hover {
-        background: #d97706;
-    }
-
     .toast-notification {
         animation: slideIn 0.3s ease-out;
     }
@@ -607,235 +540,233 @@ include '../includes/header.php';
     }
     </style>
 
-   
     <!-- Add/Edit Employee Modal -->
-   <!-- Add/Edit Employee Modal -->
-<div id="employeeModal" class="modal modal-hidden">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3 class="modal-title" id="modalTitle">
-                <i class="fas fa-user-plus"></i>
-                Add New Employee
-            </h3>
-            <button class="modal-close" onclick="EmployeeManagement.closeModal('employeeModal')">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        
-        <form id="employeeForm" onsubmit="event.preventDefault(); EmployeeManagement.saveEmployee();">
-            <!-- Avatar Preview -->
-            <div class="avatar-upload">
-                <div class="avatar-preview" id="avatarPreview">JS</div>
-                <div>
-                    <button type="button" class="avatar-upload-btn">
-                        <i class="fas fa-camera"></i>
-                        Change Avatar
+    <div id="employeeModal" class="modal modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">
+                    <i class="fas fa-user-plus"></i>
+                    Add New Employee
+                </h3>
+                <button class="modal-close" onclick="EmployeeManagement.closeModal('employeeModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="employeeForm" onsubmit="event.preventDefault(); EmployeeManagement.saveEmployee();">
+                <!-- Avatar Preview -->
+                <div class="avatar-upload">
+                    <div class="avatar-preview" id="avatarPreview">JS</div>
+                    <div>
+                        <button type="button" class="avatar-upload-btn">
+                            <i class="fas fa-camera"></i>
+                            Change Avatar
+                        </button>
+                        <p class="form-hint">Recommended: 400x400px JPG or PNG</p>
+                    </div>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">
+                            <i class="fas fa-user"></i>
+                            Full Name
+                        </label>
+                        <input type="text" class="form-input" id="empName" placeholder="Enter full name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-envelope"></i>
+                            Email Address
+                        </label>
+                        <input type="email" class="form-input" id="empEmail" placeholder="email@company.com" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-phone"></i>
+                            Phone Number
+                        </label>
+                        <input type="tel" class="form-input" id="empPhone" placeholder="+1 234-567-8900" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-briefcase"></i>
+                            Role
+                        </label>
+                        <select class="form-select" id="empRole" required>
+                            <option value="">Select Role</option>
+                            <option value="admin">Admin</option>
+                            <option value="dispatcher">Dispatcher</option>
+                            <option value="driver">Driver</option>
+                            <option value="fleet_manager">Fleet Manager</option>
+                            <option value="mechanic">Mechanic</option>
+                            <option value="employee">Employee</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-circle"></i>
+                            Status
+                        </label>
+                        <select class="form-select" id="empStatus" required>
+                            <option value="active">Active</option>
+                            <option value="pending">Pending Training</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="on-leave">On Leave</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-building"></i>
+                            Department
+                        </label>
+                        <input type="text" class="form-input" id="empDepartment" placeholder="Department" required>
+                    </div>
+                    
+                    <div class="form-group full-width">
+                        <label class="form-label">
+                            <i class="fas fa-lock"></i>
+                            Password
+                        </label>
+                        <input type="password" class="form-input" id="empPassword" placeholder="Enter password">
+                        <p class="form-hint">Leave blank to keep current password (when editing)</p>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="EmployeeManagement.closeModal('employeeModal')">
+                        Cancel
                     </button>
-                    <p class="form-hint">Recommended: 400x400px JPG or PNG</p>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        Save Employee
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- View Employee Modal -->
+    <div id="viewModal" class="modal modal-hidden">
+        <div class="modal-content view-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-user-circle"></i>
+                    Employee Profile
+                </h3>
+                <button class="modal-close" onclick="EmployeeManagement.closeModal('viewModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="profile-header">
+                <div class="profile-avatar" id="viewAvatar">JD</div>
+                <div class="profile-info">
+                    <h2 id="viewName">John Doe</h2>
+                    <p id="viewEmail">john.doe@company.com</p>
+                    <div class="profile-badges" id="viewRole"></div>
+                    <div class="profile-employee-id" id="viewId"></div>
                 </div>
             </div>
             
-            <div class="form-grid">
-                <div class="form-group full-width">
-                    <label class="form-label">
-                        <i class="fas fa-user"></i>
-                        Full Name
-                    </label>
-                    <input type="text" class="form-input" id="empName" placeholder="Enter full name" required>
+            <div class="profile-detail-row">
+                <div class="profile-detail-label">Status</div>
+                <div class="profile-detail-value" id="viewStatus"></div>
+            </div>
+            
+            <div class="profile-detail-row">
+                <div class="profile-detail-label">Contact</div>
+                <div class="profile-detail-value" id="viewPhone"></div>
+            </div>
+            
+            <div class="profile-detail-row">
+                <div class="profile-detail-label">Department</div>
+                <div class="profile-detail-value" id="viewDepartment"></div>
+            </div>
+            
+            <div class="profile-detail-row">
+                <div class="profile-detail-label">Employee ID</div>
+                <div class="profile-detail-value" id="viewId"></div>
+            </div>
+            
+            <div class="profile-detail-row">
+                <div class="profile-detail-label">Join Date</div>
+                <div class="profile-detail-value" id="viewJoinDate"></div>
+            </div>
+            
+            <div class="profile-detail-row">
+                <div class="profile-detail-label">Last Active</div>
+                <div class="profile-detail-value" id="viewLastActive"></div>
+            </div>
+            
+            <div class="activity-card">
+                <div class="activity-title">
+                    <i class="fas fa-clock"></i>
+                    Recent Activity
                 </div>
-                
-                <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-envelope"></i>
-                        Email Address
-                    </label>
-                    <input type="email" class="form-input" id="empEmail" placeholder="email@company.com" required>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-phone"></i>
-                        Phone Number
-                    </label>
-                    <input type="tel" class="form-input" id="empPhone" placeholder="+1 234-567-8900" required>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-briefcase"></i>
-                        Role
-                    </label>
-                    <select class="form-select" id="empRole" required>
-                        <option value="">Select Role</option>
-                        <option value="admin">Admin</option>
-                        <option value="dispatcher">Dispatcher</option>
-                        <option value="driver">Driver</option>
-                        <option value="fleet_manager">Fleet Manager</option>
-                        <option value="mechanic">Mechanic</option>
-                        <option value="employee">Employee</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-circle"></i>
-                        Status
-                    </label>
-                    <select class="form-select" id="empStatus" required>
-                        <option value="active">Active</option>
-                        <option value="pending">Pending Training</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="on-leave">On Leave</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-building"></i>
-                        Department
-                    </label>
-                    <input type="text" class="form-input" id="empDepartment" placeholder="Department" required>
-                </div>
-                
-                <div class="form-group full-width">
-                    <label class="form-label">
-                        <i class="fas fa-lock"></i>
-                        Password
-                    </label>
-                    <input type="password" class="form-input" id="empPassword" placeholder="Enter password">
-                    <p class="form-hint">Leave blank to keep current password (when editing)</p>
+                <div class="activity-list">
+                    <div class="activity-item">
+                        <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                        <span>Completed trip #TR-2024-001</span>
+                        <span class="time">2 hours ago</span>
+                    </div>
+                    <div class="activity-item">
+                        <i class="fas fa-truck" style="color: #2563eb;"></i>
+                        <span>Started shift - Morning</span>
+                        <span class="time">8 hours ago</span>
+                    </div>
+                    <div class="activity-item">
+                        <i class="fas fa-clock" style="color: #f59e0b;"></i>
+                        <span>Vehicle inspection completed</span>
+                        <span class="time">Yesterday</span>
+                    </div>
                 </div>
             </div>
             
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="EmployeeManagement.closeModal('employeeModal')">
+                <button class="btn btn-outline" onclick="EmployeeManagement.closeModal('viewModal')">
+                    Close
+                </button>
+                <button class="btn btn-primary" onclick="EmployeeManagement.closeModal('viewModal'); EmployeeManagement.openEditModal(document.getElementById('viewId').textContent.split(' ')[1])">
+                    <i class="fas fa-edit"></i>
+                    Edit Profile
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal modal-hidden">
+        <div class="modal-content delete-modal">
+            <div class="delete-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3 class="delete-title">Delete Employee</h3>
+            <p class="delete-text">
+                Are you sure you want to delete <strong id="deleteName">John Smith</strong>?
+                <br>
+                Role: <span id="deleteRole">Admin</span>
+            </p>
+            <div class="delete-warning">
+                <i class="fas fa-exclamation-circle"></i>
+                This action cannot be undone. All associated data will be permanently removed.
+            </div>
+            <div class="delete-actions">
+                <button class="btn btn-outline" onclick="EmployeeManagement.closeModal('deleteModal')">
                     Cancel
                 </button>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save"></i>
-                    Save Employee
+                <button class="btn btn-danger" onclick="EmployeeManagement.confirmDelete()">
+                    <i class="fas fa-trash"></i>
+                    Delete Employee
                 </button>
             </div>
-        </form>
-    </div>
-</div>
-    
-   <!-- View Employee Modal -->
-<div id="viewModal" class="modal modal-hidden">
-    <div class="modal-content view-modal">
-        <div class="modal-header">
-            <h3 class="modal-title">
-                <i class="fas fa-user-circle"></i>
-                Employee Profile
-            </h3>
-            <button class="modal-close" onclick="EmployeeManagement.closeModal('viewModal')">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        
-        <div class="profile-header">
-            <div class="profile-avatar" id="viewAvatar">JD</div>
-            <div class="profile-info">
-                <h2 id="viewName">John Doe</h2>
-                <p id="viewEmail">john.doe@company.com</p>
-                <div class="profile-badges" id="viewRole"></div>
-                <div class="profile-employee-id" id="viewId"></div>
-            </div>
-        </div>
-        
-        <div class="profile-detail-row">
-            <div class="profile-detail-label">Status</div>
-            <div class="profile-detail-value" id="viewStatus"></div>
-        </div>
-        
-        <div class="profile-detail-row">
-            <div class="profile-detail-label">Contact</div>
-            <div class="profile-detail-value" id="viewPhone"></div>
-        </div>
-        
-        <div class="profile-detail-row">
-            <div class="profile-detail-label">Department</div>
-            <div class="profile-detail-value" id="viewDepartment"></div>
-        </div>
-        
-        <div class="profile-detail-row">
-            <div class="profile-detail-label">Employee ID</div>
-            <div class="profile-detail-value" id="viewId"></div>
-        </div>
-        
-        <div class="profile-detail-row">
-            <div class="profile-detail-label">Join Date</div>
-            <div class="profile-detail-value" id="viewJoinDate"></div>
-        </div>
-        
-        <div class="profile-detail-row">
-            <div class="profile-detail-label">Last Active</div>
-            <div class="profile-detail-value" id="viewLastActive"></div>
-        </div>
-        
-        <div class="activity-card">
-            <div class="activity-title">
-                <i class="fas fa-clock"></i>
-                Recent Activity
-            </div>
-            <div class="activity-list">
-                <div class="activity-item">
-                    <i class="fas fa-check-circle" style="color: #10b981;"></i>
-                    <span>Completed trip #TR-2024-001</span>
-                    <span class="time">2 hours ago</span>
-                </div>
-                <div class="activity-item">
-                    <i class="fas fa-truck" style="color: #2563eb;"></i>
-                    <span>Started shift - Morning</span>
-                    <span class="time">8 hours ago</span>
-                </div>
-                <div class="activity-item">
-                    <i class="fas fa-clock" style="color: #f59e0b;"></i>
-                    <span>Vehicle inspection completed</span>
-                    <span class="time">Yesterday</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="modal-footer">
-            <button class="btn btn-outline" onclick="EmployeeManagement.closeModal('viewModal')">
-                Close
-            </button>
-            <button class="btn btn-primary" onclick="EmployeeManagement.closeModal('viewModal'); EmployeeManagement.openEditModal(document.getElementById('viewId').textContent.split(' ')[1])">
-                <i class="fas fa-edit"></i>
-                Edit Profile
-            </button>
         </div>
     </div>
-</div>
-    
-   <!-- Delete Confirmation Modal -->
-<div id="deleteModal" class="modal modal-hidden">
-    <div class="modal-content delete-modal">
-        <div class="delete-icon">
-            <i class="fas fa-exclamation-triangle"></i>
-        </div>
-        <h3 class="delete-title">Delete Employee</h3>
-        <p class="delete-text">
-            Are you sure you want to delete <strong id="deleteName">John Smith</strong>?
-            <br>
-            Role: <span id="deleteRole">Admin</span>
-        </p>
-        <div class="delete-warning">
-            <i class="fas fa-exclamation-circle"></i>
-            This action cannot be undone. All associated data will be permanently removed.
-        </div>
-        <div class="delete-actions">
-            <button class="btn btn-outline" onclick="EmployeeManagement.closeModal('deleteModal')">
-                Cancel
-            </button>
-            <button class="btn btn-danger" onclick="EmployeeManagement.confirmDelete()">
-                <i class="fas fa-trash"></i>
-                Delete Employee
-            </button>
-        </div>
-    </div>
-</div>
     
     <!-- Toast Notifications Container -->
     <div id="toastContainer" class="toast-container"></div>

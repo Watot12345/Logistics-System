@@ -2457,9 +2457,9 @@ function loadMyEmergencyBreakdowns() {
                                             <i class="fas fa-check"></i> Mark Resolved
                                         </button>
                                     ` : ''}
-                                    <button class="btn btn-info" onclick="viewTaskDetails(${breakdown.id}, 'breakdown')" style="width: 100%; background-color: #3b82f6; color: white; border: none;">
-    <i class="fas fa-eye"></i> View Details
-</button>
+                                   <button class="btn btn-secondary" onclick="viewTaskDetails(${breakdown.id}, 'breakdown')" style="flex: 1;">
+        <i class="fas fa-eye"></i> Details
+    </button>
                                 </div>
                             </div>
                         `;
@@ -2481,6 +2481,7 @@ function loadMyEmergencyBreakdowns() {
             emergencyList.innerHTML = '<div class="error-state">Failed to load emergencies</div>';
         });
 }
+
 
 function startBreakdownWork(breakdownId) {
     if (!confirm('Start working on this breakdown?')) return;
@@ -3726,11 +3727,6 @@ function loadVehicleAssignments() {
                                     <span style="display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background-color: ${statusColor}20; color: ${statusColor};">
                                         <i class="fas fa-${statusIcon}"></i> ${assignment.status || 'pending'}
                                     </span>
-                                </div>
-                                <div>
-                                    <button class="btn-icon" onclick="editAssignment(${assignment.id})" style="background: none; border: none; color: #64748b; cursor: pointer; padding: 8px; border-radius: 4px;" title="Edit Assignment">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
                                 </div>
                             </div>
                         `;
@@ -5126,8 +5122,10 @@ function loadMechanicTasks() {
     
     tasksList.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #3b82f6;"></i><p>Loading your tasks...</p></div>';
     
-    // Load stats and activity in parallel
+    // Load stats from API (this is the ONLY stats update we need)
     loadMechanicStats();
+    
+    // Load activity
     loadMechanicActivity();
     
     fetch('../api/get_mechanic_tasks.php?_=' + new Date().getTime())
@@ -5143,8 +5141,7 @@ function loadMechanicTasks() {
                     console.log(`Found ${data.tasks.length} tasks`);
                     if (tasksCount) tasksCount.textContent = data.tasks.length + ' pending';
                     displayMechanicTasks(data.tasks);
-                    // Update stats using the tasks data
-                    updateMechanicStats(data.tasks);
+                    // REMOVED: updateMechanicStats(data.tasks);  <-- DELETE THIS LINE
                 } else {
                     console.log('No tasks found');
                     if (tasksCount) tasksCount.textContent = '0 tasks';
@@ -5155,8 +5152,7 @@ function loadMechanicTasks() {
                             <p style="color: #64748b;">You don't have any maintenance tasks at the moment.</p>
                         </div>
                     `;
-                    // Update stats with zeros
-                    updateMechanicStats([]);
+                    // REMOVED: updateMechanicStats([]);  <-- DELETE THIS LINE
                 }
             } else {
                 console.error('API error:', data.error);
@@ -5171,36 +5167,87 @@ function loadMechanicTasks() {
 
 // Add these new functions
 function loadMechanicStats() {
+    console.log('=================================');
     console.log('Loading mechanic stats...');
+    console.log('=================================');
     
     fetch('../api/get_mechanic_stats.php')
         .then(response => response.json())
         .then(data => {
-            console.log('Mechanic stats:', data);
+            console.log('=== MECHANIC STATS RAW RESPONSE ===');
+            console.log('Full data:', JSON.stringify(data, null, 2));
             
             if (data.success) {
+                console.log('Stats object exists');
+                console.log('Stats keys:', Object.keys(data.stats));
+                console.log('Completed value:', data.stats.completed);
+                console.log('In progress value:', data.stats.in_progress);
+                console.log('Pending value:', data.stats.pending);
+                console.log('Efficiency value:', data.stats.efficiency);
+                
                 const statsDiv = document.getElementById('mechanic-stats');
                 if (statsDiv) {
                     statsDiv.innerHTML = `
                         <div class="stat-mini">
-                            <div class="value" style="color: #10b981;">${data.stats.completed}</div>
+                            <div class="value" style="color: #10b981;">${data.stats.completed || 0}</div>
                             <div class="label">Completed</div>
                         </div>
                         <div class="stat-mini">
-                            <div class="value" style="color: #f59e0b;">${data.stats.in_progress}</div>
+                            <div class="value" style="color: #f59e0b;">${data.stats.in_progress || 0}</div>
                             <div class="label">In Progress</div>
                         </div>
                         <div class="stat-mini">
-                            <div class="value" style="color: #8b5cf6;">${data.stats.efficiency}%</div>
+                            <div class="value" style="color: #8b5cf6;">${data.stats.efficiency || 0}%</div>
                             <div class="label">Efficiency</div>
                         </div>
                     `;
                 }
+            } else {
+                console.log('Stats not successful:', data.error);
             }
         })
         .catch(error => console.error('Error loading mechanic stats:', error));
 }
+// After completing a task, call this
+function refreshAllMechanicData() {
+    loadMechanicTasks();  // Reload tasks list
+    loadMechanicStats();  // Reload stats
+    loadMechanicActivity(); // Reload activity
+    loadMyEmergencyBreakdowns(); // Reload emergencies
+}
 
+// Call this in your complete task function
+function completeTask(taskId, assetName) {
+    // Your existing complete task code should look like this:
+    fetch('../api/complete_task.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            task_id: taskId,
+            asset_name: assetName,
+            notes: document.getElementById('completionNotes')?.value || ''
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            alert('Task completed successfully!');
+            // Refresh all data
+            refreshAllMechanicData();
+            // Close modal if open
+            closeTaskDetailsModal();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to complete task');
+    });
+}
 function loadMechanicActivity() {
     console.log('Loading mechanic activity...');
     const activityList = document.getElementById('mechanic-activity');
@@ -5294,31 +5341,6 @@ function completeTask(id, assetName) {
             btn.disabled = false;
         }
     });
-}
-
-function updateMechanicStats(tasks) {
-    const statsDiv = document.getElementById('mechanic-stats');
-    if (!statsDiv) return;
-    
-    const completed = tasks.filter(t => t.status === 'completed').length;
-    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
-    const total = tasks.length;
-    const efficiency = total > 0 ? Math.round((completed / total) * 100) : 0;
-    
-    statsDiv.innerHTML = `
-        <div class="stat-mini">
-            <div class="value">${completed}</div>
-            <div class="label">Completed</div>
-        </div>
-        <div class="stat-mini">
-            <div class="value">${inProgress}</div>
-            <div class="label">In Progress</div>
-        </div>
-        <div class="stat-mini">
-            <div class="value">${efficiency}%</div>
-            <div class="label">Efficiency</div>
-        </div>
-    `;
 }
 
 function refreshMechanicTasks() {
@@ -5612,3 +5634,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1000);
     }
 });
+// Simple toggle
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        if (sidebar.style.display === 'none' || sidebar.style.display === '') {
+            sidebar.style.display = 'block';
+        } else {
+            sidebar.style.display = 'none';
+        }
+    }
+}

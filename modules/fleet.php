@@ -215,7 +215,9 @@ $page_title = 'Fleet Management | Logistics System';
 $page_css = ['../assets/css/style.css', '../assets/css/fleet.css'];
 include '../includes/header.php';
 ?>
-
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
 <body>
             <!-- Page Content -->
             <div class="page-content">
@@ -422,11 +424,6 @@ if ($in_progress_count > 0 && $pending_count > 0) {
                         <div class="card">
                             <div class="card-header">
                                 <h2><i class="fas fa-chart-line"></i> Transport Efficiency</h2>
-                                <div class="card-actions">
-                                    <button class="card-action-btn">
-                                        <i class="fas fa-download"></i>
-                                    </button>
-                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="efficiency-list">

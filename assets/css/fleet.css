@@ -1947,38 +1947,82 @@
     color: #64748b;
     font-size: 14px;
 }
+/* Sidebar toggle styles */
+.sidebar.collapsed {
+    width: 70px !important;
+}
 
-/* Force override any inline styles */
+.sidebar.collapsed .logo span,
+.sidebar.collapsed .nav-link span,
+.sidebar.collapsed .user-info {
+    display: none !important;
+}
+
+.page-content.expanded {
+    margin-left: 70px !important;
+    width: calc(100% - 70px) !important;
+}
+
+/* Mobile sidebar - FIXED */
 @media screen and (max-width: 768px) {
-    [style*="display: grid"] {
-        display: grid !important;
-        grid-template-columns: 1fr !important;
+    .sidebar {
+        position: fixed !important;
+        left: -280px !important; /* Match your sidebar width */
+        top: 0 !important;
+        bottom: 0 !important;
+        width: 280px !important;
+        transition: left 0.3s ease !important;
+        z-index: 1000 !important;
+        background: white !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1) !important;
+        overflow-y: auto !important; /* Allow scrolling */
     }
     
-    [style*="width:"] {
+    .sidebar.mobile-show {
+        left: 0 !important;
+    }
+    
+    /* Make sure logout button is visible */
+    .sidebar .nav-item:last-child,
+    .sidebar .logout-item,
+    .sidebar a[href*="logout"] {
+        display: flex !important;
+        margin-top: auto !important;
+        border-top: 1px solid #e5e7eb !important;
+        padding: 15px !important;
+    }
+    
+    /* Ensure the bottom section stays at bottom */
+    .sidebar .nav {
+        min-height: 100vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    
+    .sidebar .nav-item:last-child {
+        margin-top: auto !important;
+    }
+    
+    .page-content {
+        margin-left: 0 !important;
         width: 100% !important;
-        max-width: 100% !important;
     }
     
-    /* Force all flex containers to wrap */
-    [style*="display: flex"] {
-        flex-wrap: wrap !important;
+    /* Add overlay when sidebar is open */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
     }
     
-    /* Fix the specific driver/mechanic sections */
-    #tab-drivers .dashboard-grid,
-    #tab-mechanic .dashboard-grid {
-        grid-template-columns: 1fr !important;
-    }
-    
-    /* Fix the current assignment card */
-    #current-assignment-card {
-        width: 100% !important;
-    }
-    
-    /* Fix the performance cards */
-    #driver-stats,
-    #mechanic-stats {
-        grid-template-columns: 1fr !important;
+    .sidebar-overlay.show {
+        display: block !important;
     }
 }
+
+
