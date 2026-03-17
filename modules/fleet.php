@@ -128,56 +128,61 @@ $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
         echo "<!-- Alert: Vehicle='{$alert['asset_name']}', Status='{$alert['status']}', Priority='{$alert['priority']}' -->\n";
     }
 
+    // Reset counters
+    $real_available_count = 0;
+    $real_maintenance_count = 0;
+    $real_in_use_count = 0;
 
-foreach ($vehicles as $vehicle) {
-    $is_maintenance = false;
-    $is_in_use = false;
-    
-    // Check for ANY active maintenance alerts (pending OR in_progress)
-    foreach ($maintenance_alerts as $alert) {
-        if ($alert['asset_name'] == $vehicle['asset_name']) {
-            $is_maintenance = true;
-            break;
+    foreach ($vehicles as $vehicle) {
+        $is_maintenance = false;
+        
+        // Check for ANY active maintenance alerts (pending OR in_progress)
+        foreach ($maintenance_alerts as $alert) {
+            if ($alert['asset_name'] == $vehicle['asset_name']) {
+                $is_maintenance = true;
+                break;
+            }
+        }
+        
+        // If in maintenance, count as maintenance and skip further checks
+        if ($is_maintenance) {
+            $real_maintenance_count++;
+            echo "<!-- Vehicle {$vehicle['asset_name']}: MAINTENANCE -->\n";
+            continue;
+        }
+        
+        // Check if vehicle is in use - using more specific status checks
+        $check_dispatch = $pdo->prepare("
+            SELECT COUNT(*) FROM dispatch_schedule 
+            WHERE vehicle_id = ? 
+            AND status IN ('in-progress', 'scheduled', 'delivered', 'awaiting_verification')
+        ");
+        $check_dispatch->execute([$vehicle['id']]);
+        $dispatch_active = $check_dispatch->fetchColumn() > 0;
+        
+        $check_shipment = $pdo->prepare("
+            SELECT COUNT(*) FROM shipments 
+            WHERE vehicle_id = ? 
+            AND shipment_status IN ('in_transit', 'pending')
+        ");
+        $check_shipment->execute([$vehicle['id']]);
+        $shipment_active = $check_shipment->fetchColumn() > 0;
+        
+        if ($dispatch_active || $shipment_active) {
+            $real_in_use_count++;
+            echo "<!-- Vehicle {$vehicle['asset_name']}: IN USE (dispatch=" . ($dispatch_active ? 'Y' : 'N') . ", shipment=" . ($shipment_active ? 'Y' : 'N') . ") -->\n";
+        } else {
+            $real_available_count++;
+            echo "<!-- Vehicle {$vehicle['asset_name']}: AVAILABLE -->\n";
         }
     }
-    
-    // Check if vehicle is in use - FIX THIS PART
-    // Query directly to check actual status
-   // Check if vehicle is in use - count any non-completed dispatch
-$check_dispatch = $pdo->prepare("
-    SELECT COUNT(*) FROM dispatch_schedule 
-    WHERE vehicle_id = ? 
-    AND status NOT IN ('completed', 'cancelled')
-");
-$check_dispatch->execute([$vehicle['id']]);
-$dispatch_active = $check_dispatch->fetchColumn() > 0;
 
-// Check shipments similarly
-$check_shipment = $pdo->prepare("
-    SELECT COUNT(*) FROM shipments 
-    WHERE vehicle_id = ? 
-    AND shipment_status NOT IN ('delivered', 'cancelled')
-");
-$check_shipment->execute([$vehicle['id']]);
-$shipment_active = $check_shipment->fetchColumn() > 0;
+    $available_count = $real_available_count;
+    $maintenance_count = $real_maintenance_count;
+    $in_use_count = $real_in_use_count;
 
-$is_in_use = ($dispatch_active || $shipment_active);
-    // Count based on status
-    if ($is_maintenance) {
-        $real_maintenance_count++;
-    } else if ($is_in_use) {
-        $real_in_use_count++;
-    } else {
-        $real_available_count++;
-    }
-}
-
-$available_count = $real_available_count;
-$maintenance_count = $real_maintenance_count;
-$in_use_count = $real_in_use_count;
-
-// FIX: Calculate total vehicles from the actual vehicles array
-$total_vehicles = count($vehicles);
+    // FIX: Calculate total vehicles from the actual vehicles array
+    $total_vehicles = count($vehicles);
 
     // FINAL DEBUG
     echo "<!-- FINAL COUNTS - Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count -->\n";
