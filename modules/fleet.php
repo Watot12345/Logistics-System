@@ -7,6 +7,15 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: ../index.php");
     exit();
 }
+// Add this helper function
+function safe_js_string($str) {
+    if ($str === null) return '';
+    // Remove line breaks and escape quotes
+    $str = str_replace(["\r", "\n"], ' ', $str);
+    $str = addslashes($str);
+    return $str;
+}
+
 require_once '../config/db.php';
 $available_count = 0;
 $maintenance_count = 0;
@@ -53,9 +62,8 @@ try {
     ");
     $shipment_stats = $stmt->fetch();
     
-    // Total vehicles from assets table
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM assets WHERE asset_type = 'vehicle'");
-    $total_vehicles = $stmt->fetch()['total'] ?? 0;
+    // FIX: Initialize total_vehicles as 0 first (will calculate later)
+    $total_vehicles = 0;
 
     // Get vehicles added this month
     $stmt = $pdo->query("
@@ -76,6 +84,7 @@ try {
         AND YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
     ");
     $vehicles_last_month = $stmt->fetch()['total'] ?? 0;
+    
     $stmt = $pdo->query("
     SELECT a.*, 
            u.full_name as current_driver,
@@ -166,8 +175,13 @@ $is_in_use = ($dispatch_active || $shipment_active);
 $available_count = $real_available_count;
 $maintenance_count = $real_maintenance_count;
 $in_use_count = $real_in_use_count;
+
+// FIX: Calculate total vehicles from the actual vehicles array
+$total_vehicles = count($vehicles);
+
     // FINAL DEBUG
     echo "<!-- FINAL COUNTS - Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count -->\n";
+    echo "<!-- TOTAL VEHICLES (FIXED): $total_vehicles -->\n";
     
     // Get drivers
     $stmt = $pdo->query("
@@ -196,6 +210,7 @@ $in_use_count = $real_in_use_count;
         echo "<!--   - Has Maintenance: " . ($has_maintenance ? 'Yes' : 'No') . " -->\n";
     }
     echo "<!-- Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count -->\n";
+    echo "<!-- TOTAL VEHICLES: $total_vehicles -->\n";
     echo "<!-- ===== END DEBUG ===== -->\n";
     
 } catch (PDOException $e) {
