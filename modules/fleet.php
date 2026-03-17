@@ -65,6 +65,9 @@ function isVehicleInUse($vehicle_id, $pdo) {
 
 // Get real statistics
 try {
+    // CRITICAL FIX: Ensure PDO is in exception mode
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
     // Get active shipments for stats
     $stmt = $pdo->query("
         SELECT COUNT(*) as total, 
@@ -202,6 +205,36 @@ $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
     // FIX: Calculate total vehicles from the actual vehicles array
     $total_vehicles = count($vehicles);
     
+    // CRITICAL FIX: If all counts are 0 but we have vehicles, recalculate
+    if ($total_vehicles > 0 && $available_count === 0 && $maintenance_count === 0 && $in_use_count === 0) {
+        error_log("WARNING: Stats are 0 but vehicles exist. Recalculating...");
+        
+        // Recalculate from scratch
+        $available_count = 0;
+        $maintenance_count = 0;
+        $in_use_count = 0;
+        
+        foreach ($vehicles as $v) {
+            $has_maint = false;
+            foreach ($maintenance_alerts as $alert) {
+                if ($alert['asset_name'] == $v['asset_name']) {
+                    $has_maint = true;
+                    break;
+                }
+            }
+            
+            if ($has_maint) {
+                $maintenance_count++;
+            } else if ($v['is_in_use']) {
+                $in_use_count++;
+            } else {
+                $available_count++;
+            }
+        }
+        
+        error_log("Recalculated - Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count");
+    }
+    
     // Log final counts
     error_log("Fleet Stats - Available: $available_count, Maintenance: $maintenance_count, In Use: $in_use_count, Total: $total_vehicles");
 
@@ -242,6 +275,11 @@ $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log("Fleet page error: " . $e->getMessage());
     error_log("Fleet page error trace: " . $e->getTraceAsString());
+    
+    // CRITICAL: Show error to user if in development
+    if (getenv('RAILWAY_ENVIRONMENT')) {
+        error_log("DEPLOYMENT ERROR: Stats calculation failed - " . $e->getMessage());
+    }
     
     // Initialize all variables with safe defaults
     $total_vehicles = 0;
