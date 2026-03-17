@@ -1,7 +1,7 @@
 <?php
 // ===== DEBUG CONFIGURATION =====
 // Set to true to bypass 2FA for testing, false for production with 2FA
-define('DEBUG_MODE', false); // Change to false for production
+define('DEBUG_MODE', true); // Change to false for production
 
 // ===== SECURITY CONFIGURATION =====
 define('SESSION_TIMEOUT', 1800); // 30 minutes (in seconds) - change as needed
@@ -539,7 +539,7 @@ if ($showVerification) {
             </div>
             
             <div class="text-sm text-blue-200">
-                <p>© 2024 Logistics System. All rights reserved.</p>
+                <p>© 2026 Logistics System. All rights reserved.</p>
             </div>
         </div>
         
