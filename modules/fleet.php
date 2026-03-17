@@ -68,11 +68,25 @@ try {
     // CRITICAL FIX: Ensure PDO is in exception mode
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
+    // DIAGNOSTIC: Check SQL mode and raw asset count on Railway
+    $sql_mode_row = $pdo->query("SELECT @@sql_mode as sql_mode")->fetch(PDO::FETCH_ASSOC);
+    $current_sql_mode = $sql_mode_row['sql_mode'] ?? 'unknown';
+    error_log("FLEET DIAG - SQL mode: " . $current_sql_mode);
+    
+    $raw_asset_count = $pdo->query("SELECT COUNT(*) as cnt FROM assets")->fetch(PDO::FETCH_ASSOC);
+    error_log("FLEET DIAG - Total assets in DB: " . ($raw_asset_count['cnt'] ?? 0));
+    
+    $raw_vehicle_count = $pdo->query("SELECT COUNT(*) as cnt FROM assets WHERE asset_type = 'vehicle'")->fetch(PDO::FETCH_ASSOC);
+    error_log("FLEET DIAG - Assets with asset_type='vehicle': " . ($raw_vehicle_count['cnt'] ?? 0));
+    
+    $asset_types_check = $pdo->query("SELECT DISTINCT asset_type FROM assets")->fetchAll(PDO::FETCH_COLUMN);
+    error_log("FLEET DIAG - Distinct asset_type values: " . implode(', ', $asset_types_check));
+    
     // Get active shipments for stats
     $stmt = $pdo->query("
-        SELECT COUNT(*) as total, 
+        SELECT COUNT(*) as total,
                SUM(CASE WHEN shipment_status = 'delivered' THEN 1 ELSE 0 END) as delivered
-        FROM shipments 
+        FROM shipments
         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     ");
     $shipment_stats = $stmt->fetch();
@@ -85,39 +99,44 @@ try {
 
     // Get vehicles added this month
     $stmt = $pdo->query("
-        SELECT COUNT(*) as total 
-        FROM assets 
-        WHERE asset_type = 'vehicle' 
-        AND MONTH(created_at) = MONTH(CURDATE()) 
+        SELECT COUNT(*) as total
+        FROM assets
+        WHERE asset_type = 'vehicle'
+        AND MONTH(created_at) = MONTH(CURDATE())
         AND YEAR(created_at) = YEAR(CURDATE())
     ");
     $vehicles_this_month = $stmt->fetch()['total'] ?? 0;
 
     // Get vehicles added last month
     $stmt = $pdo->query("
-        SELECT COUNT(*) as total 
-        FROM assets 
-        WHERE asset_type = 'vehicle' 
+        SELECT COUNT(*) as total
+        FROM assets
+        WHERE asset_type = 'vehicle'
         AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
         AND YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
     ");
     $vehicles_last_month = $stmt->fetch()['total'] ?? 0;
     
+    // DIAGNOSTIC: Test if GROUP BY a.id with SELECT a.* fails due to ONLY_FULL_GROUP_BY
+    // This is the most likely cause of 0 vehicles on Railway
+    error_log("FLEET DIAG - About to run GROUP BY query. SQL mode has ONLY_FULL_GROUP_BY: " .
+        (strpos($current_sql_mode, 'ONLY_FULL_GROUP_BY') !== false ? 'YES - THIS IS THE BUG' : 'no'));
+    
     $stmt = $pdo->query("
-    SELECT a.*, 
+    SELECT a.*,
            u.full_name as current_driver,
            s.shipment_status,
            ds.status as dispatch_status,
            ds.driver_id as dispatch_driver_id,
            -- Calculate is_in_use including delivered and awaiting_verification
-           CASE 
+           CASE
                WHEN s.shipment_id IS NOT NULL AND s.shipment_status IN ('in_transit', 'pending') THEN 1
                WHEN ds.id IS NOT NULL AND ds.status IN ('in-progress', 'scheduled', 'delivered', 'awaiting_verification') THEN 1
                ELSE 0
            END as is_in_use
     FROM assets a
     LEFT JOIN shipments s ON a.id = s.vehicle_id AND s.shipment_status IN ('in_transit', 'pending')
-    LEFT JOIN dispatch_schedule ds ON a.id = ds.vehicle_id 
+    LEFT JOIN dispatch_schedule ds ON a.id = ds.vehicle_id
         AND ds.status IN ('in-progress', 'scheduled', 'delivered', 'awaiting_verification')
     LEFT JOIN users u ON COALESCE(s.driver_id, ds.driver_id) = u.id
     WHERE a.asset_type = 'vehicle'
@@ -128,6 +147,7 @@ $vehicles = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Log vehicle count for debugging
     error_log("Fleet Stats - Total vehicles found: " . count($vehicles));
+    error_log("FLEET DIAG - GROUP BY query returned: " . count($vehicles) . " rows");
     
     // Get maintenance alerts - INCLUDES BOTH PENDING AND IN_PROGRESS
     $stmt = $pdo->query("
