@@ -57,9 +57,28 @@ try {
     
     $pdo = new PDO($dsn, $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     
-    // Set MySQL timezone
-    $pdo->exec("SET time_zone = '" . date('P') . "'");
+    // Disable ONLY_FULL_GROUP_BY strict mode which breaks GROUP BY queries on Railway MySQL
+    // Also set a safe SQL mode that works across local and Railway environments
+    try {
+        $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
+    } catch (PDOException $e) {
+        error_log("Warning: Could not set sql_mode: " . $e->getMessage());
+    }
+    
+    // Set MySQL timezone safely (Railway may not have timezone tables populated)
+    try {
+        $pdo->exec("SET time_zone = '" . date('P') . "'");
+    } catch (PDOException $e) {
+        error_log("Warning: Could not set time_zone: " . $e->getMessage());
+        // Fallback: try UTC offset format
+        try {
+            $pdo->exec("SET time_zone = '+08:00'");
+        } catch (PDOException $e2) {
+            error_log("Warning: Could not set fallback time_zone either: " . $e2->getMessage());
+        }
+    }
     
     error_log("Successfully connected to database: $dbname on $host");
     
