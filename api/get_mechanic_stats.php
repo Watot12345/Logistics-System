@@ -19,32 +19,45 @@ require_once '../config/db.php';
 $mechanic_id = $_SESSION['user_id'];
 
 try {
-    // Get stats for this mechanic
-    $stats = $pdo->prepare("
+    // Get stats from maintenance_alerts
+    $maintenance_query = $pdo->prepare("
         SELECT 
-            COUNT(*) as total_tasks,
-            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-            SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks,
-            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_tasks,
-            ROUND(AVG(CASE WHEN status = 'completed' THEN DATEDIFF(completed_date, due_date) ELSE NULL END), 1) as avg_completion_time
+            COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+            COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress,
+            COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending
         FROM maintenance_alerts 
         WHERE assigned_mechanic = ?
     ");
-    $stats->execute([$mechanic_id]);
-    $data = $stats->fetch(PDO::FETCH_ASSOC);
+    $maintenance_query->execute([$mechanic_id]);
+    $maintenance = $maintenance_query->fetch(PDO::FETCH_ASSOC);
+    
+    // Get stats from emergency_breakdowns
+    $emergency_query = $pdo->prepare("
+        SELECT 
+            COUNT(CASE WHEN status = 'resolved' THEN 1 END) as completed,
+            COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress
+        FROM emergency_breakdowns 
+        WHERE assigned_mechanic = ?
+    ");
+    $emergency_query->execute([$mechanic_id]);
+    $emergency = $emergency_query->fetch(PDO::FETCH_ASSOC);
+    
+    // Calculate totals
+    $completed = (int)($maintenance['completed'] ?? 0) + (int)($emergency['completed'] ?? 0);
+    $in_progress = (int)($maintenance['in_progress'] ?? 0) + (int)($emergency['in_progress'] ?? 0);
+    $pending = (int)($maintenance['pending'] ?? 0);
     
     // Calculate efficiency (completed vs total attempted)
-    $total_attempted = ($data['completed_tasks'] ?? 0) + ($data['in_progress_tasks'] ?? 0);
-    $efficiency = $total_attempted > 0 ? round(($data['completed_tasks'] / $total_attempted) * 100) : 0;
+    $total_attempted = $completed + $in_progress;
+    $efficiency = $total_attempted > 0 ? round(($completed / $total_attempted) * 100) : 0;
     
     echo json_encode([
         'success' => true,
         'stats' => [
-            'completed' => (int)($data['completed_tasks'] ?? 0),
-            'in_progress' => (int)($data['in_progress_tasks'] ?? 0),
-            'pending' => (int)($data['pending_tasks'] ?? 0),
-            'efficiency' => $efficiency,
-            'avg_time' => $data['avg_completion_time'] ?? 'N/A'
+            'completed' => $completed,
+            'in_progress' => $in_progress,
+            'pending' => $pending,
+            'efficiency' => $efficiency
         ]
     ]);
     

@@ -2259,7 +2259,23 @@ function editAlertModal(id, asset_name, issue, priority, due_date) {
     document.getElementById('edit_alert_due_date').value = due_date;
     modal.style.display = 'block';
 }
-
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const pageContent = document.querySelector('.page-content');
+    
+    if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+        
+        // For mobile
+        if (window.innerWidth <= 768) {
+            sidebar.classList.toggle('show');
+        }
+    }
+    
+    if (pageContent) {
+        pageContent.classList.toggle('expanded');
+    }
+}
 // Function to CLOSE the edit alert modal
 function closeEditAlertModal() {
     document.getElementById('editAlertModal').style.display = 'none';

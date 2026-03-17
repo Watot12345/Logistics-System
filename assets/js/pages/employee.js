@@ -158,7 +158,6 @@ loadStatistics: async function() {
 },
 
     // Render Table
-// Update the renderTable function to add a new action for pending training
 renderTable: function() {
     const tbody = document.querySelector('#employeeTable tbody');
     if (!tbody) return;
@@ -185,8 +184,9 @@ renderTable: function() {
     this.employees.forEach(emp => {
         const initials = this.getInitials(emp.full_name);
         
-        // Check if employee can be assigned to training (not already a driver or in training)
-        const canAssignToTraining = emp.role !== 'driver' && emp.status !== 'pending';
+        // FIXED: Only show training button for regular employees (not admins, not already drivers)
+        // Only employees with role 'employee' and status 'active' can be assigned to driver training
+        const canAssignToTraining = emp.role === 'employee' && emp.status === 'active';
         
         html += `
             <tr>
@@ -242,7 +242,6 @@ renderTable: function() {
 
     tbody.innerHTML = html;
 },
-
 // Add new function to open training assignment modal
 openTrainingModal: function(userId, userName) {
     // Store in current employee
@@ -809,3 +808,8 @@ function showToast(message, type = 'success') {
         toast.remove();
     }, 3000);
 }
+
+
+
+
+
