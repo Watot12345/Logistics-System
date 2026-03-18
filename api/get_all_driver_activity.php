@@ -10,7 +10,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 // Only admin and dispatcher can view all driver activity
-if (!in_array($_SESSION['role'], ['admin', 'dispatcher', 'fleet_manager'])) {
+if (!in_array($_SESSION['role'], ['admin', 'dispatcher', 'fleet_manager', 'employee'])) {
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit();
 }
