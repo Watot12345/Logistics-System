@@ -554,39 +554,39 @@ async function savePO() {
         return;
     }
     
-    itemRows.forEach(row => {
-        if (row.getAttribute('data-is-new') === 'true') {
-            const newItemData = JSON.parse(row.querySelector('.new-item-data').value);
+    // In your savePO function, update the item detection:
+itemRows.forEach(row => {
+    // Check for new items - look for the data-is-new attribute
+    if (row.getAttribute('data-is-new') === 'true') {
+        const newItemData = JSON.parse(row.querySelector('.new-item-data').value);
+        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+        const price = parseFloat(row.querySelector('.item-price').value) || 0;
+        
+        items.push({
+            is_new: true,
+            new_item_name: newItemData.name,
+            new_sku: newItemData.sku,
+            new_category: newItemData.category,
+            new_category_name: newItemData.category_name,
+            new_reorder_level: newItemData.reorder,
+            new_description: newItemData.description || '',
+            quantity: qty,
+            unit_price: price
+        });
+    } else {
+        const itemSelect = row.querySelector('.item-select');
+        if (itemSelect && itemSelect.value) {
             const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
             const price = parseFloat(row.querySelector('.item-price').value) || 0;
             
             items.push({
-                is_new: true,
-                new_item_name: newItemData.name,
-                new_sku: newItemData.sku,
-                new_category: newItemData.category,
-                new_category_name: newItemData.category_name,
-                new_reorder_level: newItemData.reorder,
-                new_description: newItemData.description || '',
+                item_id: itemSelect.value,
                 quantity: qty,
-                unit_price: price,
-                total_price: qty * price
+                unit_price: price
             });
-        } else {
-            const itemSelect = row.querySelector('.item-select');
-            if (itemSelect && itemSelect.value) {
-                const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-                const price = parseFloat(row.querySelector('.item-price').value) || 0;
-                
-                items.push({
-                    item_id: itemSelect.value,
-                    quantity: qty,
-                    unit_price: price,
-                    total_price: qty * price
-                });
-            }
         }
-    });
+    }
+});
     
     if (items.length === 0) {
         alert('Please select at least one item');

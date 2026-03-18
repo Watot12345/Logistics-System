@@ -20,7 +20,7 @@ try {
         throw new Exception('Invalid JSON data');
     }
     
-    // Check user role - is this user allowed to create POs?
+    // Check user role
     $user_role = $_SESSION['role'] ?? 'employee';
     $is_admin = in_array($user_role, ['admin', 'procurement_manager']);
     
@@ -49,15 +49,13 @@ try {
     // Check if this PO contains NEW items
     $has_new_items = false;
     foreach ($data['items'] as $item) {
-        if (empty($item['item_id']) || $item['item_id'] === 'new') {
+        if (isset($item['is_new']) && $item['is_new'] === true) {
             $has_new_items = true;
             break;
         }
     }
     
     // Determine initial status
-    // If user is admin AND no new items, can be auto-approved
-    // Otherwise, always pending
     $initial_status = 'pending'; // Default to pending
     
     if ($is_admin && !$has_new_items) {
@@ -104,92 +102,80 @@ try {
     
     // Process items
     $new_items_created = [];
+    $items_inserted = 0;
     
     foreach ($data['items'] as $index => $item) {
         $item_id = null;
-        $is_new_item = false;
+        $is_new_item = isset($item['is_new']) && $item['is_new'] === true;
         
-        if (empty($item['item_id']) || $item['item_id'] === 'new') {
-            $is_new_item = true;
+        if ($is_new_item) {
+            // Handle new item creation
+            error_log("Creating new item: " . json_encode($item));
             
-            // For pending POs, we don't create the item yet
-            // We just store the item details in a temporary field or notes
-            if ($initial_status === 'pending') {
-                // Store new item details in PO notes or a separate table
-                // For now, append to notes
-                $item_details = "NEW ITEM: {$item['new_item_name']} (SKU: {$item['new_sku']}) - Qty: {$item['quantity']}";
-                $update_notes = $pdo->prepare("UPDATE purchase_orders SET notes = CONCAT(notes, '\n', ?) WHERE id = ?");
-                $update_notes->execute([$item_details, $po_id]);
+            // Get or create category
+            $category_id = null;
+            if (!empty($item['new_category'])) {
+                // Check if category exists
+                $cat_stmt = $pdo->prepare("SELECT id FROM categories WHERE id = ? OR category_name = ?");
+                $cat_stmt->execute([$item['new_category'], $item['new_category']]);
+                $category = $cat_stmt->fetch();
                 
-                // Use a placeholder item_id (0 or NULL) - but need to handle FK constraint
-                // Better: Create the item but mark as pending approval?
-                $item_id = 0; // This will fail FK constraint!
-                throw new Exception('New items require approval. Please create the item first or have an admin approve.');
-            } else {
-                // Admin is creating - create the item now
-                // Get category_id
-                $category_id = null;
-                if (!empty($item['new_category'])) {
-                    $cat_stmt = $pdo->prepare("SELECT id FROM categories WHERE category_name = ?");
-                    $cat_stmt->execute([$item['new_category']]);
-                    $category = $cat_stmt->fetch();
-                    if ($category) {
-                        $category_id = $category['id'];
-                    } else {
-                        // Create new category
-                        $cat_insert = $pdo->prepare("INSERT INTO categories (category_name) VALUES (?)");
-                        $cat_insert->execute([$item['new_category']]);
-                        $category_id = $pdo->lastInsertId();
-                    }
+                if ($category) {
+                    $category_id = $category['id'];
+                } else {
+                    // Create new category
+                    $cat_insert = $pdo->prepare("INSERT INTO categories (category_name) VALUES (?)");
+                    $cat_insert->execute([$item['new_category_name'] ?? $item['new_category']]);
+                    $category_id = $pdo->lastInsertId();
                 }
-                
-                // Create the new item
-                $new_item_sql = "INSERT INTO inventory_items (
-                    item_name, sku, category_id, supplier_id, 
-                    quantity, price, reorder_level, description, created_at
-                ) VALUES (
-                    :item_name, :sku, :category_id, :supplier_id,
-                    0, :price, :reorder_level, :description, NOW()
-                )";
-                
-                $new_item_stmt = $pdo->prepare($new_item_sql);
-                $new_item_stmt->execute([
-                    ':item_name' => $item['new_item_name'],
-                    ':sku' => $item['new_sku'],
-                    ':category_id' => $category_id,
-                    ':supplier_id' => $data['supplier_id'],
-                    ':price' => (float)($item['unit_price'] ?? 0),
-                    ':reorder_level' => (int)($item['new_reorder_level'] ?? 10),
-                    ':description' => $item['new_description'] ?? ''
-                ]);
-                
-                $item_id = $pdo->lastInsertId();
-                $new_items_created[] = $item['new_item_name'];
-                
-                // Record stock movement
-                $movement_stmt = $pdo->prepare("
-                    INSERT INTO stock_movements (
-                        item_id, movement_type, quantity_change, 
-                        previous_quantity, new_quantity, notes
-                    ) VALUES (?, 'in', 0, 0, 0, ?)
-                ");
-                $movement_stmt->execute([$item_id, 'New product created via PO ' . $po_number]);
             }
+            
+            // Create the new item in inventory
+            $new_item_sql = "INSERT INTO inventory_items (
+                item_name, sku, category_id, supplier_id, 
+                quantity, price, reorder_level, description, created_at
+            ) VALUES (
+                :item_name, :sku, :category_id, :supplier_id,
+                0, :price, :reorder_level, :description, NOW()
+            )";
+            
+            $new_item_stmt = $pdo->prepare($new_item_sql);
+            $new_item_stmt->execute([
+                ':item_name' => $item['new_item_name'] ?? $item['item_name'],
+                ':sku' => $item['new_sku'] ?? $item['sku'],
+                ':category_id' => $category_id,
+                ':supplier_id' => $data['supplier_id'],
+                ':price' => (float)($item['unit_price'] ?? 0),
+                ':reorder_level' => (int)($item['new_reorder_level'] ?? 10),
+                ':description' => $item['new_description'] ?? ''
+            ]);
+            
+            $item_id = $pdo->lastInsertId();
+            $new_items_created[] = $item['new_item_name'] ?? $item['item_name'];
+            
+            error_log("New item created with ID: $item_id");
+            
         } else {
             // Existing item
-            $item_id = $item['item_id'];
+            $item_id = $item['item_id'] ?? null;
+            
+            if (!$item_id) {
+                error_log("Skipping item - no item_id: " . json_encode($item));
+                continue;
+            }
             
             // Verify item exists
             $check = $pdo->prepare("SELECT id FROM inventory_items WHERE id = ?");
             $check->execute([$item_id]);
             if (!$check->fetch()) {
-                throw new Exception('Item ID ' . $item_id . ' does not exist');
+                error_log("Item ID $item_id does not exist, skipping");
+                continue;
             }
         }
         
-        // Only insert PO item if we have a valid item_id
+        // Insert PO item
         if ($item_id && $item_id > 0) {
-            $quantity = (int)($item['quantity'] ?? 0);
+            $quantity = (int)($item['quantity'] ?? 1);
             $unit_price = (float)($item['unit_price'] ?? 0);
             $total_price = $quantity * $unit_price;
             
@@ -200,14 +186,26 @@ try {
             )";
             
             $item_stmt = $pdo->prepare($item_sql);
-            $item_stmt->execute([
+            $result = $item_stmt->execute([
                 ':po_id' => $po_id,
                 ':item_id' => $item_id,
                 ':quantity' => $quantity,
                 ':unit_price' => $unit_price,
                 ':total_price' => $total_price
             ]);
+            
+            if ($result) {
+                $items_inserted++;
+                error_log("Item inserted successfully for PO $po_id");
+            } else {
+                error_log("Failed to insert item: " . json_encode($item_stmt->errorInfo()));
+            }
         }
+    }
+    
+    // Check if any items were inserted
+    if ($items_inserted === 0) {
+        throw new Exception('No items were inserted successfully. Please check your item selections.');
     }
     
     // Log status history
@@ -250,13 +248,16 @@ try {
         'po_number' => $po_number,
         'status' => $initial_status,
         'message' => $message,
-        'new_items_created' => $new_items_created
+        'new_items_created' => $new_items_created,
+        'items_inserted' => $items_inserted
     ]);
     
 } catch (Exception $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
+    
+    error_log('PO Creation Error: ' . $e->getMessage());
     
     http_response_code(500);
     echo json_encode([

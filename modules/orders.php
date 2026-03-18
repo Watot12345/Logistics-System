@@ -975,7 +975,6 @@ if (isset($_GET['status']) && $_GET['status'] == 'requests') {
     </div>
 
 </div>
-
 <script>
 console.log('✅ Page JavaScript loaded');
 
@@ -990,6 +989,16 @@ window.openPOModal = function() {
     if (modal) {
         modal.classList.remove('modal-hidden');
         modal.classList.add('modal-visible');
+        
+        // Reset form
+        document.getElementById('poForm')?.reset();
+        
+        // Clear items table and add one empty row
+        const tbody = document.querySelector('.items-table tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+            addItem();
+        }
         
         // Load data
         setTimeout(() => {
@@ -1010,7 +1019,6 @@ window.closeModal = function(modalId) {
 };
 
 // ===== LOAD DATA FUNCTIONS =====
-// Add this to your JavaScript
 function updateSupplierNameDisplay() {
     const supplierSelect = document.getElementById('modalSupplierSelect');
     const supplierNameSpan = document.getElementById('selectedSupplierName');
@@ -1029,26 +1037,28 @@ function updateSupplierNameDisplay() {
     }
 }
 
-// Update your filterItemsBySupplier function to include this
 window.filterItemsBySupplier = function() {
     const supplierId = document.getElementById('modalSupplierSelect').value;
+    
+    console.log('Filtering items for supplier:', supplierId);
     
     if (!supplierId || supplierId === '') {
         filteredItems = allItems;
     } else {
-        filteredItems = allItems.filter(item => item.supplier_id == supplierId);
+        filteredItems = allItems.filter(item => Number(item.supplier_id) === Number(supplierId));
     }
     
     console.log(`Showing ${filteredItems.length} items for supplier ${supplierId || 'all'}`);
     
     updateAllItemDropdowns();
     updateItemCountDisplay();
-    updateSupplierNameDisplay(); // Add this line
+    updateSupplierNameDisplay();
     
     if (filteredItems.length === 0 && supplierId) {
         alert('No items found for this supplier. You can add new items using the "Add New Product" button.');
     }
 };
+
 async function loadSuppliers() {
     try {
         const response = await fetch('../api/get_suppliers.php');
@@ -1069,7 +1079,6 @@ async function loadItems() {
         const response = await fetch('../api/get_inventory_items.php');
         const items = await response.json();
         
-        // Check if we got an error
         if (items.error) {
             console.error('API Error:', items.error);
             alert('Error loading items: ' + items.error);
@@ -1086,45 +1095,11 @@ async function loadItems() {
     }
 }
 
-// ===== SUPPLIER FILTER FUNCTION =====
-window.filterItemsBySupplier = function() {
-    const supplierId = document.getElementById('modalSupplierSelect').value;
-    
-    console.log('🔍 Filter called with supplierId:', supplierId);
-    console.log('📦 All items before filter:', allItems);
-    
-    if (!supplierId || supplierId === '') {
-        filteredItems = allItems;
-        console.log('📊 Showing all items:', filteredItems.length);
-    } else {
-        // Convert both to numbers for comparison
-        filteredItems = allItems.filter(item => {
-            const match = Number(item.supplier_id) === Number(supplierId);
-            if (match) {
-                console.log(`✅ Item ${item.item_name} matches supplier ${supplierId}`);
-            }
-            return match;
-        });
-        
-        console.log(`📊 Found ${filteredItems.length} items for supplier ${supplierId}`);
-    }
-    
-    updateAllItemDropdowns();
-    updateItemCountDisplay();
-    updateSupplierNameDisplay();
-    
-    if (filteredItems.length === 0 && supplierId) {
-        alert(`No items found for supplier ID ${supplierId}`);
-    }
-};
-
-// Update all item dropdowns with filtered items
 function updateAllItemDropdowns() {
     const dropdowns = document.querySelectorAll('.item-select');
     dropdowns.forEach(select => {
         const currentValue = select.value;
         
-        // Generate new options
         let options = '<option value="">Select Item</option>';
         
         if (filteredItems.length > 0) {
@@ -1139,11 +1114,10 @@ function updateAllItemDropdowns() {
     });
 }
 
-// Update item count display
 function updateItemCountDisplay() {
     const countDisplay = document.getElementById('itemCountDisplay');
     if (countDisplay) {
-        countDisplay.textContent = filteredItems.length;
+        countDisplay.innerHTML = `<span id="itemCount">${filteredItems.length}</span> items available for selected supplier`;
     }
 }
 
@@ -1154,7 +1128,6 @@ window.addItem = function() {
     
     const row = document.createElement('tr');
     
-    // Generate options for the dropdown
     let options = '<option value="">Select Item</option>';
     
     if (filteredItems.length > 0) {
@@ -1225,7 +1198,260 @@ window.removeItem = function(button) {
         alert('You must have at least one item');
     }
 };
+// Add these functions right after your savePO function
+// ===== PO VIEW FUNCTIONS =====
+window.viewPO = async function(poId) {
+    console.log('Viewing PO:', poId);
+    
+    try {
+        const response = await fetch(`../api/get_po_details.php?po_id=${poId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            showPODetailsModal(data.po);
+        } else {
+            alert('Error loading PO details: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to load PO details');
+    }
+};
 
+function showPODetailsModal(po) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('poDetailsModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'poDetailsModal';
+        modal.className = 'modal modal-hidden';
+        document.body.appendChild(modal);
+    }
+    
+    // Format items table
+    let itemsHtml = '';
+    if (po.items && po.items.length > 0) {
+        po.items.forEach(item => {
+            itemsHtml += `
+                <tr>
+                    <td>${item.item_name} ${item.sku ? '(' + item.sku + ')' : ''}</td>
+                    <td style="text-align: right;">${item.quantity}</td>
+                    <td style="text-align: right;">₱${parseFloat(item.unit_price).toFixed(2)}</td>
+                    <td style="text-align: right;">₱${parseFloat(item.total_price).toFixed(2)}</td>
+                </tr>
+            `;
+        });
+    }
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-file-invoice"></i> 
+                    PO Details: ${po.po_number}
+                </h3>
+                <button class="modal-close" onclick="closeModal('poDetailsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div style="padding: 24px; max-height: 70vh; overflow-y: auto;">
+                <div style="background: ${getStatusColor(po.status)}; color: white; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 600;">Status: ${po.status.toUpperCase()}</span>
+                    <span>Priority: ${po.priority?.toUpperCase() || 'NORMAL'}</span>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 20px;">
+                    <div>
+                        <h4 style="color: #666; margin-bottom: 10px;">Supplier Information</h4>
+                        <p><strong>Name:</strong> ${po.supplier_name}</p>
+                        ${po.supplier_contact ? `<p><strong>Contact:</strong> ${po.supplier_contact}</p>` : ''}
+                        ${po.supplier_email ? `<p><strong>Email:</strong> ${po.supplier_email}</p>` : ''}
+                    </div>
+                    <div>
+                        <h4 style="color: #666; margin-bottom: 10px;">Order Information</h4>
+                        <p><strong>Order Date:</strong> ${formatDate(po.order_date)}</p>
+                        <p><strong>Expected Delivery:</strong> ${po.expected_delivery ? formatDate(po.expected_delivery) : 'Not set'}</p>
+                        <p><strong>Created By:</strong> ${po.requester || 'Unknown'}</p>
+                    </div>
+                </div>
+                
+                <h4 style="color: #666; margin: 20px 0 10px;">Items</h4>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <thead style="background: #f8fafc;">
+                        <tr>
+                            <th style="padding: 12px; text-align: left;">Item</th>
+                            <th style="padding: 12px; text-align: right;">Qty</th>
+                            <th style="padding: 12px; text-align: right;">Unit Price</th>
+                            <th style="padding: 12px; text-align: right;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml || '<tr><td colspan="4" style="text-align: center; padding: 20px;">No items found</td></tr>'}
+                    </tbody>
+                    <tfoot style="border-top: 2px solid #e2e8f0;">
+                        <tr>
+                            <td colspan="3" style="padding: 12px; text-align: right;"><strong>Subtotal:</strong></td>
+                            <td style="padding: 12px; text-align: right;">₱${parseFloat(po.subtotal || 0).toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" style="padding: 12px; text-align: right;"><strong>Tax (12%):</strong></td>
+                            <td style="padding: 12px; text-align: right;">₱${parseFloat(po.tax_amount || 0).toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" style="padding: 12px; text-align: right;"><strong>Total:</strong></td>
+                            <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: 700; color: #2563eb;">
+                                ₱${parseFloat(po.total_amount || 0).toFixed(2)}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                ${po.notes ? `
+                <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                    <h4 style="color: #666; margin-bottom: 8px;">Notes</h4>
+                    <p style="margin: 0; white-space: pre-line;">${po.notes}</p>
+                </div>
+                ` : ''}
+            </div>
+            
+            <div class="modal-footer" style="justify-content: space-between;">
+                <div>
+                    ${po.status === 'pending' ? `
+                        <button class="btn btn-outline" onclick="editPO(${po.id})">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    ` : ''}
+                </div>
+                <div>
+                    <button class="btn btn-outline" onclick="closeModal('poDetailsModal')">Close</button>
+                    ${po.status === 'pending' && window.userRole === 'admin' ? `
+                        <button class="btn btn-primary" onclick="updatePOStatus(${po.id}, 'approved')">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                        <button class="btn btn-danger" onclick="updatePOStatus(${po.id}, 'rejected')">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    ` : ''}
+                    ${po.status === 'approved' && window.userRole === 'admin' ? `
+                        <button class="btn btn-primary" onclick="updatePOStatus(${po.id}, 'completed')">
+                            <i class="fas fa-check-double"></i> Complete
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    modal.classList.remove('modal-hidden');
+    modal.classList.add('modal-visible');
+}
+
+// Helper functions
+function getStatusColor(status) {
+    const colors = {
+        'draft': '#6b7280',
+        'pending': '#f59e0b',
+        'approved': '#10b981',
+        'rejected': '#ef4444',
+        'completed': '#2563eb',
+        'cancelled': '#6b7280'
+    };
+    return colors[status] || '#6b7280';
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+    });
+}
+window.updatePOStatus = async function(poId, newStatus) {
+    console.log('Updating PO status:', {poId, newStatus});
+    
+    if (!confirm(`Are you sure you want to mark this PO as ${newStatus}?`)) return;
+    
+    try {
+        const response = await fetch('../api/update_po_status.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                po_id: poId,
+                status: newStatus
+            })
+        });
+        
+        console.log('Response status:', response.status);
+        
+        // Get the response as text first
+        const responseText = await response.text();
+        console.log('Raw response:', responseText);
+        
+        // Try to parse as JSON
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (e) {
+            console.warn('Response is not valid JSON:', responseText);
+            
+            // Even if response isn't JSON, check if status code is OK
+            if (response.ok) {
+                alert(`PO ${newStatus} successfully! (Status updated)`);
+                window.location.reload();
+                return;
+            } else {
+                throw new Error('Server returned invalid response');
+            }
+        }
+        
+        if (result.success) {
+            alert(result.message || `PO ${newStatus} successfully!`);
+            window.location.reload();
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        
+        // Last resort - ask user to refresh to check
+        if (confirm('Error updating status. Would you like to refresh the page to see if it worked?')) {
+            window.location.reload();
+        }
+    }
+};
+// Add editPO and updatePO functions if you want edit functionality
+window.editPO = function(poId) {
+    alert('Edit functionality coming soon!');
+};
+
+window.updatePOStatus = async function(poId, newStatus) {
+    if (!confirm(`Are you sure you want to mark this PO as ${newStatus}?`)) return;
+    
+    try {
+        const response = await fetch('../api/update_po_status.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({po_id: poId, status: newStatus})
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            alert(`PO ${newStatus} successfully!`);
+            window.location.reload();
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error updating PO status');
+    }
+};
+// ===== SAVE PO FUNCTION (COMBINED VERSION) =====
 window.savePO = async function() {
     console.log('Saving PO...');
     
@@ -1258,17 +1484,35 @@ window.savePO = async function() {
     }
     
     itemRows.forEach(row => {
-        const itemSelect = row.querySelector('.item-select');
-        const qtyInput = row.querySelector('.item-qty');
-        const priceInput = row.querySelector('.item-price');
-        
-        if (itemSelect && itemSelect.value) {
+        // Check for new items - look for the data-is-new attribute
+        if (row.getAttribute('data-is-new') === 'true') {
+            const newItemData = JSON.parse(row.querySelector('.new-item-data').value);
+            const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+            const price = parseFloat(row.querySelector('.item-price').value) || 0;
+            
             items.push({
-                item_id: itemSelect.value,
-                quantity: parseFloat(qtyInput?.value) || 0,
-                unit_price: parseFloat(priceInput?.value) || 0,
-                total_price: parseFloat(row.querySelector('.item-total')?.textContent.replace('₱', '')) || 0
+                is_new: true,
+                new_item_name: newItemData.name,
+                new_sku: newItemData.sku,
+                new_category: newItemData.category,
+                new_category_name: newItemData.category_name,
+                new_reorder_level: newItemData.reorder,
+                new_description: newItemData.description || '',
+                quantity: qty,
+                unit_price: price
             });
+        } else {
+            const itemSelect = row.querySelector('.item-select');
+            if (itemSelect && itemSelect.value) {
+                const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+                const price = parseFloat(row.querySelector('.item-price').value) || 0;
+                
+                items.push({
+                    item_id: itemSelect.value,
+                    quantity: qty,
+                    unit_price: price
+                });
+            }
         }
     });
     
@@ -1296,7 +1540,7 @@ window.savePO = async function() {
         items: items
     };
     
-    console.log('Sending PO data:', poData);
+    console.log('Sending PO data:', JSON.stringify(poData, null, 2));
     
     try {
         const response = await fetch('../api/create_purchase_order.php', {
@@ -1315,7 +1559,7 @@ window.savePO = async function() {
         console.log('Server response:', result);
         
         if (result.success) {
-            alert(`PO ${result.po_number} created successfully!`);
+            alert(result.message || `PO ${result.po_number} created successfully!`);
             closeModal('poModal');
             
             // Reset form
@@ -1337,7 +1581,7 @@ window.savePO = async function() {
         console.error('Error saving PO:', error);
         alert('Error saving purchase order: ' + error.message);
     }
-};  
+};
 
 // ===== SEARCH FUNCTION =====
 window.filterBySearch = function(searchTerm) {
@@ -1354,18 +1598,6 @@ window.filterBySearch = function(searchTerm) {
     const currentTab = urlParams.get('status') || 'pending';
     window.location.href = `?status=${currentTab}&search=${encodeURIComponent(searchTerm)}`;
 };
-
-// ===== PO FUNCTIONS =====
-window.updatePOStatus = function(poId, status) {
-    if (confirm(`Are you sure you want to mark this PO as ${status}?`)) {
-        alert('Status update will be implemented soon!');
-    }
-};
-
-window.viewPO = function(poId) {
-    alert('View PO details coming soon!');
-};
-
 
 // ===== NEW PRODUCT MODAL FUNCTIONS =====
 window.openNewProductModal = function() {
@@ -1392,8 +1624,6 @@ window.addNewCategoryFromProduct = function() {
         return;
     }
     
-    // Here you would make API call to add category
-    // For now, simulate adding
     const select = document.getElementById('new_product_category');
     const newOption = document.createElement('option');
     newOption.value = 'temp_' + Date.now();
@@ -1414,7 +1644,6 @@ window.addNewSupplierFromProduct = function() {
         return;
     }
     
-    // Simulate adding supplier
     const select = document.getElementById('new_product_supplier');
     const newOption = document.createElement('option');
     newOption.value = 'temp_' + Date.now();
@@ -1444,7 +1673,6 @@ window.submitNewProductRequest = function() {
         return;
     }
     
-    // Show loading state
     const submitBtn = event.target;
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
@@ -1464,12 +1692,9 @@ window.submitNewProductRequest = function() {
     
     console.log('Submitting product request:', productData);
     
-    // Send to API
     fetch('../api/submit_product_request.php', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(productData)
     })
     .then(response => response.json())
@@ -1477,8 +1702,6 @@ window.submitNewProductRequest = function() {
         if (data.success) {
             alert('Product request submitted for approval!');
             closeModal('newProductModal');
-            // Optionally reload to show in pending tab
-            // window.location.reload();
         } else {
             alert('Error: ' + (data.error || 'Unknown error'));
         }
@@ -1494,9 +1717,8 @@ window.submitNewProductRequest = function() {
 };
 
 // ===== PRODUCT REQUEST FUNCTIONS =====
-function approveProductRequest(requestId) {
+window.approveProductRequest = function(requestId) {
     if (confirm('Approve this product request? This will add the product to inventory.')) {
-        // Here you would call an API to approve
         fetch('../api/approve_product_request.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -1516,9 +1738,9 @@ function approveProductRequest(requestId) {
             alert('An error occurred');
         });
     }
-}
+};
 
-function rejectProductRequest(requestId) {
+window.rejectProductRequest = function(requestId) {
     const reason = prompt('Please provide a reason for rejection:');
     if (reason !== null) {
         fetch('../api/approve_product_request.php', {
@@ -1540,17 +1762,14 @@ function rejectProductRequest(requestId) {
             alert('An error occurred');
         });
     }
-}
+};
 
-function viewProductRequest(requestId) {
-    // Fetch and display product request details
+window.viewProductRequest = function(requestId) {
     fetch('../api/get_product_request.php?id=' + requestId)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 const req = data.request;
-                
-                // Format the details in a nice alert
                 alert(`
 📦 PRODUCT REQUEST DETAILS
 ─────────────────────────
@@ -1575,7 +1794,7 @@ ${req.reviewed_at ? `\nReviewed: ${new Date(req.reviewed_at).toLocaleDateString(
             console.error('Error:', error);
             alert('Error loading request details');
         });
-}
+};
 
 // ===== SETUP ON PAGE LOAD =====
 document.addEventListener('DOMContentLoaded', function() {
@@ -1618,7 +1837,15 @@ document.addEventListener('DOMContentLoaded', function() {
         countDisplay.innerHTML = '<span id="itemCount">0</span> items available for selected supplier';
         supplierDropdownContainer.appendChild(countDisplay);
     }
+    
+    // Set order date to today if not set
+    const orderDate = document.getElementById('orderDate');
+    if (orderDate && !orderDate.value) {
+        const today = new Date().toISOString().split('T')[0];
+        orderDate.value = today;
+    }
 });
 </script>
+<script src="../assets/js/orders.js"></script>
 </body>
 </html>
