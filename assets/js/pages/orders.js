@@ -644,7 +644,466 @@ async function savePO() {
     }
 }
 
-function viewPO(poId) {
+// ===== PO FUNCTIONS =====
+
+// View PO Details
+async function viewPO(poId) {
     console.log('Viewing PO:', poId);
-    alert('View PO feature coming soon!');
+    
+    try {
+        const response = await fetch(`../api/get_po_details.php?po_id=${poId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            showPODetailsModal(data.po);
+        } else {
+            alert('Error loading PO details: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to load PO details');
+    }
 }
+
+// Show PO Details Modal
+function showPODetailsModal(po) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('poDetailsModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'poDetailsModal';
+        modal.className = 'modal modal-hidden';
+        document.body.appendChild(modal);
+    }
+    
+    // Format items table
+    let itemsHtml = '';
+    po.items.forEach(item => {
+        itemsHtml += `
+            <tr>
+                <td>${item.item_name}</td>
+                <td>${item.quantity}</td>
+                <td>₱${parseFloat(item.unit_price).toFixed(2)}</td>
+                <td>₱${parseFloat(item.total_price).toFixed(2)}</td>
+            </tr>
+        `;
+    });
+    
+    // Set modal content
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-file-invoice"></i> 
+                    PO Details: ${po.po_number}
+                </h3>
+                <button class="modal-close" onclick="closeModal('poDetailsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div style="padding: 24px; max-height: 70vh; overflow-y: auto;">
+                <!-- Status Banner -->
+                <div style="background: ${getStatusColor(po.status)}; color: white; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 600;">Status: ${po.status.toUpperCase()}</span>
+                    <span>Priority: ${po.priority.toUpperCase()}</span>
+                </div>
+                
+                <!-- Basic Info -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 20px;">
+                    <div>
+                        <h4 style="color: #666; margin-bottom: 10px;">Supplier Information</h4>
+                        <p><strong>Name:</strong> ${po.supplier_name}</p>
+                        ${po.supplier_contact ? `<p><strong>Contact:</strong> ${po.supplier_contact}</p>` : ''}
+                        ${po.supplier_email ? `<p><strong>Email:</strong> ${po.supplier_email}</p>` : ''}
+                    </div>
+                    <div>
+                        <h4 style="color: #666; margin-bottom: 10px;">Order Information</h4>
+                        <p><strong>Order Date:</strong> ${formatDate(po.order_date)}</p>
+                        <p><strong>Expected Delivery:</strong> ${po.expected_delivery ? formatDate(po.expected_delivery) : 'Not set'}</p>
+                        <p><strong>Created By:</strong> ${po.requester || 'Unknown'}</p>
+                    </div>
+                </div>
+                
+                <!-- Items Table -->
+                <h4 style="color: #666; margin: 20px 0 10px;">Items</h4>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <thead style="background: #f8fafc;">
+                        <tr>
+                            <th style="padding: 12px; text-align: left;">Item</th>
+                            <th style="padding: 12px; text-align: right;">Qty</th>
+                            <th style="padding: 12px; text-align: right;">Unit Price</th>
+                            <th style="padding: 12px; text-align: right;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                    <tfoot style="border-top: 2px solid #e2e8f0;">
+                        <tr>
+                            <td colspan="3" style="padding: 12px; text-align: right;"><strong>Subtotal:</strong></td>
+                            <td style="padding: 12px; text-align: right;">₱${parseFloat(po.subtotal).toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" style="padding: 12px; text-align: right;"><strong>Tax (12%):</strong></td>
+                            <td style="padding: 12px; text-align: right;">₱${parseFloat(po.tax_amount).toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" style="padding: 12px; text-align: right;"><strong>Total:</strong></td>
+                            <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: 700; color: #2563eb;">
+                                ₱${parseFloat(po.total_amount).toFixed(2)}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <!-- Notes -->
+                ${po.notes ? `
+                <div style="background: #f8fafc; padding: 16px; border-radius: 8px;">
+                    <h4 style="color: #666; margin-bottom: 8px;">Notes</h4>
+                    <p style="margin: 0; white-space: pre-line;">${po.notes}</p>
+                </div>
+                ` : ''}
+            </div>
+            
+            <div class="modal-footer" style="justify-content: space-between;">
+                <div>
+                    ${po.status === 'pending' ? `
+                        <button class="btn btn-outline" onclick="editPO(${po.id})">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    ` : ''}
+                </div>
+                <div>
+                    <button class="btn btn-outline" onclick="closeModal('poDetailsModal')">Close</button>
+                    ${po.status === 'pending' && userRole === 'admin' ? `
+                        <button class="btn btn-primary" onclick="updatePOStatus(${po.id}, 'approved')">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                        <button class="btn btn-danger" onclick="updatePOStatus(${po.id}, 'rejected')">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    ` : ''}
+                    ${po.status === 'approved' && userRole === 'admin' ? `
+                        <button class="btn btn-primary" onclick="updatePOStatus(${po.id}, 'completed')">
+                            <i class="fas fa-check-double"></i> Complete
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Show modal
+    modal.classList.remove('modal-hidden');
+    modal.classList.add('modal-visible');
+}
+
+// Edit PO
+async function editPO(poId) {
+    console.log('Editing PO:', poId);
+    
+    try {
+        const response = await fetch(`../api/get_po_details.php?po_id=${poId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            openEditPOModal(data.po);
+        } else {
+            alert('Error loading PO details: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to load PO details for editing');
+    }
+}
+
+// Open Edit PO Modal
+function openEditPOModal(po) {
+    // First open the main PO modal
+    openPOModal();
+    
+    // Wait for modal to be ready
+    setTimeout(() => {
+        // Fill in basic info
+        document.getElementById('poNumber').value = po.po_number;
+        document.getElementById('orderDate').value = po.order_date;
+        document.getElementById('expectedDelivery').value = po.expected_delivery || '';
+        document.getElementById('priority').value = po.priority || 'normal';
+        document.getElementById('poDescription').value = po.notes || '';
+        document.getElementById('additionalNotes').value = '';
+        
+        // Select supplier
+        const supplierSelect = document.getElementById('modalSupplierSelect');
+        if (supplierSelect) {
+            // Wait for suppliers to load then set value
+            const checkSupplier = setInterval(() => {
+                if (supplierSelect.options.length > 1) {
+                    supplierSelect.value = po.supplier_id;
+                    
+                    // Trigger change to load items for this supplier
+                    filterItemsBySupplier();
+                    
+                    // After items load, populate the items
+                    setTimeout(() => {
+                        populatePOItems(po.items);
+                    }, 500);
+                    
+                    clearInterval(checkSupplier);
+                }
+            }, 100);
+        }
+        
+        // Change modal title
+        const modalTitle = document.querySelector('#poModal .modal-title');
+        if (modalTitle) {
+            modalTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Purchase Order';
+        }
+        
+        // Change save button
+        const saveBtn = document.querySelector('#poModal .btn-primary');
+        if (saveBtn) {
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> Update Purchase Order';
+            saveBtn.setAttribute('onclick', `updatePO(${po.id})`);
+        }
+    }, 500);
+}
+
+// Populate items in edit modal
+function populatePOItems(items) {
+    const tbody = document.querySelector('.items-table tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = ''; // Clear existing rows
+    
+    items.forEach(item => {
+        const row = document.createElement('tr');
+        
+        // Create dropdown with this item selected
+        let options = `<option value="${item.item_id}" data-price="${item.unit_price}" selected>
+            ${item.item_name} - ₱${parseFloat(item.unit_price).toFixed(2)}
+        </option>`;
+        
+        // Add other available items from filteredItems (optional)
+        if (window.filteredItems && window.filteredItems.length > 0) {
+            window.filteredItems.forEach(filteredItem => {
+                if (filteredItem.id != item.item_id) {
+                    options += `<option value="${filteredItem.id}" data-price="${filteredItem.price}">
+                        ${filteredItem.item_name} (${filteredItem.sku}) - ₱${parseFloat(filteredItem.price).toFixed(2)}
+                    </option>`;
+                }
+            });
+        }
+        
+        row.innerHTML = `
+            <td>
+                <select class="item-select" onchange="updateItemPrice(this)" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    ${options}
+                </select>
+            </td>
+            <td><input type="number" class="item-qty" value="${item.quantity}" min="1" onchange="calculateItemTotal(this)" style="width: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></td>
+            <td><input type="number" class="item-price" value="${item.unit_price}" step="0.01" onchange="calculateItemTotal(this)" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></td>
+            <td class="item-total" style="font-weight: 600;">₱${parseFloat(item.total_price || (item.quantity * item.unit_price)).toFixed(2)}</td>
+            <td><button type="button" onclick="removeItem(this)" style="background:none; border:none; color:#e11d48; cursor:pointer;"><i class="fas fa-times"></i></button></td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    calculateGrandTotal();
+}
+
+// Update PO
+async function updatePO(poId) {
+    console.log('Updating PO:', poId);
+    
+    // Get form values
+    const supplier = document.getElementById('modalSupplierSelect').value;
+    const orderDate = document.getElementById('orderDate').value;
+    const priority = document.getElementById('priority').value;
+    const deliveryDate = document.getElementById('expectedDelivery').value;
+    const description = document.getElementById('poDescription').value;
+    const additionalNotes = document.getElementById('additionalNotes').value;
+    
+    if (!supplier || !orderDate) {
+        alert('Please select a supplier and order date');
+        return;
+    }
+    
+    // Get items
+    const items = [];
+    const itemRows = document.querySelectorAll('.items-table tbody tr');
+    
+    itemRows.forEach(row => {
+        const itemSelect = row.querySelector('.item-select');
+        const qtyInput = row.querySelector('.item-qty');
+        const priceInput = row.querySelector('.item-price');
+        
+        if (itemSelect && itemSelect.value) {
+            items.push({
+                item_id: parseInt(itemSelect.value),
+                quantity: parseFloat(qtyInput?.value) || 0,
+                unit_price: parseFloat(priceInput?.value) || 0
+                // total_price will be calculated on server
+            });
+        }
+    });
+    
+    if (items.length === 0) {
+        alert('Please add at least one item');
+        return;
+    }
+    
+    const totals = calculateGrandTotal();
+    const combinedNotes = [description, additionalNotes].filter(n => n).join('\n');
+    
+    const poData = {
+        po_id: poId,
+        supplier_id: parseInt(supplier),
+        order_date: orderDate,
+        expected_delivery: deliveryDate || null,
+        priority: priority,
+        subtotal: totals.subtotal,
+        tax_amount: totals.tax,
+        total_amount: totals.total,
+        notes: combinedNotes,
+        items: items
+    };
+    
+    console.log('Sending update data:', poData);
+    
+    try {
+        const response = await fetch('../api/update_po.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(poData)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Update response:', result);
+        
+        if (result.success) {
+            alert('PO updated successfully!');
+            closeModal('poModal');
+            window.location.reload();
+        } else {
+            alert('Error updating PO: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error updating purchase order: ' + error.message);
+    }
+}
+
+// Update PO Status (uses your existing update_po_status.php)
+async function updatePOStatus(poId, newStatus) {
+    const action = newStatus === 'approved' ? 'approve' : 
+                   newStatus === 'rejected' ? 'reject' : 
+                   newStatus === 'completed' ? 'complete' : newStatus;
+    
+    if (newStatus === 'rejected') {
+        const reason = prompt('Please provide a reason for rejection:');
+        if (reason === null) return;
+        
+        if (!confirm(`Are you sure you want to reject this PO?`)) return;
+        
+        try {
+            const response = await fetch('../api/update_po_status.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    po_id: poId,
+                    status: newStatus,
+                    rejection_reason: reason
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert(`PO ${newStatus} successfully!`);
+                window.location.reload();
+            } else {
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error updating PO status');
+        }
+    } else {
+        if (!confirm(`Are you sure you want to ${action} this PO?`)) return;
+        
+        try {
+            const response = await fetch('../api/update_po_status.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    po_id: poId,
+                    status: newStatus
+                })
+            });
+            
+            const result = await response.json();
+            console.log('Status update response:', result);
+            
+            if (result.success) {
+                alert(`PO ${newStatus} successfully!`);
+                window.location.reload();
+            } else {
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error updating PO status');
+        }
+    }
+}
+
+// Helper functions
+function getStatusColor(status) {
+    const colors = {
+        'draft': '#6b7280',
+        'pending': '#f59e0b',
+        'approved': '#10b981',
+        'rejected': '#ef4444',
+        'completed': '#2563eb',
+        'cancelled': '#6b7280'
+    };
+    return colors[status] || '#6b7280';
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+    });
+}
+
+// Make sure to also update your filterItemsBySupplier function if it's not already defined
+if (typeof window.filterItemsBySupplier !== 'function') {
+    window.filterItemsBySupplier = function() {
+        const supplierId = document.getElementById('modalSupplierSelect').value;
+        console.log('Filtering items for supplier:', supplierId);
+        // Your existing filterItemsBySupplier logic here
+    };
+}
+
+// Make functions globally available
+window.viewPO = viewPO;
+window.editPO = editPO;
+window.updatePOStatus = updatePOStatus;
+
+
+
+// Update PO
+
+
+
+
