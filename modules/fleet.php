@@ -391,16 +391,6 @@ include '../includes/header.php';
 <?php if ($_SESSION['role'] !== 'driver' && $_SESSION['role'] !== 'mechanic'): ?>
 <!-- Debug Info (remove after fixing) -->
 <?php if ($_SESSION['role'] === 'admin'): ?>
-<div style="background: #fef3c7; border: 1px solid #fbbf24; padding: 10px; margin-bottom: 15px; border-radius: 8px; font-size: 12px;">
-    <strong>🔍 Debug Info:</strong> 
-    Total: <?php echo $total_vehicles; ?> | 
-    Available: <?php echo $available_count; ?> | 
-    Maintenance: <?php echo $maintenance_count; ?> | 
-    In Use: <?php echo $in_use_count ?? 0; ?>
-    <button onclick="location.reload()" style="margin-left: 10px; padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
-        <i class="fas fa-sync"></i> Refresh Stats
-    </button>
-</div>
 <?php endif; ?>
 
 <div class="stats-grid">
