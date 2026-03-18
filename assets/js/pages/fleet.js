@@ -3194,7 +3194,7 @@ function loadAvailableVehicles() {
                 
                 data.vehicles.forEach(v => {
                     options += `<option value="${v.id}">
-                        ${v.asset_name} (Condition: ${v.asset_condition}%) - Available Now
+                        ${v.asset_name} (Condition: ${v.asset_condition}%) 
                     </option>`;
                 });
                 
