@@ -68,7 +68,6 @@ include '../includes/header.php';
                         </button>
                     </div>
                 </div>
-
                 <!-- EMPLOYEES TAB (Your existing admin panel) -->
                 <div id="employeesTab" class="tab-content">
                     <!-- Statistics Cards -->
@@ -267,15 +266,7 @@ include '../includes/header.php';
                             </div>
                         </div>
 
-                        <!-- API Response Display -->
-                        <div class="card" style="background: white; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-top: 20px;">
-                            <div class="card-header" style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
-                                <h3 style="margin: 0;"><i class="fas fa-terminal" style="color: #fbbf24;"></i> API Response</h3>
-                            </div>
-                            <div class="card-body" style="padding: 15px;">
-                                <pre id="apiResponse" style="background: #1e293b; color: #10b981; padding: 10px; border-radius: 5px; overflow-x: auto; max-height: 150px; font-size: 12px;">// Ready</pre>
-                            </div>
-                        </div>
+                       
                     </div>
                 </div>
             </div>
@@ -770,7 +761,372 @@ include '../includes/header.php';
     
     <!-- Toast Notifications Container -->
     <div id="toastContainer" class="toast-container"></div>
+    <script>
+const API_BASE = 'https://humanresource.up.railway.app/api';
+const API_KEY = 'logistic_system_2026_key_98765';
+
+// Tab switching function
+function switchTab(tab) {
+    document.getElementById('tabEmployees').classList.remove('active');
+    document.getElementById('tabLogistics').classList.remove('active');
     
+    document.getElementById('employeesTab').style.display = 'none';
+    document.getElementById('logisticsTab').style.display = 'none';
+    
+    if (tab === 'employees') {
+        document.getElementById('tabEmployees').classList.add('active');
+        document.getElementById('employeesTab').style.display = 'block';
+    } else if (tab === 'logistics') {
+        document.getElementById('tabLogistics').classList.add('active');
+        document.getElementById('logisticsTab').style.display = 'block';
+        fetchRequisitions();
+    }
+}
+
+// Submit requisition to HR
+document.getElementById('logisticsRequisitionForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        job_title: document.getElementById('reqJobTitle').value,
+        department: document.getElementById('reqDepartment').value,
+        requested_by: document.getElementById('reqRequestedBy').value,
+        positions: parseInt(document.getElementById('reqPositions').value),
+        needed_by: document.getElementById('reqNeededBy').value,
+        priority: document.getElementById('reqPriority').value,
+        justification: document.getElementById('reqJustification').value
+    };
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+    submitBtn.disabled = true;
+    
+    updateApiResponse('⏳ Submitting requisition to HR...');
+    
+    try {
+        const response = await fetch(`${API_BASE}/job-requisition.php?api_key=${API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        updateApiResponse(JSON.stringify(data, null, 2));
+        
+        if (data.success) {
+            showToast('✅ Requisition submitted successfully! ID: ' + data.data.id);
+            e.target.reset();
+            document.getElementById('reqJobTitle').value = 'Logistics Coordinator';
+            document.getElementById('reqPositions').value = '1';
+            document.getElementById('reqRequestedBy').value = '<?php echo htmlspecialchars($_SESSION['full_name']); ?>';
+            document.getElementById('reqNeededBy').valueAsDate = new Date(new Date().setMonth(new Date().getMonth() + 1));
+            fetchRequisitions();
+        } else {
+            showToast('❌ Error: ' + data.error, 'error');
+        }
+    } catch (error) {
+        updateApiResponse(`Error: ${error.message}`);
+        showToast('❌ Error: ' + error.message, 'error');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+});
+
+// Fetch recent requisitions
+async function fetchRequisitions() {
+    const listDiv = document.getElementById('requisitionsList');
+    
+    listDiv.innerHTML = '<p style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading requisitions...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/job-requisition.php?api_key=${API_KEY}`);
+        const data = await response.json();
+        
+        updateApiResponse(JSON.stringify(data, null, 2));
+
+        if (data.success && data.data?.length > 0) {
+            const logisticsReqs = data.data.filter(req => 
+                ['Logistics', 'Warehouse', 'Transportation', 'Supply Chain', 'Inventory'].includes(req.department)
+            ).slice(0, 10);
+            
+            if (logisticsReqs.length > 0) {
+                let html = '';
+                logisticsReqs.forEach(req => {
+                    const statusColor = req.status === 'approved' ? '#10b981' : 
+                                       req.status === 'pending' ? '#f59e0b' : 
+                                       req.status === 'rejected' ? '#ef4444' : '#3b82f6';
+                    
+                    html += `
+                        <div class="requisition-item" data-req-id="${req.id}" style="background: #f9fafb; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #fbbf24; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px; flex-wrap: wrap;">
+                                        <strong style="font-size: 16px;">${req.job_title}</strong>
+                                        <span class="requisition-status" style="background: ${statusColor}; color: white; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;">
+                                            ${req.status}
+                                        </span>
+                                    </div>
+                                    <div style="color: #4b5563; font-size: 13px; margin-bottom: 5px;">
+                                        <i class="fas fa-building"></i> ${req.department} • 
+                                        <i class="fas fa-user"></i> ${req.requested_by}
+                                    </div>
+                                    <div style="display: flex; gap: 15px; font-size: 12px; color: #6b7280; flex-wrap: wrap;">
+                                        <span><i class="fas fa-users"></i> ${req.positions} position${req.positions > 1 ? 's' : ''}</span>
+                                        <span><i class="fas fa-calendar"></i> Needed: ${req.needed_by}</span>
+                                        <span style="color: ${req.priority === 'high' ? '#ef4444' : req.priority === 'medium' ? '#f59e0b' : '#10b981'};">
+                                            <i class="fas fa-flag"></i> ${req.priority}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Action buttons -->
+                                <div class="requisition-actions" style="display: flex; gap: 5px;">
+                                    ${req.status === 'pending' ? `
+                                        <button onclick="approveRequisition('${req.id}', ${JSON.stringify(req).replace(/"/g, '&quot;')})" 
+                                                class="btn btn-sm btn-success" style="padding: 5px 10px; font-size: 12px;">
+                                            <i class="fas fa-check"></i> Approve & Create Employee
+                                        </button>
+                                    ` : ''}
+                                    
+                                    ${req.status === 'approved' ? `
+                                        <span style="color: #10b981; font-size: 12px; padding: 5px;">
+                                            <i class="fas fa-check-circle"></i> Ready to hire
+                                        </span>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            
+                            ${req.justification ? `
+                                <div style="margin-top: 10px; font-size: 12px; color: #6b7280; background: #f3f4f6; padding: 8px; border-radius: 4px;">
+                                    <i class="fas fa-comment"></i> ${req.justification}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                listDiv.innerHTML = html;
+            } else {
+                listDiv.innerHTML = '<p style="text-align: center; padding: 30px; color: #666;"><i class="fas fa-inbox fa-2x" style="display: block; margin-bottom: 10px;"></i>No requisitions from logistics departments</p>';
+            }
+        } else {
+            listDiv.innerHTML = '<p style="text-align: center; padding: 30px; color: #666;"><i class="fas fa-inbox fa-2x" style="display: block; margin-bottom: 10px;"></i>No requisitions found</p>';
+        }
+    } catch (error) {
+        listDiv.innerHTML = `<p style="text-align: center; padding: 20px; color: #ef4444;"><i class="fas fa-exclamation-circle"></i> Error loading requisitions: ${error.message}</p>`;
+        updateApiResponse(`Error: ${error.message}`);
+    }
+}
+
+// Approve requisition and create employee using your existing EmployeeManagement system
+async function approveRequisition(requisitionId, requisitionData) {
+    // Show loading
+    showToast('⏳ Processing approval and creating employee...', 'info');
+    
+    try {
+        // 1. Update requisition status in HR API
+        const updateResponse = await fetch(`${API_BASE}/job-requisition.php?api_key=${API_KEY}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: requisitionId,
+                status: 'approved'
+            })
+        });
+        
+        const updateResult = await updateResponse.json();
+        console.log('Requisition approved:', updateResult);
+        
+        // 2. Generate employee data based on requisition
+        const employeeData = generateEmployeeFromRequisition(requisitionData);
+        
+        // 3. Use your existing EmployeeManagement to add the employee
+        // We'll simulate the form submission since we can't directly call the private method
+        await addEmployeeViaForm(employeeData);
+        
+        // 4. Refresh the requisitions list to show updated status
+        fetchRequisitions();
+        
+        // 5. Show success message with option to view in employee tab
+        showToastWithAction(
+            '✅ Employee created successfully!', 
+            'View in Employees tab', 
+            () => switchTab('employees')
+        );
+        
+    } catch (error) {
+        console.error('Error in approval process:', error);
+        showToast('❌ Error: ' + error.message, 'error');
+    }
+}
+
+// Generate employee data from requisition
+function generateEmployeeFromRequisition(req) {
+    const firstNames = ['John', 'Jane', 'Michael', 'Sarah', 'David', 'Maria', 'Robert', 'Lisa', 'James', 'Patricia'];
+    const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
+    
+    // For multiple positions, we'll create multiple employees
+    // For demo, we'll create one but you could loop
+    const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+    const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+    const fullName = `${firstName} ${lastName}`;
+    
+    // Map job title to role
+    const role = mapJobTitleToRole(req.job_title);
+    
+    return {
+        full_name: fullName,
+        email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@logistics.com`,
+        phone: generatePhoneNumber(),
+        role: role,
+        status: 'active',
+        department: req.department,
+        password: 'Welcome123!' // Default password, user would change on first login
+    };
+}
+
+// Map job title to system role
+function mapJobTitleToRole(jobTitle) {
+    const title = jobTitle.toLowerCase();
+    if (title.includes('driver')) return 'driver';
+    if (title.includes('dispatcher') || title.includes('coordinator')) return 'dispatcher';
+    if (title.includes('manager')) return 'fleet_manager';
+    if (title.includes('mechanic')) return 'mechanic';
+    if (title.includes('admin')) return 'admin';
+    return 'employee'; // Default
+}
+
+// Generate a realistic phone number
+function generatePhoneNumber() {
+    const areaCode = Math.floor(Math.random() * 900) + 100;
+    const prefix = Math.floor(Math.random() * 900) + 100;
+    const lineNumber = Math.floor(Math.random() * 9000) + 1000;
+    return `(${areaCode}) ${prefix}-${lineNumber}`;
+}
+
+// Add employee using your existing system via API
+async function addEmployeeViaForm(employeeData) {
+    try {
+        const response = await fetch('../api/employees.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(employeeData)
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to create employee');
+        }
+        
+        console.log('Employee created:', result);
+        
+        // Refresh the employee data if on employees tab
+        if (document.getElementById('employeesTab').style.display !== 'none') {
+            EmployeeManagement.loadEmployees();
+            EmployeeManagement.loadStatistics();
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Error creating employee:', error);
+        throw error;
+    }
+}
+
+// Show toast with action button
+function showToastWithAction(message, actionText, actionCallback) {
+    const toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast success';
+    toast.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #10b981;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    `;
+    
+    toast.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-check-circle"></i>
+            <span>${message}</span>
+        </div>
+        <button onclick="${actionCallback.toString()}; this.parentElement.remove();" 
+                style="background: white; color: #10b981; border: none; padding: 5px 10px; border-radius: 3px; font-size: 12px; cursor: pointer; margin-left: 15px;">
+            ${actionText} →
+        </button>
+        <i class="fas fa-times" style="margin-left: 10px; cursor: pointer; opacity: 0.8;" onclick="this.parentElement.remove()"></i>
+    `;
+
+    toastContainer.appendChild(toast);
+
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 8000);
+}
+
+// Update API response display
+function updateApiResponse(content) {
+    const apiResponse = document.getElementById('apiResponse');
+    if (apiResponse) {
+        if (typeof content === 'string') {
+            apiResponse.innerHTML = content;
+        } else {
+            apiResponse.innerHTML = JSON.stringify(content, null, 2);
+        }
+    }
+}
+
+// Toast notification (your existing function but enhanced)
+function showToast(message, type = 'success') {
+    const toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    
+    const icon = type === 'success' ? 'check-circle' : 
+                type === 'error' ? 'exclamation-circle' : 
+                type === 'info' ? 'info-circle' : 'exclamation-triangle';
+    
+    toast.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-${icon}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+
+    toastContainer.appendChild(toast);
+
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 5000);
+}
+
+// Set default date for needed by
+window.addEventListener('load', function() {
+    const dateInput = document.getElementById('reqNeededBy');
+    if (dateInput) {
+        const today = new Date();
+        const nextMonth = new Date(today.setMonth(today.getMonth() + 1));
+        dateInput.valueAsDate = nextMonth;
+    }
+});
+</script>   
     <script src="../assets/js/pages/employee.js"></script>
 </body>
 </html>
