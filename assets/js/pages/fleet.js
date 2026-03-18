@@ -4297,8 +4297,27 @@ function displayDriverPerformance(drivers) {
     drivers.forEach(driver => {
         const initials = driver.full_name.split(' ').map(n => n[0]).join('').substring(0, 2);
         
+        // Format safety display
+        let safetyDisplay = '';
+        if (driver.safety === null) {
+            safetyDisplay = '<span style="color: #94a3b8;">N/A</span>';
+        } else {
+            safetyDisplay = `${driver.safety}%`;
+        }
+        
+        // Format rating display
+        let ratingDisplay = '';
+        if (driver.rating === null) {
+            ratingDisplay = '<span style="color: #94a3b8;">No trips yet</span>';
+        } else {
+            ratingDisplay = `
+                ${getStarRating(driver.rating)}
+                <span>${driver.rating}</span>
+            `;
+        }
+        
         html += `
-            <div class="driver-item">
+            <div class="driver-item" style="${driver.trips === 0 ? 'opacity: 0.8;' : ''}">
                 <div class="driver-avatar">${initials}</div>
                 <div class="driver-info">
                     <h3>${driver.full_name}</h3>
@@ -4313,13 +4332,12 @@ function displayDriverPerformance(drivers) {
                         <div class="label">Efficiency</div>
                     </div>
                     <div class="driver-stat">
-                        <div class="value">${driver.safety}%</div>
+                        <div class="value">${safetyDisplay}</div>
                         <div class="label">Safety</div>
                     </div>
                 </div>
                 <div class="driver-rating">
-                    ${getStarRating(driver.rating)}
-                    <span>${driver.rating}</span>
+                    ${ratingDisplay}
                 </div>
             </div>
         `;

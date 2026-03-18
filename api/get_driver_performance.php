@@ -25,13 +25,21 @@ try {
                     NULLIF(COUNT(ds.id), 0)) * 100, 
                 0), 1
             ) as efficiency,
-            98 as safety,
-            ROUND(
-                COALESCE(
-                    (SUM(CASE WHEN ds.status = 'completed' THEN 1 ELSE 0 END) / 
-                    NULLIF(COUNT(ds.id), 0)) * 5, 
-                0), 1
-            ) as rating
+            -- SAFETY: NULL for drivers with no trips
+            CASE 
+                WHEN COUNT(ds.id) = 0 THEN NULL
+                ELSE 98  -- You can replace this with real safety calculation later
+            END as safety,
+            -- RATING: NULL for drivers with no trips
+            CASE 
+                WHEN COUNT(ds.id) = 0 THEN NULL
+                ELSE ROUND(
+                    COALESCE(
+                        (SUM(CASE WHEN ds.status = 'completed' THEN 1 ELSE 0 END) / 
+                        NULLIF(COUNT(ds.id), 0)) * 5, 
+                    0), 1
+                )
+            END as rating
         FROM users u
         LEFT JOIN dispatch_schedule ds ON u.id = ds.driver_id
         WHERE u.role = 'driver' AND u.status = 'active'
@@ -42,12 +50,12 @@ try {
     
     $drivers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Also loop through to ensure no nulls
+    // Clean up the data
     foreach ($drivers as &$driver) {
         $driver['trips'] = (int)($driver['trips'] ?? 0);
         $driver['completed_trips'] = (int)($driver['completed_trips'] ?? 0);
         $driver['efficiency'] = (float)($driver['efficiency'] ?? 0);
-        $driver['rating'] = (float)($driver['rating'] ?? 0);
+        // Keep safety and rating as NULL for drivers with no trips
     }
     
     echo json_encode([
