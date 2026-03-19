@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 require_once __DIR__ . '/../config/db.php';
 
 // Site configuration
-define('SITE_URL', 'http://localhost/Logistics%20System/includes');
+define('SITE_URL', 'https://logistics-system-production-ae8a.up.railway.app');
 define('SMTP_FROM_NAME', 'Logistics System');
 
 // Gmail SMTP configuration (keep for localhost)
@@ -118,7 +118,7 @@ function markTokenAsUsed($token, $pdo) {
  * Send password reset email using Resend via cURL (matching your working 2FA pattern)
  */
 function sendPasswordResetEmailViaResend($to_email, $raw_token) {
-    $reset_link = SITE_URL . "/reset_password.php?token=" . urlencode($raw_token);
+    $reset_link = SITE_URL . "/includes/reset_password.php?token=" . urlencode($raw_token);
     $api_key = getenv('RESEND_API_KEY');
     
     // Fallback to hardcoded key if env not set (for testing)
