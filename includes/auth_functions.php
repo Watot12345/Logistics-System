@@ -202,11 +202,6 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
         return false;
     }
 }
-
-
-
-
-
 /**
  * Send login notification email using Resend
  */
@@ -249,95 +244,37 @@ function sendLoginNotificationEmailViaResend($to_email, $full_name, $user_agent,
 /**
  * Send password reset email (original PHPMailer version)
  */
-function sendPasswordResetEmail($to_email, $raw_token) {
-    $reset_link = SITE_URL . "/reset_password.php?token=" . urlencode($raw_token);
-    
-    $mail = new PHPMailer(true);
-    
-    try {
-        // Server settings
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USER;
-        $mail->Password   = str_replace(' ', '', SMTP_PASS);
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-        
-        // Recipients
-        $mail->setFrom(SMTP_USER, SMTP_FROM_NAME);
-        $mail->addAddress($to_email);
-        
-        // Content
-        $mail->isHTML(true);
-        $mail->Subject = 'Reset Your Password - ' . SMTP_FROM_NAME;
-        
-        $mail->Body = "
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
-                .content { padding: 20px; background-color: #f9f9f9; }
-                .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; 
-                         color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h2>Password Reset Request</h2>
-                </div>
-                <div class='content'>
-                    <p>Hello,</p>
-                    <p>Click the button to reset your password:</p>
-                    <div style='text-align: center;'>
-                        <a href='{$reset_link}' class='button'>Reset Password</a>
-                    </div>
-                    <p><strong>Link expires in 1 hour.</strong></p>
-                    <p>If you didn't request this, ignore this email.</p>
-                </div>
-                <div class='footer'>
-                    <p>&copy; " . date('Y') . " " . SMTP_FROM_NAME . "</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        ";
-        
-        $mail->AltBody = "Reset your password here: $reset_link\n\nThis link expires in 1 hour.";
-        
-        $mail->send();
-        return true;
-        
-    } catch (Exception $e) {
-        error_log("Password reset email failed: " . $mail->ErrorInfo);
-        return false;
-    }
-}
-
 function handleForgotPassword($email, $pdo) {
+    error_log("🔍 handleForgotPassword STARTED for: $email");
+    
     // Check if user exists
     $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
     $stmt->execute([$email]);
     $user = $stmt->fetch();
     
-    if ($user) {
-        $raw_token = generateResetToken($email, $pdo);
-        
-        // ONLY use Resend on Railway (since that's what works)
-        $sent = sendPasswordResetEmailViaResend($email, $raw_token);
-        
-        if (!$sent) {
-            error_log("❌ Resend failed for $email - check API key and logs");
-            // Don't fallback to PHPMailer on Railway since SMTP is blocked
-            // Just log the error
-        }
+    if (!$user) {
+        error_log("❌ User not found: $email");
+        return "If an account exists, you'll receive a reset link."; // Generic message for security
     }
     
-    // Always return this message for security
-    return "If an account exists with this email, you will receive a reset link.";
+    error_log("✅ User found. ID: " . $user['id']);
+    
+    // Generate token
+    $raw_token = generateResetToken($email, $pdo);
+    error_log("✅ Token generated: " . substr($raw_token, 0, 10) . "...");
+    
+    // Try to send email
+    error_log("📧 Attempting to send email via Resend...");
+    $sent = sendPasswordResetEmailViaResend($email, $raw_token);
+    
+    if ($sent) {
+        error_log("✅ Email sent successfully!");
+        return true;
+    } else {
+        error_log("❌ Email sending FAILED!");
+        // Don't tell user it failed (security), but log it
+        return "If an account exists, you'll receive a reset link.";
+    }
 }
 
 /**
