@@ -3,6 +3,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once 'includes/security_headers.php';
 
 // DEBUG - Add this temporary code
 $debug_role = $_SESSION['role'] ?? 'NOT SET';

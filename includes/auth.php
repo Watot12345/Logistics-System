@@ -1,4 +1,5 @@
 <?php
+require_once 'includes/security_headers.php';
 // ===== DEBUG CONFIGURATION =====
 // Set to true to bypass 2FA for testing, false for production with 2FA
 define('DEBUG_MODE', true); // Change to false for production
