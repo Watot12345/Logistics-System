@@ -746,12 +746,12 @@ if ($showVerification) {
                     
                     <div class="flex items-start">
                         <input type="checkbox" required class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-<span class="ml-2 text-sm text-gray-600">
-    I agree to the 
-    <a href="policy.php?from=signup" target="_blank" class="text-blue-600 hover:text-blue-800">Terms of Service</a> 
-    and 
-    <a href="policy.php?from=signup#privacy" target="_blank" class="text-blue-600 hover:text-blue-800">Privacy Policy</a>
-</span>
+                        <span class="ml-2 text-sm text-gray-600">
+                            I agree to the 
+                       <a href="policy.php?from=signup" target="_blank" class="text-blue-600 hover:text-blue-800">Terms of Service</a> 
+                          and 
+                      <a href="policy.php?from=signup#privacy" target="_blank" class="text-blue-600 hover:text-blue-800">Privacy Policy</a>
+                             </span>
                     </div>
                     
                     <button type="submit" 
