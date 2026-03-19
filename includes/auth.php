@@ -1,8 +1,9 @@
 <?php
+
 // ===== DEBUG CONFIGURATION =====
 // Set to true to bypass 2FA for testing, false for production with 2FA
 define('DEBUG_MODE', true); // Change to false for production
-
+require_once 'includes/session_config.php'; 
 // ===== SECURITY CONFIGURATION =====
 define('SESSION_TIMEOUT', 1800); // 30 minutes (in seconds) - change as needed
 define('MAX_LOGIN_ATTEMPTS', 5); // Maximum failed attempts before lockout
@@ -19,7 +20,6 @@ ob_implicit_flush(true);
 // Start session FIRST before anything that uses $_SESSION
 session_start();
 ob_start(); // Keep this for now
-
 require_once 'includes/security_headers.php';
 // ===== SESSION TIMEOUT CHECK =====
 function checkSessionTimeout() {
