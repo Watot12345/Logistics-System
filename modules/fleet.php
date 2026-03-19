@@ -337,6 +337,418 @@ include '../includes/header.php';
 ?>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* ===== MOBILE RESPONSIVE STYLES ===== */
+
+/* Mobile Header with Menu Button */
+.mobile-header {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 1001;
+    padding: 0 20px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.mobile-menu-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #3b82f6;
+    cursor: pointer;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mobile-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.mobile-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mobile-user .avatar-small {
+    width: 36px;
+    height: 36px;
+}
+
+/* Main content padding for mobile */
+.page-content {
+    transition: margin-left 0.3s ease;
+}
+
+/* ===== RESPONSIVE BREAKPOINTS ===== */
+
+/* Tablet Styles (768px - 1024px) */
+@media screen and (max-width: 1024px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 15px !important;
+    }
+    
+    .dashboard-grid-3 {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .card-full .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .card-actions {
+        width: 100%;
+    }
+    
+    .search-box {
+        width: 100%;
+    }
+    
+    .search-box input {
+        width: 100%;
+    }
+}
+
+/* Mobile Styles (up to 768px) */
+@media screen and (max-width: 768px) {
+    /* Show mobile header */
+    .mobile-header {
+        display: flex;
+    }
+    
+    /* Adjust main content for fixed header */
+    body {
+        padding-top: 60px;
+    }
+    
+    .page-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 15px !important;
+    }
+    
+    /* Sidebar mobile styles */
+    .sidebar {
+        position: fixed !important;
+        left: -280px !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        width: 280px !important;
+        transition: left 0.3s ease !important;
+        z-index: 1002 !important;
+        background: white !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1) !important;
+        overflow-y: auto !important;
+    }
+    
+    .sidebar.mobile-show {
+        left: 0 !important;
+    }
+    
+    /* Sidebar overlay */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 1001;
+    }
+    
+    .sidebar-overlay.show {
+        display: block !important;
+    }
+    
+    /* Header adjustments */
+    .header {
+        display: none !important;
+    }
+    
+    /* Grid adjustments */
+    .stats-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+        margin-top: 10px !important;
+    }
+    
+    .dashboard-grid-3,
+    .dashboard-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Card adjustments */
+    .card {
+        padding: 15px !important;
+    }
+    
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    /* Tab adjustments */
+    .tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        padding: 5px 0;
+        margin: 0 -5px;
+    }
+    
+    .tabs .tab {
+        display: inline-block;
+        white-space: nowrap;
+        margin: 0 5px;
+        padding: 10px 15px;
+        font-size: 14px;
+    }
+    
+    /* Vehicle list adjustments */
+    .vehicle-item {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 15px;
+    }
+    
+    .vehicle-info {
+        width: 100%;
+    }
+    
+    .vehicle-status {
+        width: 100%;
+        text-align: left !important;
+    }
+    
+    .vehicle-metrics {
+        width: 100%;
+        justify-content: flex-start !important;
+    }
+    
+    /* Filter bar adjustments */
+    .filter-bar {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .filter-group {
+        width: 100%;
+    }
+    
+    .filter-select {
+        width: 100%;
+    }
+    
+    /* Table adjustments */
+    .table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Modal adjustments */
+    .modal-content {
+        width: 90% !important;
+        margin: 20px auto !important;
+        max-height: 80vh !important;
+        overflow-y: auto !important;
+    }
+    
+    /* Driver activity cards */
+    #driverScrollContainer {
+        padding: 10px 0 !important;
+    }
+    
+    #driverScrollContainer > div {
+        gap: 10px !important;
+    }
+    
+    #driverScrollContainer > div > div {
+        width: 240px !important;
+    }
+    
+    /* Maintenance items */
+    .maintenance-item {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 10px;
+    }
+    
+    .maintenance-actions {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+    }
+    
+    /* Reservation items */
+    .reservation-item {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 15px;
+    }
+    
+    .reservation-item > div:last-child {
+        width: 100%;
+        text-align: left !important;
+    }
+    
+    /* Form adjustments */
+    .form-row {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+    
+    /* Button adjustments */
+    .btn {
+        width: 100%;
+        margin: 5px 0 !important;
+    }
+    
+    .action-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    /* Driver assignment card */
+    .assignment-details {
+        padding: 10px !important;
+    }
+    
+    .detail-row {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 5px;
+    }
+    
+    /* Location dropdown */
+    .location-card {
+        width: 100%;
+    }
+    
+    .history-dropdown {
+        max-width: 100%;
+    }
+    
+    /* Stats mini grid */
+    .stats-mini-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    /* Quick action buttons */
+    .assignment-actions {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    /* Training stats grid */
+    [style*="grid-template-columns: repeat(3, 1fr)"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Small mobile styles (up to 480px) */
+@media screen and (max-width: 480px) {
+    .page-content {
+        padding: 10px !important;
+    }
+    
+    .stat-card {
+        padding: 15px !important;
+    }
+    
+    .stat-value {
+        font-size: 24px !important;
+    }
+    
+    .mobile-title {
+        font-size: 16px;
+    }
+    
+    .mobile-user .avatar-small {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .verification-input {
+        font-size: 1.5rem !important;
+        letter-spacing: 4px !important;
+    }
+    
+    .modal-content {
+        width: 95% !important;
+        padding: 15px !important;
+    }
+    
+    .vehicle-meta {
+        flex-wrap: wrap;
+    }
+    
+    .vehicle-meta span {
+        width: 100%;
+        margin: 2px 0;
+    }
+    
+    .availability-badge {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* Landscape mode adjustments */
+@media screen and (max-width: 900px) and (orientation: landscape) {
+    .modal-content {
+        max-height: 90vh !important;
+        overflow-y: auto !important;
+    }
+    
+    .sidebar {
+        overflow-y: auto !important;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* Print styles */
+@media print {
+    .sidebar,
+    .mobile-header,
+    .header,
+    .btn,
+    button,
+    .modal,
+    .sidebar-overlay {
+        display: none !important;
+    }
+    
+    .page-content {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    .card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+}
+    </style>
 </head>
 <body>
             <!-- Page Content -->
@@ -1947,6 +2359,131 @@ document.body.dataset.userRole = '<?php echo $_SESSION['role']; ?>';
     setTimeout(updateStats, 5000);
 })();
 
+// ===== MOBILE RESPONSIVE FUNCTIONS =====
+
+// Create mobile header if it doesn't exist
+function initMobileHeader() {
+    if (document.querySelector('.mobile-header')) return;
+    
+    const mobileHeader = document.createElement('div');
+    mobileHeader.className = 'mobile-header';
+    
+    // Get user info from existing header
+    const userName = document.querySelector('.user-name-header')?.textContent || 'User';
+    const avatar = document.querySelector('.avatar-small')?.innerHTML || 'U';
+    
+    mobileHeader.innerHTML = `
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div class="mobile-title">Fleet Management</div>
+        <div class="mobile-user">
+            <div class="avatar-small">${avatar}</div>
+        </div>
+    `;
+    
+    document.body.insertBefore(mobileHeader, document.body.firstChild);
+    
+    // Create overlay if it doesn't exist
+    if (!document.querySelector('.sidebar-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        overlay.onclick = toggleMobileSidebar;
+        document.body.appendChild(overlay);
+    }
+}
+
+// Toggle mobile sidebar
+function toggleMobileSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    
+    if (sidebar) {
+        sidebar.classList.toggle('mobile-show');
+        if (overlay) overlay.classList.toggle('show');
+    }
+}
+
+// Close sidebar when clicking a link (on mobile)
+function setupMobileNavLinks() {
+    const navLinks = document.querySelectorAll('.sidebar .nav-item a, .sidebar a');
+    navLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (window.innerWidth <= 768) {
+                // Don't close if it's a dropdown toggle
+                if (this.closest('.dropdown-toggle')) return;
+                
+                setTimeout(() => {
+                    toggleMobileSidebar();
+                }, 100);
+            }
+        });
+    });
+}
+
+// Handle window resize
+function handleResize() {
+    if (window.innerWidth > 768) {
+        const sidebar = document.querySelector('.sidebar');
+        const overlay = document.querySelector('.sidebar-overlay');
+        
+        if (sidebar) sidebar.classList.remove('mobile-show');
+        if (overlay) overlay.classList.remove('show');
+    }
+}
+
+// Make tables scrollable on mobile
+function makeTablesResponsive() {
+    const tables = document.querySelectorAll('.table');
+    tables.forEach(table => {
+        if (!table.parentElement.classList.contains('table-responsive')) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'table-responsive';
+            wrapper.style.overflowX = 'auto';
+            wrapper.style.WebkitOverflowScrolling = 'touch';
+            table.parentNode.insertBefore(wrapper, table);
+            wrapper.appendChild(table);
+        }
+    });
+}
+
+// Adjust modals for mobile
+function adjustModalsForMobile() {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        const content = modal.querySelector('.modal-content');
+        if (content) {
+            // Ensure modals are scrollable on mobile
+            if (window.innerWidth <= 768) {
+                content.style.maxHeight = '80vh';
+                content.style.overflowY = 'auto';
+            }
+        }
+    });
+}
+
+// Initialize all mobile features
+function initMobileResponsive() {
+    initMobileHeader();
+    setupMobileNavLinks();
+    makeTablesResponsive();
+    adjustModalsForMobile();
+    
+    window.addEventListener('resize', function() {
+        handleResize();
+        adjustModalsForMobile();
+    });
+}
+
+// Call this when document is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initMobileResponsive();
+    
+    // Handle orientation change
+    window.addEventListener('orientationchange', function() {
+        setTimeout(adjustModalsForMobile, 100);
+    });
+});
 // Fix for deployment: Refresh stats if they show 0 but vehicles exist
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {

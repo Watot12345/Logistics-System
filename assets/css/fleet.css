@@ -1963,66 +1963,6 @@
     width: calc(100% - 70px) !important;
 }
 
-/* Mobile sidebar - FIXED */
-@media screen and (max-width: 768px) {
-    .sidebar {
-        position: fixed !important;
-        left: -280px !important; /* Match your sidebar width */
-        top: 0 !important;
-        bottom: 0 !important;
-        width: 280px !important;
-        transition: left 0.3s ease !important;
-        z-index: 1000 !important;
-        background: white !important;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.1) !important;
-        overflow-y: auto !important; /* Allow scrolling */
-    }
-    
-    .sidebar.mobile-show {
-        left: 0 !important;
-    }
-    
-    /* Make sure logout button is visible */
-    .sidebar .nav-item:last-child,
-    .sidebar .logout-item,
-    .sidebar a[href*="logout"] {
-        display: flex !important;
-        margin-top: auto !important;
-        border-top: 1px solid #e5e7eb !important;
-        padding: 15px !important;
-    }
-    
-    /* Ensure the bottom section stays at bottom */
-    .sidebar .nav {
-        min-height: 100vh !important;
-        display: flex !important;
-        flex-direction: column !important;
-    }
-    
-    .sidebar .nav-item:last-child {
-        margin-top: auto !important;
-    }
-    
-    .page-content {
-        margin-left: 0 !important;
-        width: 100% !important;
-    }
-    
-    /* Add overlay when sidebar is open */
-    .sidebar-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0,0,0,0.5);
-        z-index: 999;
-    }
-    
-    .sidebar-overlay.show {
-        display: block !important;
-    }
-}
+
 
 
