@@ -257,56 +257,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $stmt->execute([$username, $username]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 
-                if ($user && password_verify($password, $user['password'])) {
-                    // ===== SUCCESSFUL LOGIN =====
-                    // Log successful attempt
-                    trackLoginAttempt($pdo, $username, true);
-                    
-                    // ===== DEBUG MODE CHECK =====
-                    if (DEBUG_MODE) {
-                        // DEBUG MODE: Direct login without 2FA
-                        error_log("🔧 DEBUG MODE: Direct login for {$user['email']}");
-                        
-                        // Create session immediately
-                        $_SESSION['user_id'] = $user['id'];
-                        $_SESSION['username'] = $user['username'];
-                        $_SESSION['full_name'] = $user['full_name'];
-                        $_SESSION['role'] = $user['role'];
-                        $_SESSION['logged_in'] = true;
-                        $_SESSION['debug_mode'] = true;
-                        $_SESSION['last_activity'] = time();
-                        
-                        // Redirect to dashboard
-                        header('Location: dashboard.php');
-                        exit();
-                    } else {
-                        // PRODUCTION MODE: Normal 2FA flow
-                        // Generate and save code
-                        $verification_code = sprintf("%06d", random_int(0, 999999));
-                        $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
-                        
-                        // Delete old codes
-                        $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
-                        $stmt->execute([$user['id']]);
-                        
-                        // Save new code
-                        $stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
-                        $stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
-                        
-                        // Send email in background
-                        sendEmailFast($user['email'], $user['full_name'], $verification_code);
-                        
-                        // Show verification form
-                        $showVerification = true;
-                        $temp_user_id = $user['id'];
-                        $temp_email = maskEmail($user['email']);
-                        
-                        $message = "✓ Verification code sent to " . $temp_email;
-                        $messageType = 'success';
-                        
-                        error_log("✅ Login successful for {$user['email']}, code: $verification_code");
-                    }
-                } else {
+               if ($user && password_verify($password, $user['password'])) {
+    // ===== SUCCESSFUL LOGIN =====
+    // Log successful attempt
+    trackLoginAttempt($pdo, $username, true);
+    
+    // ===== CHECK FOR EXISTING ACTIVE SESSION =====
+    // If user already has an active session, skip 2FA and log them in directly
+    if (isset($_SESSION['user_id']) && $_SESSION['user_id'] == $user['id']) {
+        error_log("🔄 User {$user['email']} already has active session - skipping OTP");
+        
+        // Update last activity time
+        $_SESSION['last_activity'] = time();
+        
+        // Redirect to dashboard
+        header('Location: dashboard.php');
+        exit();
+    }
+    
+    // ===== DEBUG MODE CHECK =====
+    if (DEBUG_MODE) {
+        // DEBUG MODE: Direct login without 2FA
+        error_log("🔧 DEBUG MODE: Direct login for {$user['email']}");
+        
+        // Create session immediately
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['full_name'] = $user['full_name'];
+        $_SESSION['role'] = $user['role'];
+        $_SESSION['logged_in'] = true;
+        $_SESSION['debug_mode'] = true;
+        $_SESSION['last_activity'] = time();
+        
+        // Redirect to dashboard
+        header('Location: dashboard.php');
+        exit();
+    } else {
+        // PRODUCTION MODE: Normal 2FA flow
+        // Generate and save code
+        $verification_code = sprintf("%06d", random_int(0, 999999));
+        $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+        
+        // Delete old codes
+        $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
+        $stmt->execute([$user['id']]);
+        
+        // Save new code
+        $stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
+        
+        // Send email in background
+        sendEmailFast($user['email'], $user['full_name'], $verification_code);
+        
+        // Show verification form
+        $showVerification = true;
+        $temp_user_id = $user['id'];
+        $temp_email = maskEmail($user['email']);
+        
+        $message = "✓ Verification code sent to " . $temp_email;
+        $messageType = 'success';
+        
+        error_log("✅ Login successful for {$user['email']}, code: $verification_code");
+    }
+}else {
                     // ===== FAILED LOGIN =====
                     // Log failed attempt
                     trackLoginAttempt($pdo, $username, false);
