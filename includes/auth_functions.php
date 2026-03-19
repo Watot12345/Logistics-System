@@ -115,7 +115,7 @@ function markTokenAsUsed($token, $pdo) {
 }
 
 /**
- * Send password reset email using Resend via cURL (works without Composer)
+ * Send password reset email using Resend via cURL (matching your working 2FA pattern)
  */
 function sendPasswordResetEmailViaResend($to_email, $raw_token) {
     $reset_link = SITE_URL . "/reset_password.php?token=" . urlencode($raw_token);
@@ -123,12 +123,12 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
     
     // Fallback to hardcoded key if env not set (for testing)
     if (!$api_key) {
-        $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW'; // Your working key
+        $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW'; // Your working key from 2FA
     }
     
     error_log("📧 Attempting to send password reset email to: $to_email");
     
-    // Prepare email data
+    // Prepare email data - EXACT format as your working 2FA function
     $data = [
         'from' => 'onboarding@resend.dev',
         'to' => [$to_email],
@@ -140,12 +140,11 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
                 <style>
                     body { font-family: Arial, sans-serif; line-height: 1.6; }
                     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                    .header { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .header { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
                     .content { padding: 20px; background-color: #f9f9f9; text-align: center; }
                     .button-box { margin: 30px 0; }
-                    .reset-button { display: inline-block; padding: 15px 40px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 18px; }
+                    .reset-button { display: inline-block; padding: 15px 40px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 18px; }
                     .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-                    .warning { color: #d97706; font-size: 14px; margin-top: 20px; }
                 </style>
             </head>
             <body>
@@ -163,14 +162,9 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
                         
                         <p><strong>⚠️ This link expires in 1 hour</strong></p>
                         
-                        <div style='background: #f1f5f9; padding: 15px; border-radius: 5px; margin-top: 20px; text-align: left;'>
-                            <p style='margin: 0; color: #475569; font-size: 13px;'>
-                                <strong>Link (if button doesn't work):</strong><br>
-                                {$reset_link}
-                            </p>
-                        </div>
-                        
-                        <p class='warning'>If you didn't request this, please ignore this email.</p>
+                        <p style='color: #666; font-size: 14px; margin-top: 20px;'>
+                            If you didn't request this, ignore this email.
+                        </p>
                     </div>
                     <div class='footer'>
                         <p>&copy; " . date('Y') . " Logistics System</p>
@@ -179,10 +173,10 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
             </body>
             </html>
         ",
-        'text' => "Reset your password here: $reset_link\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email."
+        'text' => "Reset your password here: $reset_link\n\nThis link expires in 1 hour."
     ];
     
-    // Send via cURL (works without Composer)
+    // Send via cURL - EXACT same as your working 2FA function
     $ch = curl_init('https://api.resend.com/emails');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
@@ -191,7 +185,8 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
         'Content-Type: application/json'
     ]);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Increased timeout
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true); // Keep SSL verification
     
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -322,9 +317,6 @@ function sendPasswordResetEmail($to_email, $raw_token) {
     }
 }
 
-/**
- * Handle forgot password request - SMART VERSION (tries both)
- */
 function handleForgotPassword($email, $pdo) {
     // Check if user exists
     $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
@@ -334,19 +326,17 @@ function handleForgotPassword($email, $pdo) {
     if ($user) {
         $raw_token = generateResetToken($email, $pdo);
         
-        // Try Resend first (for Railway), fallback to PHPMailer
-        if (function_exists('sendPasswordResetEmailViaResend')) {
-            $sent = sendPasswordResetEmailViaResend($email, $raw_token);
-        } else {
-            $sent = sendPasswordResetEmail($email, $raw_token);
-        }
+        // ONLY use Resend on Railway (since that's what works)
+        $sent = sendPasswordResetEmailViaResend($email, $raw_token);
         
         if (!$sent) {
-            // Fallback to original
-            sendPasswordResetEmail($email, $raw_token);
+            error_log("❌ Resend failed for $email - check API key and logs");
+            // Don't fallback to PHPMailer on Railway since SMTP is blocked
+            // Just log the error
         }
     }
     
+    // Always return this message for security
     return "If an account exists with this email, you will receive a reset link.";
 }
 
