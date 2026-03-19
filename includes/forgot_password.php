@@ -7,6 +7,7 @@ require_once '../config/db.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+error_log("FORGOT PASSWORD PAGE - Session contents: " . print_r($_SESSION, true));
 ?>
 <!DOCTYPE html>
 <html>
@@ -221,19 +222,19 @@ if (session_status() === PHP_SESSION_NONE) {
             </div>
             
             <div class="card-body">
-                <?php if (isset($_SESSION['message'])): ?>
-                    <div class="message success">
-                        <i class="fas fa-check-circle"></i>
-                        <?php echo $_SESSION['message']; unset($_SESSION['message']); ?>
-                    </div>
-                <?php endif; ?>
-                
-                <?php if (isset($_SESSION['error'])): ?>
-                    <div class="message error">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
-                    </div>
-                <?php endif; ?>
+               <?php if (isset($_SESSION['success'])): ?>
+    <div class="message success">
+        <i class="fas fa-check-circle"></i>
+        <?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+    </div>
+<?php endif; ?>
+
+<?php if (isset($_SESSION['error'])): ?>
+    <div class="message error">
+        <i class="fas fa-exclamation-circle"></i>
+        <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+    </div>
+<?php endif; ?>
                 
                 <form action="process_forgot.php" method="POST">
                     <div class="form-group">
