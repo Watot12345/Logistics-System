@@ -115,45 +115,99 @@ function markTokenAsUsed($token, $pdo) {
 }
 
 /**
- * Send password reset email using Resend (for Railway)
+ * Send password reset email using Resend via cURL (works without Composer)
  */
 function sendPasswordResetEmailViaResend($to_email, $raw_token) {
     $reset_link = SITE_URL . "/reset_password.php?token=" . urlencode($raw_token);
     $api_key = getenv('RESEND_API_KEY');
     
+    // Fallback to hardcoded key if env not set (for testing)
     if (!$api_key) {
-        error_log("RESEND_API_KEY not found");
-        return false;
+        $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW'; // Your working key
     }
     
-    try {
-        $resend = Resend::client($api_key);
-        
-        $result = $resend->emails->send([
-            'from' => 'onboarding@resend.dev',
-            'to' => [$to_email],
-            'subject' => 'Reset Your Password - Logistics System',
-            'html' => "
-                <html>
-                <body>
-                    <h2>Password Reset Request</h2>
-                    <p>Click the button to reset your password:</p>
-                    <a href='{$reset_link}' style='display:inline-block; padding:12px 30px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px;'>Reset Password</a>
-                    <p><strong>Link expires in 1 hour.</strong></p>
-                </body>
-                </html>
-            ",
-            'text' => "Reset your password here: $reset_link"
-        ]);
-        
-        error_log("Password reset email sent via Resend to $to_email");
+    error_log("📧 Attempting to send password reset email to: $to_email");
+    
+    // Prepare email data
+    $data = [
+        'from' => 'onboarding@resend.dev',
+        'to' => [$to_email],
+        'subject' => 'Reset Your Password - Logistics System',
+        'html' => "
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { padding: 20px; background-color: #f9f9f9; text-align: center; }
+                    .button-box { margin: 30px 0; }
+                    .reset-button { display: inline-block; padding: 15px 40px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 18px; }
+                    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+                    .warning { color: #d97706; font-size: 14px; margin-top: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>🔐 Password Reset Request</h2>
+                    </div>
+                    <div class='content'>
+                        <p>Hello,</p>
+                        <p>Click the button below to reset your password:</p>
+                        
+                        <div class='button-box'>
+                            <a href='{$reset_link}' class='reset-button'>Reset Password</a>
+                        </div>
+                        
+                        <p><strong>⚠️ This link expires in 1 hour</strong></p>
+                        
+                        <div style='background: #f1f5f9; padding: 15px; border-radius: 5px; margin-top: 20px; text-align: left;'>
+                            <p style='margin: 0; color: #475569; font-size: 13px;'>
+                                <strong>Link (if button doesn't work):</strong><br>
+                                {$reset_link}
+                            </p>
+                        </div>
+                        
+                        <p class='warning'>If you didn't request this, please ignore this email.</p>
+                    </div>
+                    <div class='footer'>
+                        <p>&copy; " . date('Y') . " Logistics System</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        ",
+        'text' => "Reset your password here: $reset_link\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email."
+    ];
+    
+    // Send via cURL (works without Composer)
+    $ch = curl_init('https://api.resend.com/emails');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $api_key,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    
+    // Log the result
+    if ($httpCode === 200) {
+        error_log("✅ Password reset email sent successfully to {$to_email}");
         return true;
-        
-    } catch (Exception $e) {
-        error_log("Resend password reset failed: " . $e->getMessage());
+    } else {
+        error_log("❌ Password reset email failed: HTTP {$httpCode}, Response: {$response}, Error: {$error}");
         return false;
     }
 }
+
 
 
 
