@@ -407,10 +407,6 @@ if (isset($_GET['status']) && $_GET['status'] == 'requests') {
                 <h3 style="margin-bottom: 15px;">New Product Requests</h3>
                 
                 <?php if (empty($requests)): ?>
-                    <div style="text-align: center; padding: 40px; background: #f8fafc; border-radius: 8px;">
-                        <i class="fas fa-box-open" style="font-size: 48px; color: #94a3b8; margin-bottom: 16px;"></i>
-                        <p style="color: #64748b;">No product requests found.</p>
-                    </div>
                <?php else: ?>
     <!-- ADD THIS SCROLLABLE CONTAINER for product requests -->
     <div style="overflow-x: auto; max-height: 500px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
