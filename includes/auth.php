@@ -1,5 +1,4 @@
 <?php
-require_once 'includes/security_headers.php';
 // ===== DEBUG CONFIGURATION =====
 // Set to true to bypass 2FA for testing, false for production with 2FA
 define('DEBUG_MODE', true); // Change to false for production
@@ -21,6 +20,7 @@ ob_implicit_flush(true);
 session_start();
 ob_start(); // Keep this for now
 
+require_once 'includes/security_headers.php';
 // ===== SESSION TIMEOUT CHECK =====
 function checkSessionTimeout() {
     if (isset($_SESSION['user_id']) && isset($_SESSION['last_activity'])) {
