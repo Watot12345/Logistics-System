@@ -5,7 +5,14 @@ ini_set('display_errors', 1);
 require_once __DIR__ . '/../config/db.php';
 
 // Site configuration
-define('SITE_URL', 'http://localhost/Logistics%20System/includes');
+// Detect environment automatically
+if (getenv('RAILWAY_ENVIRONMENT') || isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'railway.app') !== false) {
+    // On Railway
+    define('SITE_URL', 'https://' . $_SERVER['HTTP_HOST']);
+} else {
+    // Local development
+    define('SITE_URL', 'http://localhost/Logistics%20System');
+}
 define('SMTP_FROM_NAME', 'Logistics System');
 
 // Gmail SMTP configuration (keep for localhost)
