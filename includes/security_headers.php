@@ -15,9 +15,9 @@ header("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload"
 header("Content-Security-Policy: " . 
        "default-src 'self'; " .
        "script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline' 'unsafe-eval'; " .
-       "style-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; " .
+       "style-src 'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com 'unsafe-inline'; " .
        "img-src 'self' data: https:; " .
-       "font-src 'self' https://cdnjs.cloudflare.com; " .
+       "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; " .
        "connect-src 'self'; " .
        "frame-ancestors 'none';");
 
