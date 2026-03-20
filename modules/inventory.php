@@ -1565,25 +1565,10 @@ function confirmDeleteCategory() {
 // Supplier Management Functions
 function openDeleteSupplierModal(id, supplierName) {
     <?php if ($isAdmin): ?>
-        // First check if supplier has items
-        fetch(`check-supplier-items.php?supplier_id=${id}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.has_items) {
-                    // Show alert that supplier has items
-                    alert(`Cannot delete supplier "${supplierName}" because they have ${data.item_count} item(s). Please remove or reassign the items first.`);
-                } else {
-                    // No items - show delete modal
-                    document.getElementById('delete_supplier_id').value = id;
-                    document.getElementById('deleteSupplierText').textContent = 
-                        `Are you sure you want to delete the supplier "${supplierName}"? This action cannot be undone.`;
-                    document.getElementById('deleteSupplierModal').classList.remove('modal-hidden');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error checking supplier status. Please try again.');
-            });
+        document.getElementById('delete_supplier_id').value = id;
+        document.getElementById('deleteSupplierText').textContent = 
+            `Are you sure you want to delete the supplier "${supplierName}"? This action cannot be undone.`;
+        document.getElementById('deleteSupplierModal').classList.remove('modal-hidden');
     <?php else: ?>
         alert('Only administrators can delete suppliers.');
     <?php endif; ?>
