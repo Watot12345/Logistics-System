@@ -140,7 +140,9 @@ checkSessionTimeout();
 // Add this function for instant email sending
 function sendEmailFast($to, $name, $code) {
     // Use Brevo API
-    $brevo_api_key = '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';
+  // NEW - Use environment variable
+require_once __DIR__ . '/config/load_config.php';
+$brevo_api_key = getenv('BREVO_API_KEY') ?: $_ENV['BREVO_API_KEY'];
     
     $data = [
         'sender' => ['name' => 'Logistics System', 'email' => 'asierra389@gmail.com'],

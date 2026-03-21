@@ -1,0 +1,8 @@
+# Environment variables
+.env
+config/api_keys.php
+
+# Never commit API keys
+*.key
+*.pem
+secrets.php
