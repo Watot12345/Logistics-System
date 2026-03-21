@@ -1,6 +1,20 @@
 <?php
+// Enable error reporting to see what's causing 500
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 session_start();
-require_once '../config/db.php';
+
+// Try to include db.php with error handling
+if (!file_exists('config/db.php')) {
+    die('<h1>Error</h1><p>config/db.php not found. Current directory: ' . getcwd() . '</p>');
+}
+
+try {
+    require_once 'config/db.php';
+} catch (Exception $e) {
+    die('<h1>Error loading database</h1><pre>' . htmlspecialchars($e->getMessage()) . '</pre>');
+}
 
 // Force output
 header('Content-Type: text/html; charset=utf-8');
@@ -14,11 +28,15 @@ try {
     echo "<h2>1. Database Connection</h2>";
     if (isset($pdo)) {
         echo "✅ PDO connection exists<br>";
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        echo "✅ Exception mode set<br>";
+        try {
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            echo "✅ Exception mode set<br>";
+        } catch (Exception $e) {
+            echo "⚠️ Could not set exception mode: " . htmlspecialchars($e->getMessage()) . "<br>";
+        }
     } else {
         echo "❌ No PDO connection<br>";
-        die();
+        die('<p>Database connection failed. Check config/db.php</p>');
     }
     
     // Test 2: Count total vehicles

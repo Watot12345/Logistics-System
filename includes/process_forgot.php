@@ -1,51 +1,73 @@
 <?php
-// process_forgot.php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 require_once '../config/db.php';
-require_once 'auth_functions.php';
+require_once 'auth_functions.php'; // This already has maskEmail() function
 
-// Start session
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+session_start();
 
-// Clear any old messages
-unset($_SESSION['error']);
-unset($_SESSION['success']);
-
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['email'])) {
-    $_SESSION['error'] = "Invalid request method.";
-    header('Location: forgot_password.php');
-    exit;
-}
-
-$email = filter_var($_POST['email'], FILTER_SANITIZE_EMAIL);
-
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $_SESSION['error'] = "Please enter a valid email address.";
-    header('Location: forgot_password.php');
-    exit;
-}
-
-// Handle the forgot password request
-try {
-    error_log("=== Processing forgot password for: $email ===");
-    $result = handleForgotPassword($email, $pdo);
+// Handle resend request
+if (isset($_GET['resend']) && isset($_SESSION['reset_email'])) {
+    $email = $_SESSION['reset_email'];
     
-    // Check what actually happened
-    if ($result === true) {
-        $_SESSION['success'] = "Reset link sent! Check your email.";
-    } else {
-        // If we got a message back
-        $_SESSION['success'] = $result;
+    $reset_code = sprintf("%06d", random_int(0, 999999));
+    $expires = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+    
+    $stmt = $pdo->prepare("DELETE FROM password_resets WHERE email = ?");
+    $stmt->execute([$email]);
+    
+    $stmt = $pdo->prepare("INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)");
+    $stmt->execute([$email, password_hash($reset_code, PASSWORD_DEFAULT), $expires]);
+    
+    sendPasswordResetCode($email, $reset_code);
+    
+    $_SESSION['success'] = 'New code sent to ' . maskEmail($email); // maskEmail from auth_functions.php
+    header('Location: forgot_password.php?code_sent=1');
+    exit();
+}
+
+// Handle initial request
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email = trim($_POST['email'] ?? '');
+    
+    if (empty($email)) {
+        $_SESSION['error'] = 'Please enter your email address';
+        header('Location: forgot_password.php');
+        exit();
     }
     
-} catch (Exception $e) {
-    error_log("❌ Exception in process_forgot: " . $e->getMessage());
-    $_SESSION['error'] = "System error. Please try again later.";
+    $stmt = $pdo->prepare("SELECT id, email FROM users WHERE email = ?");
+    $stmt->execute([$email]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$user) {
+        $_SESSION['error'] = 'Email not found in our records';
+        header('Location: forgot_password.php');
+        exit();
+    }
+    
+    $reset_code = sprintf("%06d", random_int(0, 999999));
+    $expires = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+    
+    $stmt = $pdo->prepare("DELETE FROM password_resets WHERE email = ?");
+    $stmt->execute([$email]);
+    
+    $stmt = $pdo->prepare("INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)");
+    $stmt->execute([$email, password_hash($reset_code, PASSWORD_DEFAULT), $expires]);
+    
+    $sent = sendPasswordResetCode($email, $reset_code);
+    
+    if ($sent) {
+        $_SESSION['reset_email'] = $email;
+        $_SESSION['success'] = 'Reset code sent to ' . maskEmail($email);
+        header('Location: forgot_password.php?code_sent=1');
+    } else {
+        $_SESSION['error'] = 'Failed to send reset code. Please try again.';
+        header('Location: forgot_password.php');
+    }
+    exit();
 }
 
 header('Location: forgot_password.php');
-exit;
+exit();
 ?>

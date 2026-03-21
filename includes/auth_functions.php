@@ -5,7 +5,16 @@ ini_set('display_errors', 1);
 require_once __DIR__ . '/../config/db.php';
 
 // Site configuration
-define('SITE_URL', 'https://logistics-system-production-ae8a.up.railway.app');
+// Auto-detect local vs production
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
+$host = $_SERVER['HTTP_HOST'];
+
+// If running locally, use localhost
+if ($host === 'localhost' || strpos($host, '127.0.0.1') !== false || strpos($host, '::1') !== false) {
+    define('SITE_URL', $protocol . $host);
+} else {
+    define('SITE_URL', 'https://logistics-system-production-ae8a.up.railway.app');
+}
 define('SMTP_FROM_NAME', 'Logistics System');
 
 // Gmail SMTP configuration (keep for localhost)
@@ -113,27 +122,111 @@ function markTokenAsUsed($token, $pdo) {
     $stmt = $pdo->prepare("UPDATE password_resets SET used = TRUE WHERE token = ?");
     $stmt->execute([$token_hash]);
 }
-
 /**
- * Send password reset email using Resend via cURL (matching your working 2FA pattern)
+ * Send password reset code via Brevo
  */
-function sendPasswordResetEmailViaResend($to_email, $raw_token) {
-    $reset_link = SITE_URL . "/includes/reset_password.php?token=" . urlencode($raw_token);
-    $api_key = getenv('RESEND_API_KEY');
+function sendPasswordResetCode($to_email, $code) {
+    $api_key = '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';
     
-    // Fallback to hardcoded key if env not set (for testing)
-    if (!$api_key) {
-        $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW'; // Your working key from 2FA
+    error_log("📧 Sending password reset code to: $to_email");
+    
+    $data = [
+        'sender' => ['name' => 'Logistics System', 'email' => 'asierra389@gmail.com'],
+        'to' => [['email' => $to_email]],
+        'subject' => 'Password Reset Code - Logistics System',
+        'htmlContent' => "
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; }
+                    .container { max-width: 500px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { padding: 30px; background: #f9fafb; text-align: center; }
+                    .code { font-size: 48px; font-weight: bold; color: #2563eb; letter-spacing: 8px; background: white; padding: 20px; border-radius: 10px; display: inline-block; margin: 20px 0; font-family: monospace; }
+                    .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }
+                    .warning { color: #d97706; font-size: 14px; margin-top: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>🔐 Password Reset Request</h2>
+                    </div>
+                    <div class='content'>
+                        <p>Hello,</p>
+                        <p>You requested to reset your password. Enter this code on your computer:</p>
+                        <div class='code'>{$code}</div>
+                        <p>⏰ This code expires in <strong>15 minutes</strong></p>
+                        <div class='warning'>
+                            <i class='fas fa-mobile-alt'></i> 
+                            Enter this code on the device where you requested the password reset
+                        </div>
+                        <p style='margin-top: 20px; color: #6b7280; font-size: 12px;'>
+                            If you didn't request this, ignore this email.
+                        </p>
+                    </div>
+                    <div class='footer'>
+                        <p>&copy; " . date('Y') . " Logistics System</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        "
+    ];
+    
+    $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'api-key: ' . $api_key,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 201 || $httpCode === 200) {
+        error_log("✅ Password reset code sent to: $to_email");
+        return true;
     }
     
-    error_log("📧 Attempting to send password reset email to: $to_email");
+    error_log("❌ Password reset code failed: HTTP $httpCode, Response: $response");
+    return false;
+}
+
+/**
+ * Mask email for display
+ */
+function maskEmail($email) {
+    if (empty($email)) return '';
+    $parts = explode('@', $email);
+    $name = $parts[0];
+    $domain = $parts[1] ?? '';
     
-    // Prepare email data - EXACT format as your working 2FA function
+    if (strlen($name) > 2) {
+        $masked_name = substr($name, 0, 2) . str_repeat('*', strlen($name) - 2);
+    } else {
+        $masked_name = $name . '***';
+    }
+    
+    return $masked_name . '@' . $domain;
+}
+function sendPasswordResetEmailViaResend($to_email, $raw_token) {
+    $reset_link = SITE_URL . "/reset_password.php?token=" . urlencode($raw_token);
+    
+    $api_key = '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';
+    
+    error_log("📧 Sending password reset email to: $to_email");
+    
     $data = [
-        'from' => 'onboarding@resend.dev',
-        'to' => [$to_email],
+        'sender' => ['name' => 'Logistics System', 'email' => 'asierra389@gmail.com'],
+        'to' => [['email' => $to_email]],
         'subject' => 'Reset Your Password - Logistics System',
-        'html' => "
+        'htmlContent' => "
             <!DOCTYPE html>
             <html>
             <head>
@@ -172,35 +265,30 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
                 </div>
             </body>
             </html>
-        ",
-        'text' => "Reset your password here: $reset_link\n\nThis link expires in 1 hour."
+        "
     ];
     
-    // Send via cURL - EXACT same as your working 2FA function
-    $ch = curl_init('https://api.resend.com/emails');
+    $ch = curl_init('https://api.brevo.com/v3/smtp/email');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Bearer ' . $api_key,
+        'api-key: ' . $api_key,
         'Content-Type: application/json'
     ]);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Increased timeout
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true); // Keep SSL verification
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
     curl_close($ch);
     
-    // Log the result
-    if ($httpCode === 200) {
-        error_log("✅ Password reset email sent successfully to {$to_email}");
+    if ($httpCode === 201 || $httpCode === 200) {
+        error_log("✅ Password reset email sent to: $to_email");
         return true;
-    } else {
-        error_log("❌ Password reset email failed: HTTP {$httpCode}, Response: {$response}, Error: {$error}");
-        return false;
     }
+    
+    error_log("❌ Password reset failed: HTTP $httpCode");
+    return false;
 }
 /**
  * Send login notification email using Resend
