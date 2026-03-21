@@ -126,7 +126,11 @@ function markTokenAsUsed($token, $pdo) {
  * Send password reset code via Brevo
  */
 function sendPasswordResetCode($to_email, $code) {
-    $api_key = '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';
+    // NEW - Add at the top of the file:
+require_once __DIR__ . '/config/load_config.php';
+
+// Then inside your functions:
+$brevo_api_key = getenv('BREVO_API_KEY') ?: $_ENV['BREVO_API_KEY'];
     
     error_log("📧 Sending password reset code to: $to_email");
     
