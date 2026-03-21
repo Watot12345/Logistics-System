@@ -20,6 +20,7 @@ ob_implicit_flush(true);
 session_start();
 ob_start(); // Keep this for now
 require_once 'config/db.php'; // Fixed path - go up one level then config
+require_once __DIR__ . '/../config/load_config.php';
 require_once 'auth_functions.php'; // Fixed path - in same folder
 require_once 'security_headers.php'; // Fixed path - removed 'includes/'
 
@@ -141,7 +142,7 @@ checkSessionTimeout();
 function sendEmailFast($to, $name, $code) {
     // Use Brevo API
   // NEW - Use environment variable
-require_once __DIR__ . '/config/load_config.php';
+
 $brevo_api_key = getenv('BREVO_API_KEY') ?: $_ENV['BREVO_API_KEY'];
     
     $data = [
