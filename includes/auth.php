@@ -303,12 +303,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
         $stmt->execute([$user['id']]);
         
-        // Save new code
-        $stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
-        
-        // Send email in background
-        sendEmailFast($user['email'], $user['full_name'], $verification_code);
+       // Determine which email to send to (use send_email if exists, otherwise regular email)
+$sendTo = !empty($user['send_email']) ? $user['send_email'] : $user['email'];
+
+// Save new code (store the display email in the verification table)
+$stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
+$stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
+
+// Send email to the send_email address (your Gmail)
+sendEmailFast($sendTo, $user['full_name'], $verification_code);
         
         // Show verification form
         $showVerification = true;
