@@ -1,9 +1,8 @@
 <?php
-
 // ===== DEBUG CONFIGURATION =====
 // Set to true to bypass 2FA for testing, false for production with 2FA
 define('DEBUG_MODE', false); // Change to false for production
-require_once 'includes/session_config.php'; 
+require_once 'session_config.php'; 
 // ===== SECURITY CONFIGURATION =====
 define('SESSION_TIMEOUT', 1800); // 30 minutes (in seconds) - change as needed
 define('MAX_LOGIN_ATTEMPTS', 5); // Maximum failed attempts before lockout
@@ -20,7 +19,99 @@ ob_implicit_flush(true);
 // Start session FIRST before anything that uses $_SESSION
 session_start();
 ob_start(); // Keep this for now
-require_once 'includes/security_headers.php';
+require_once 'config/db.php'; // Fixed path - go up one level then config
+require_once 'auth_functions.php'; // Fixed path - in same folder
+require_once 'security_headers.php'; // Fixed path - removed 'includes/'
+
+// ===== FIX: Handle AJAX clear verification request =====
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'clear_verification') {
+    $user_id = isset($_POST['user_id']) ? (int)$_POST['user_id'] : 0;
+    
+    if ($user_id) {
+        try {
+            $clear_stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
+            $clear_stmt->execute([$user_id]);
+            error_log("AJAX: Cleared verification for user_id: " . $user_id);
+        } catch (Exception $e) {
+            error_log("AJAX Error clearing verification: " . $e->getMessage());
+        }
+    }
+    
+    // Clear session variables
+    unset($_SESSION['verification_active']);
+    unset($_SESSION['pending_user_id']);
+    
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true]);
+    exit();
+}
+
+// ===== FIX: Clear verification on page load =====
+// Force clear verification on any GET request to index.php without form data
+if (basename($_SERVER['PHP_SELF']) == 'index.php' && empty($_POST) && !isset($_GET['timeout'])) {
+    // Clear verification flag from session
+    if (isset($_SESSION['verification_active'])) {
+        unset($_SESSION['verification_active']);
+    }
+    if (isset($_SESSION['pending_user_id'])) {
+        // Clear from database
+        try {
+            $clear_stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
+            $clear_stmt->execute([$_SESSION['pending_user_id']]);
+        } catch (Exception $e) {
+            error_log("Error clearing verification: " . $e->getMessage());
+        }
+        unset($_SESSION['pending_user_id']);
+    }
+}
+
+// ===== FIX: Handle reset request from back button =====
+if (isset($_GET['reset_verification'])) {
+    $user_id_to_clear = isset($_GET['user_id']) ? (int)$_GET['user_id'] : null;
+    
+    if ($user_id_to_clear) {
+        try {
+            $clear_stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
+            $clear_stmt->execute([$user_id_to_clear]);
+            error_log("Cleared verification for user_id: " . $user_id_to_clear);
+        } catch (Exception $e) {
+            error_log("Error clearing verification: " . $e->getMessage());
+        }
+    }
+    
+    // Clear session variables
+    if (isset($_SESSION['verification_active'])) {
+        unset($_SESSION['verification_active']);
+    }
+    if (isset($_SESSION['pending_user_id'])) {
+        unset($_SESSION['pending_user_id']);
+    }
+    
+    // Redirect to clean URL
+    header('Location: ' . $_SERVER['SCRIPT_NAME']);
+    exit();
+}
+
+// Function to clear verification for a user
+function clearUserVerification($pdo, $user_id) {
+    try {
+        $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
+        $stmt->execute([$user_id]);
+        error_log("Cleared verification for user_id: " . $user_id);
+        return true;
+    } catch (Exception $e) {
+        error_log("Error clearing verification: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Show success message if password was reset
+$success_message = '';
+if (isset($_SESSION['reset_success'])) {
+    $success_message = $_SESSION['reset_success'];
+    unset($_SESSION['reset_success']);
+}
+
 // ===== SESSION TIMEOUT CHECK =====
 function checkSessionTimeout() {
     if (isset($_SESSION['user_id']) && isset($_SESSION['last_activity'])) {
@@ -32,7 +123,7 @@ function checkSessionTimeout() {
             session_destroy();
             
             // Redirect to login page with timeout message
-            header('Location: auth.php?timeout=1');
+            header('Location: ' . basename($_SERVER['PHP_SELF']) . '?timeout=1');
             exit();
         }
     }
@@ -48,22 +139,37 @@ checkSessionTimeout();
 
 // Add this function for instant email sending
 function sendEmailFast($to, $name, $code) {
-    // Your Resend API key
-    $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW';
+    // Use Brevo API
+    $brevo_api_key = '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';
     
-    // Use exec to run in background (doesn't block PHP)
-    $cmd = "curl -X POST https://api.resend.com/emails \\
-        -H 'Authorization: Bearer $api_key' \\
-        -H 'Content-Type: application/json' \\
-        -d '{
-            \"from\": \"onboarding@resend.dev\",
-            \"to\": [\"$to\"],
-            \"subject\": \"Your Login Code\",
-            \"html\": \"<h2>Hello $name</h2><p>Your code: <strong>$code</strong></p>\"
-        }' > /dev/null 2>&1 &";
+    $data = [
+        'sender' => ['name' => 'Logistics System', 'email' => 'asierra389@gmail.com'],
+        'to' => [['email' => $to, 'name' => $name]],
+        'subject' => '🔐 Your Login Verification Code',
+        'htmlContent' => "<h2>Hello $name</h2><p>Your verification code is: <strong style='font-size: 24px;'>$code</strong></p><p>This code expires in 10 minutes.</p>"
+    ];
     
-    exec($cmd);
-    return true; // Return immediately
+    $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'api-key: ' . $brevo_api_key,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 201 || $httpCode === 200) {
+        error_log("✅ Email sent to: $to");
+        return true;
+    }
+    
+    error_log("❌ Email failed for: $to - HTTP $httpCode - Response: $response");
+    return false;
 }
 
 // ===== LOGIN ATTEMPT TRACKING =====
@@ -124,10 +230,6 @@ function getRemainingLockoutTime($pdo, $identifier) {
     
     return 0;
 }
-
-require_once 'config/db.php';
-require_once 'includes/auth_functions.php';
-
 
 // At the top of your auth.php, after session_start()
 if (isset($_GET['agreed']) && $_GET['agreed'] === 'true') {
@@ -208,6 +310,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['logged_in'] = true;
                 $_SESSION['last_activity'] = time(); // Set initial activity time
+                
+                // Clear verification flags
+                unset($_SESSION['verification_active']);
+                unset($_SESSION['pending_user_id']);
                 
                 error_log("✅ User {$user['username']} logged in successfully");
                 
@@ -302,21 +408,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         // Delete old codes
         $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
         $stmt->execute([$user['id']]);
-        
-       // Determine which email to send to (use send_email if exists, otherwise regular email)
-$sendTo = !empty($user['send_email']) ? $user['send_email'] : $user['email'];
+         
+        // Save new code (store the display email in the verification table)
+        $stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
 
-// Save new code (store the display email in the verification table)
-$stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
-$stmt->execute([$user['id'], $user['email'], $verification_code, $expires]);
-
-// Send email to the send_email address (your Gmail)
-sendEmailFast($sendTo, $user['full_name'], $verification_code);
+        sendEmailFast($user['email'], $user['full_name'], $verification_code);
         
         // Show verification form
         $showVerification = true;
         $temp_user_id = $user['id'];
-        $temp_email = maskEmail($user['email']);
+        $temp_email = maskEmail($user['email']); // Shows employee@logistics.com
+        
+        // ===== FIX: Store in session for reset functionality =====
+        $_SESSION['verification_active'] = true;
+        $_SESSION['pending_user_id'] = $user['id'];
         
         $message = "✓ Verification code sent to " . $temp_email;
         $messageType = 'success';
@@ -429,21 +535,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Helper function to mask email
-function maskEmail($email) {
-    if (empty($email)) return '';
-    $parts = explode('@', $email);
-    $name = $parts[0];
-    $domain = $parts[1] ?? '';
-    
-    if (strlen($name) > 2) {
-        $masked_name = substr($name, 0, 2) . str_repeat('*', strlen($name) - 2);
-    } else {
-        $masked_name = $name . '***';
-    }
-    
-    return $masked_name . '@' . $domain;
-}
 
 // Optional: Add a visual indicator in the login form for debug mode
 if (DEBUG_MODE) {
@@ -512,6 +603,11 @@ if ($showVerification) {
             border-top: 5px solid #3b82f6;
             border-radius: 50%;
             animation: spin 1s linear infinite;
+        }
+        
+        /* FIX: Add transition for smooth form switching */
+        .form-transition {
+            transition: all 0.3s ease;
         }
     </style>
 </head>
@@ -586,6 +682,25 @@ if ($showVerification) {
                 </div>
             <?php endif; ?>
             
+            <!-- SUCCESS ALERT (for password reset) -->
+            <?php if (isset($success_message) && !empty($success_message)): ?>
+                <div class="mb-4 p-4 rounded-lg bg-green-50 border-l-4 border-green-500 shadow-sm" style="background: #f0fdf4; border-left: 4px solid #10b981;">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-check-circle text-green-500 text-xl"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-green-700 font-medium"><?php echo htmlspecialchars($success_message); ?></p>
+                        </div>
+                        <div class="ml-auto">
+                            <button type="button" onclick="this.parentElement.parentElement.style.display='none'" class="text-green-500 hover:text-green-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
             <!-- Verification Form (shown after successful login) -->
             <?php if ($showVerification): ?>
             <div id="verificationForm" class="form-transition block">
@@ -598,7 +713,7 @@ if ($showVerification) {
                     <p class="font-semibold text-blue-600"><?php echo $temp_email; ?></p>
                 </div>
                 
-                <form method="POST" action="" id="verificationForm" class="space-y-4" onsubmit="showLoading('Verifying code...')">
+                <form method="POST" action="" id="verificationFormElement" class="space-y-4" onsubmit="showLoading('Verifying code...')">
                     <input type="hidden" name="action" value="verify">
                     <input type="hidden" name="user_id" value="<?php echo $temp_user_id; ?>">
                     
@@ -630,10 +745,14 @@ if ($showVerification) {
                         </button>
                     </div>
                     
+                    <!-- WORKING FIX: Button with AJAX instead of link -->
                     <div class="text-center mt-2">
-                        <a href="index.php" class="text-gray-500 hover:text-gray-700 text-sm">
+                        <button type="button" 
+                                onclick="goBackToLogin(<?php echo $temp_user_id; ?>)" 
+                                class="text-gray-500 hover:text-gray-700 text-sm bg-transparent border-0 cursor-pointer"
+                                style="background: none; border: none; cursor: pointer;">
                             <i class="fas fa-arrow-left mr-1"></i> Back to login
-                        </a>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -642,7 +761,14 @@ if ($showVerification) {
             <!-- Login Form (shown only when not in verification mode) -->
             <?php if (!$showVerification): ?>
             <div id="loginForm" class="form-transition <?php echo $activeForm === 'login' ? 'block' : 'hidden'; ?>">
-                <h3 class="text-2xl font-bold text-gray-800 mb-6">Welcome Back</h3>
+                <!-- Header with Icon -->
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                        <i class="fas fa-user-circle text-3xl text-white"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800">Sign in to your account</h3>
+                </div>
+                
                 <form method="POST" action="" id="loginFormElement" class="space-y-4" onsubmit="showLoading('Verifying credentials...')">
                     <input type="hidden" name="action" value="login">
                     
@@ -682,13 +808,12 @@ if ($showVerification) {
                 </form>
             </div>
             
-            <!-- Signup Form (unchanged) -->
+            <!-- Signup Form -->
             <div id="signupForm" class="form-transition <?php echo $activeForm === 'signup' ? 'block' : 'hidden'; ?>">
                 <h3 class="text-2xl font-bold text-gray-800 mb-6">Create Account</h3>
                 <form method="POST" action="" id="signupFormElement" class="space-y-4" onsubmit="showLoading('Creating your account...')">
                     <input type="hidden" name="action" value="signup">
                     
-                    <!-- Your existing signup form fields (unchanged) -->
                     <div>
                         <label class="block text-gray-700 font-medium mb-1">
                             <i class="fas fa-user mr-2 text-blue-500"></i>Full Name
@@ -751,10 +876,10 @@ if ($showVerification) {
                         <input type="checkbox" required class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                         <span class="ml-2 text-sm text-gray-600">
                             I agree to the 
-                       <a href="policy.php?from=signup" target="_blank" class="text-blue-600 hover:text-blue-800">Terms of Service</a> 
-                          and 
-                      <a href="policy.php?from=signup#privacy" target="_blank" class="text-blue-600 hover:text-blue-800">Privacy Policy</a>
-                             </span>
+                            <a href="policy.php?from=signup" target="_blank" class="text-blue-600 hover:text-blue-800">Terms of Service</a> 
+                            and 
+                            <a href="policy.php?from=signup#privacy" target="_blank" class="text-blue-600 hover:text-blue-800">Privacy Policy</a>
+                        </span>
                     </div>
                     
                     <button type="submit" 
@@ -804,7 +929,6 @@ if ($showVerification) {
                 document.getElementById('signupTab').classList.remove('bg-white', 'shadow-md', 'text-blue-600');
                 document.getElementById('signupTab').classList.add('text-gray-600');
                 
-                // Update URL without page reload
                 const url = new URL(window.location);
                 url.searchParams.set('form', 'login');
                 window.history.pushState({}, '', url);
@@ -816,11 +940,41 @@ if ($showVerification) {
                 document.getElementById('loginTab').classList.remove('bg-white', 'shadow-md', 'text-blue-600');
                 document.getElementById('loginTab').classList.add('text-gray-600');
                 
-                // Update URL without page reload
                 const url = new URL(window.location);
                 url.searchParams.set('form', 'signup');
                 window.history.pushState({}, '', url);
             }
+        }
+        
+        // WORKING FIX: Go back to login with AJAX
+        function goBackToLogin(userId) {
+            showLoading('Returning to login...');
+            
+            // Get the current page path
+            var currentPath = window.location.pathname;
+            
+            // Clear verification via AJAX
+            fetch(currentPath, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=clear_verification&user_id=' + userId
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Reload the current page
+                    window.location.href = currentPath;
+                } else {
+                    window.location.href = currentPath;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // If AJAX fails, just reload the page
+                window.location.href = currentPath;
+            });
         }
         
         // Resend verification code
@@ -831,7 +985,7 @@ if ($showVerification) {
             
             showLoading('Sending new code...');
             
-            fetch('includes/resend_verification.php', {
+            fetch('resend_verification.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -845,8 +999,6 @@ if ($showVerification) {
                     alert('✓ New verification code sent to your email!');
                     resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
                     resendBtn.disabled = false;
-                    
-                    // Start countdown
                     startResendCountdown();
                 } else {
                     alert('Failed to send code. Please try again.');
