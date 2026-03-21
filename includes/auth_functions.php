@@ -206,35 +206,70 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
  * Send login notification email using Resend
  */
 function sendLoginNotificationEmailViaResend($to_email, $full_name, $user_agent, $ip_address) {
-    $api_key = getenv('RESEND_API_KEY');
+    $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW';
     
-    if (!$api_key) return false;
+    $data = [
+        'from' => 'onboarding@resend.dev',
+        'to' => [$to_email],
+        'subject' => '🔐 New Login Detected',
+        'html' => "
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { padding: 20px; background-color: #f9f9f9; }
+                    .info-box { background: white; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #3b82f6; }
+                    .warning { color: #d97706; font-weight: bold; }
+                    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>🔐 New Login Alert</h2>
+                    </div>
+                    <div class='content'>
+                        <p>Hello <strong>{$full_name}</strong>,</p>
+                        <p>A new login was detected on your account.</p>
+                        <div class='info-box'>
+                            <p><strong>📅 Date & Time:</strong> " . date('F j, Y, g:i a') . "</p>
+                            <p><strong>💻 Browser/Device:</strong> {$user_agent}</p>
+                            <p><strong>🌍 IP Address:</strong> {$ip_address}</p>
+                        </div>
+                        <p class='warning'>⚠️ If this wasn't you, please secure your account immediately.</p>
+                    </div>
+                    <div class='footer'>
+                        <p>&copy; " . date('Y') . " Logistics System</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        ",
+        'text' => "New login detected:\n\nDate & Time: " . date('F j, Y, g:i a') . "\nBrowser: {$user_agent}\nIP Address: {$ip_address}\n\nIf this wasn't you, secure your account immediately."
+    ];
     
-    try {
-        $resend = Resend::client($api_key);
-        
-        $result = $resend->emails->send([
-            'from' => 'onboarding@resend.dev',
-            'to' => [$to_email],
-            'subject' => '🔐 New Login Detected',
-            'html' => "
-                <html>
-                <body>
-                    <h2>Hello {$full_name},</h2>
-                    <p>A new login was detected on your account:</p>
-                    <p><strong>Date & Time:</strong> " . date('F j, Y, g:i a') . "</p>
-                    <p><strong>Browser:</strong> {$user_agent}</p>
-                    <p><strong>IP Address:</strong> {$ip_address}</p>
-                    <p style='color: #d97706;'>If this wasn't you, secure your account immediately.</p>
-                </body>
-                </html>
-            "
-        ]);
-        
+    $ch = curl_init('https://api.resend.com/emails');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $api_key,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200) {
+        error_log("✅ Login notification sent to {$to_email}");
         return true;
-        
-    } catch (Exception $e) {
-        error_log("Resend notification failed: " . $e->getMessage());
+    } else {
+        error_log("❌ Login notification failed: HTTP {$httpCode}");
         return false;
     }
 }
