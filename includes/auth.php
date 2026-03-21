@@ -175,6 +175,62 @@ $brevo_api_key = getenv('BREVO_API_KEY') ?: $_ENV['BREVO_API_KEY'];
     return false;
 }
 
+// Handle resend code request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'resend_code') {
+    $user_id = isset($_POST['user_id']) ? (int)$_POST['user_id'] : 0;
+    
+    if (!$user_id) {
+        $message = 'User ID required';
+        $messageType = 'error';
+    } else {
+        try {
+            // Get user
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+            $stmt->execute([$user_id]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$user) {
+                $message = 'User not found';
+                $messageType = 'error';
+            } else {
+                // Generate new code
+                $verification_code = sprintf("%06d", random_int(0, 999999));
+                $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+                
+                // Delete old codes
+                $stmt = $pdo->prepare("DELETE FROM login_verifications WHERE user_id = ?");
+                $stmt->execute([$user_id]);
+                
+                // Insert new code
+                $stmt = $pdo->prepare("INSERT INTO login_verifications (user_id, email, verification_code, expires_at) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$user_id, $user['email'], $verification_code, $expires]);
+                
+                // Send email
+                $sent = sendEmailFast($user['email'], $user['full_name'], $verification_code);
+                
+                if ($sent) {
+                    $message = "✓ New verification code sent to " . maskEmail($user['email']);
+                    $messageType = 'success';
+                } else {
+                    $message = 'Failed to send email. Please try again.';
+                    $messageType = 'error';
+                }
+            }
+        } catch (Exception $e) {
+            $message = 'Error: ' . $e->getMessage();
+            $messageType = 'error';
+            error_log("Resend error: " . $e->getMessage());
+        }
+    }
+    
+    // Keep showing verification form
+    $showVerification = true;
+    $temp_user_id = $user_id;
+    if (isset($user) && $user) {
+        $temp_email = maskEmail($user['email']);
+    }
+}
+
 // ===== LOGIN ATTEMPT TRACKING =====
 function trackLoginAttempt($pdo, $identifier, $success = false) {
     $ip_address = $_SERVER['REMOTE_ADDR'];
@@ -981,42 +1037,57 @@ if ($showVerification) {
         }
         
         // Resend verification code
-        function resendCode(userId) {
-            const resendBtn = document.getElementById('resendBtn');
-            resendBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Sending...';
-            resendBtn.disabled = true;
-            
-            showLoading('Sending new code...');
-            
-            fetch('resend_verification.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ user_id: userId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                hideLoading();
-                if (data.success) {
-                    alert('✓ New verification code sent to your email!');
-                    resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
-                    resendBtn.disabled = false;
-                    startResendCountdown();
-                } else {
-                    alert('Failed to send code. Please try again.');
-                    resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
-                    resendBtn.disabled = false;
-                }
-            })
-            .catch(error => {
-                hideLoading();
-                console.error('Error:', error);
-                alert('Error sending code');
-                resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
-                resendBtn.disabled = false;
-            });
+// Resend verification code
+function resendCode(userId) {
+    console.log('Resending code for user:', userId);
+    
+    const resendBtn = document.getElementById('resendBtn');
+    resendBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Sending...';
+    resendBtn.disabled = true;
+    
+    showLoading('Sending new code...');
+    
+    // Use FormData for POST
+    const formData = new URLSearchParams();
+    formData.append('user_id', userId);
+    
+    // Use api_resend.php instead of resend_verification.php
+    fetch('api_resend.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('HTTP error: ' + response.status);
         }
+        return response.json();
+    })
+    .then(data => {
+        hideLoading();
+        console.log('Server response:', data);
+        
+        if (data.success) {
+            alert('✓ ' + data.message);
+            resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
+            resendBtn.disabled = false;
+            startResendCountdown();
+        } else {
+            alert('Failed: ' + (data.error || 'Unknown error'));
+            resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
+            resendBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Fetch error:', error);
+        alert('Error sending code: ' + error.message);
+        resendBtn.innerHTML = '<i class="fas fa-redo-alt mr-1"></i> Resend code';
+        resendBtn.disabled = false;
+    });
+}
         
         // Resend countdown
         function startResendCountdown() {
