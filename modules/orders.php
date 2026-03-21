@@ -491,7 +491,7 @@ if (isset($_GET['status']) && $_GET['status'] == 'requests') {
     }
 }
 ?>
-<!-- PO List - replace your existing po-list div with this -->
+                        <!-- PO List - replace your existing po-list div with this -->
 <div class="po-list">
     <?php
     // Get current filters
@@ -527,7 +527,7 @@ if (isset($_GET['status']) && $_GET['status'] == 'requests') {
     $filtered_orders = $stmt->fetchAll();
     
     if (empty($filtered_orders)): ?>
-        <div class="empty-state" style="text-align: center; padding: 60px 20px;">
+        <div class="empty-state">
             <?php if ($current_tab == 'pending'): ?>
                 <i class="fas fa-file-alt" style="font-size: 80px; color: #9ca3af; margin-bottom: 16px;"></i>
                 <h3 style="margin: 0 0 8px 0; color: #374151;">No Pending Approvals</h3>
@@ -565,46 +565,48 @@ if (isset($_GET['status']) && $_GET['status'] == 'requests') {
                                 <?php echo ucfirst($order['priority']); ?>
                             </span>
                         </td>
-                        <td>
-                            <div style="display: flex; gap: 4px;">
-                                <!-- Everyone can view -->
-                                <button class="action-btn" title="View PO Details" 
-                                        onclick="viewPO(<?php echo $order['id']; ?>)">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                
-                                <?php if ($order['status'] == 'pending'): ?>
-                                    <!-- Only admin can approve/reject -->
-                                    <?php if ($user_role === 'admin'): ?>
-                                        <button class="action-btn approve" title="Approve Purchase Order" 
-                                                onclick="updatePOStatus(<?php echo $order['id']; ?>, 'approved')">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                        <button class="action-btn reject" title="Reject Purchase Order" 
-                                                onclick="updatePOStatus(<?php echo $order['id']; ?>, 'rejected')">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    <?php endif; ?>
-                                <?php endif; ?>
-                                
-                                <?php if ($order['status'] == 'approved'): ?>
-                                    <!-- Only admin can mark as completed -->
-                                    <?php if ($user_role === 'admin'): ?>
-                                        <button class="action-btn complete" title="Mark as Completed" 
-                                                onclick="updatePOStatus(<?php echo $order['id']; ?>, 'completed')">
-                                            <i class="fas fa-check-double"></i>
-                                        </button>
-                                    <?php endif; ?>
-                                <?php endif; ?>
-                            </div>
-                        </td>
+                       <td>
+    <div style="display: flex; gap: 4px;">
+        <!-- Everyone can view -->
+        <button class="action-btn" title="View PO Details" 
+                onclick="viewPO(<?php echo $order['id']; ?>)">
+            <i class="fas fa-eye"></i>
+        </button>
+        
+        <?php if ($order['status'] == 'pending'): ?>
+            <!-- Only admin can approve/reject -->
+            <?php if ($user_role === 'admin'): ?>
+                <button class="action-btn approve" title="Approve Purchase Order" 
+                        onclick="updatePOStatus(<?php echo $order['id']; ?>, 'approved')">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button class="action-btn reject" title="Reject Purchase Order" 
+                        onclick="updatePOStatus(<?php echo $order['id']; ?>, 'rejected')">
+                    <i class="fas fa-times"></i>
+                </button>
+            <?php endif; ?>
+        <?php endif; ?>
+        
+        <?php if ($order['status'] == 'approved'): ?>
+            <!-- Only admin can mark as completed -->
+            <?php if ($user_role === 'admin'): ?>
+                <button class="action-btn complete" title="Mark as Completed" 
+                        onclick="updatePOStatus(<?php echo $order['id']; ?>, 'completed')">
+                    <i class="fas fa-check-double"></i>
+                </button>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+</td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
     <?php endif; ?>
-</div>         
+</div>
+                    </div>
+                </div>
                 
                 <!-- Supplier List and Performance -->
                 <div class="card">
