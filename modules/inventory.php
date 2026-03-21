@@ -651,13 +651,17 @@ $value_growth_text = $value_growth_sign . $value_growth . '%';
                                         <button class="action-btn view" onclick="viewSupplierDetails(<?php echo $supplier['id']; ?>)" title="View Supplier">
                                             <i class="fas fa-eye"></i>
                                         </button>
-                                        <button class="action-btn edit" onclick="editSupplier(<?php echo $supplier['id']; ?>)" title="Edit Supplier">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="action-btn delete" onclick="openDeleteSupplierModal(<?php echo $supplier['id']; ?>, '<?php echo htmlspecialchars($supplier['supplier_name']); ?>')" 
-                                            <?php echo $supplier['product_count'] > 0 ? 'disabled title="Cannot delete supplier with existing items"' : ''; ?>>
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                       <button class="action-btn delete" 
+    <?php if ($supplier['product_count'] > 0): ?>
+        disabled 
+        style="opacity: 0.5; cursor: not-allowed; background-color: #f3f4f6;"
+        onclick="return false;"
+        title="Cannot delete supplier with <?php echo $supplier['product_count']; ?> existing item(s)"
+    <?php else: ?>
+        onclick="openDeleteSupplierModal(<?php echo $supplier['id']; ?>, '<?php echo htmlspecialchars($supplier['supplier_name']); ?>')"
+    <?php endif; ?>>
+    <i class="fas fa-trash"></i>
+</button>
                                     </div>
                                 </td>
                             </tr>

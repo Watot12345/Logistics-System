@@ -18,7 +18,7 @@ header("Content-Security-Policy: " .
        "style-src 'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com 'unsafe-inline'; " .
        "img-src 'self' data: https:; " .
        "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; " .
-       "connect-src 'self'; " .
+       "connect-src 'self' https://humanresource.up.railway.app; " .  // 👈 ADD YOUR API DOMAIN HERE
        "frame-ancestors 'none';");
 
 // ===== REFERRER POLICY =====
