@@ -1079,8 +1079,26 @@ async function loadItems() {
         }
         
         allItems = items;
-        filteredItems = items;
+        
+        // Debug: Log items with their supplier_id
         console.log('✅ Items loaded:', items.length);
+        console.log('Sample item:', items[0]);
+        console.log('Items by supplier:', items.reduce((acc, item) => {
+            const supplierId = item.supplier_id;
+            if (!acc[supplierId]) acc[supplierId] = [];
+            acc[supplierId].push(item.item_name);
+            return acc;
+        }, {}));
+        
+        // Initialize filtered items based on currently selected supplier
+        const supplierSelect = document.getElementById('modalSupplierSelect');
+        if (supplierSelect && supplierSelect.value) {
+            filterItemsBySupplier();
+        } else {
+            filteredItems = allItems;
+            updateAllItemDropdowns();
+            updateItemCountDisplay();
+        }
         
     } catch (error) {
         console.error('Error loading items:', error);
@@ -1108,9 +1126,21 @@ function updateAllItemDropdowns() {
 }
 
 function updateItemCountDisplay() {
-    const countDisplay = document.getElementById('itemCountDisplay');
+    const countDisplay = document.getElementById('supplierItemCount');
+    const itemCountSpan = document.getElementById('itemCount');
+    
     if (countDisplay) {
-        countDisplay.innerHTML = `<span id="itemCount">${filteredItems.length}</span> items available for selected supplier`;
+        const itemCount = filteredItems.length;
+        const supplierSelect = document.getElementById('modalSupplierSelect');
+        const selectedSupplier = supplierSelect.options[supplierSelect.selectedIndex]?.text;
+        
+        if (supplierSelect.value === '') {
+            countDisplay.innerHTML = `<span id="itemCount">${itemCount}</span> total items available (select a supplier to filter)`;
+        } else if (itemCount === 0) {
+            countDisplay.innerHTML = `<span id="itemCount">0</span> items available for ${selectedSupplier}. Click "Add New Product" to add items.`;
+        } else {
+            countDisplay.innerHTML = `<span id="itemCount">${itemCount}</span> items available for ${selectedSupplier}`;
+        }
     }
 }
 

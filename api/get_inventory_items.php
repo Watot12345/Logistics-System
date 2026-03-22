@@ -9,7 +9,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 try {
-    // REMOVED the comment that was causing the SQL error
+    // Remove the quantity > 0 filter to show ALL items
     $stmt = $pdo->query("
         SELECT 
             i.id, 
@@ -18,19 +18,33 @@ try {
             i.price, 
             i.quantity,
             i.supplier_id,
+            i.reorder_level,
             c.category_name, 
-            s.supplier_name
+            s.supplier_name,
+            CASE 
+                WHEN i.quantity <= 0 THEN 'out_of_stock'
+                WHEN i.quantity <= i.reorder_level THEN 'low_stock'
+                ELSE 'in_stock'
+            END as stock_status
         FROM inventory_items i
         LEFT JOIN categories c ON i.category_id = c.id
         LEFT JOIN suppliers s ON i.supplier_id = s.id
-        WHERE i.quantity > 0 AND i.deleted_at IS NULL
-        ORDER BY i.item_name
+        WHERE i.deleted_at IS NULL
+        ORDER BY 
+            CASE 
+                WHEN i.quantity <= 0 THEN 0  -- Show out of stock first (need to reorder)
+                WHEN i.quantity <= i.reorder_level THEN 1  -- Then low stock
+                ELSE 2  -- Then in stock
+            END,
+            i.item_name
     ");
     
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Debug: Check if supplier_id is present
     error_log("Items loaded: " . count($items));
+    error_log("Out of stock items: " . count(array_filter($items, function($item) {
+        return $item['quantity'] <= 0;
+    })));
     
     header('Content-Type: application/json');
     echo json_encode($items);
