@@ -18,6 +18,20 @@ require 'config/db.php';
 $page_title = 'Dashboard | Logistics System';
 $page_css = 'assets/css/style.css';
 include 'includes/header.php';
+if (isset($_GET['download_document']) && isset($_GET['id'])) {
+    $stmt = $pdo->prepare("SELECT file_name, file_content FROM documents WHERE id = ?");
+    $stmt->execute([$_GET['id']]);
+    $doc = $stmt->fetch();
+    
+    if ($doc && !empty($doc['file_content'])) {
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $doc['file_name'] . '"');
+        header('Content-Length: ' . strlen($doc['file_content']));
+        echo $doc['file_content'];
+        exit;
+    }
+    die("File not found.");
+}
 $shipments = getActiveShipments($pdo, 10);
 
 function getShipmentProgress($shipment) {
@@ -61,10 +75,12 @@ function getActiveShipments($pdo, $limit = 10) {
 }
 
 
-// Handle document upload
+// ============================================
+// HANDLE DOCUMENT UPLOAD & DELETE
+// ============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
-    // Upload Document
+    // Upload Document - CHANGED: Now stores in database, not filesystem
     if ($_POST['action'] === 'upload_document' && isset($_FILES['document_file'])) {
         $title = $_POST['document_title'];
         $document_type = $_POST['document_type'];
@@ -73,22 +89,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $description = $_POST['description'] ?? '';
         $uploaded_by = $_SESSION['user_id'];
         
-        // File upload handling
-        $target_dir = "uploads/documents/";
-        
-        // Create directory if it doesn't exist
-        if (!file_exists($target_dir)) {
-            mkdir($target_dir, 0777, true);
-        }
-        
         $file_name = basename($_FILES["document_file"]["name"]);
         $file_size = $_FILES["document_file"]["size"];
         $file_tmp = $_FILES["document_file"]["tmp_name"];
-        
-        // Generate unique filename to prevent overwrites
-        $file_extension = pathinfo($file_name, PATHINFO_EXTENSION);
-        $new_file_name = time() . '_' . uniqid() . '.' . $file_extension;
-        $target_file = $target_dir . $new_file_name;
+        $file_extension = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
         
         // Check file size (10MB max)
         if ($file_size > 10000000) {
@@ -97,15 +101,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } else {
             // Allow certain file formats
             $allowed_types = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'];
-            if (in_array(strtolower($file_extension), $allowed_types)) {
-                if (move_uploaded_file($file_tmp, $target_file)) {
-                    // Save to database
+            if (in_array($file_extension, $allowed_types)) {
+                
+                // CHANGE 1: Read file content instead of moving it
+                $file_content = file_get_contents($file_tmp);
+                
+                if ($file_content !== false) {
+                    // CHANGE 2: Store in database with file_content, no file_path
                     $stmt = $pdo->prepare("
-                        INSERT INTO documents (title, document_type, file_name, file_path, file_size, description, asset_id, uploaded_by, expiry_date) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO documents (
+                            title, document_type, file_name, file_content, file_size, 
+                            description, asset_id, uploaded_by, expiry_date
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ");
                     
-                    if ($stmt->execute([$title, $document_type, $file_name, $target_file, $file_size, $description, $asset_id, $uploaded_by, $expiry_date])) {
+                    if ($stmt->execute([
+                        $title, $document_type, $file_name, $file_content, $file_size,
+                        $description, $asset_id, $uploaded_by, $expiry_date
+                    ])) {
                         $message = "Document uploaded successfully!";
                         $message_type = "success";
                         
@@ -120,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $message_type = "error";
                     }
                 } else {
-                    $message = "Error uploading file. Please check directory permissions.";
+                    $message = "Error reading file content.";
                     $message_type = "error";
                 }
             } else {
@@ -130,37 +143,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
     
-    // Delete Document
+    // Delete Document - CHANGED: No physical file to delete
     if ($_POST['action'] === 'delete_document' && isset($_POST['document_id'])) {
         $document_id = $_POST['document_id'];
         
-        // Get file path first
-        $stmt = $pdo->prepare("SELECT file_path FROM documents WHERE id = ?");
-        $stmt->execute([$document_id]);
-        $doc = $stmt->fetch();
-        
-        if ($doc) {
-            // Delete physical file
-            if (file_exists($doc['file_path'])) {
-                unlink($doc['file_path']);
-            }
-            
-            // Delete from database
-            $stmt = $pdo->prepare("DELETE FROM documents WHERE id = ?");
-            if ($stmt->execute([$document_id])) {
-                $message = "Document deleted successfully!";
-                $message_type = "success";
-            } else {
-                $message = "Error deleting document.";
-                $message_type = "error";
-            }
+        // CHANGE 3: Just delete from database (file is stored in database)
+        $stmt = $pdo->prepare("DELETE FROM documents WHERE id = ?");
+        if ($stmt->execute([$document_id])) {
+            $message = "Document deleted successfully!";
+            $message_type = "success";
+        } else {
+            $message = "Error deleting document.";
+            $message_type = "error";
         }
     }
 }
 
-// Fetch documents for display
+// Fetch documents for display - CHANGED: Don't select file_content (too large for list)
 $stmt = $pdo->query("
-    SELECT d.*, a.asset_name,
+    SELECT d.id, d.title, d.document_type, d.file_name, d.file_size, 
+           d.description, d.asset_id, d.uploaded_by, d.expiry_date, d.uploaded_at,
+           a.asset_name,
            u.full_name as uploaded_by_name
     FROM documents d
     LEFT JOIN assets a ON d.asset_id = a.id
@@ -1292,7 +1295,7 @@ $completed_maintenance = $pdo->query("
                 
                 <div style="display: flex; gap: 8px;">
                     <!-- Download button for everyone -->
-                    <a href="download.php?file=<?php echo $doc['id']; ?>" class="btn btn-primary" style="flex: 1; padding: 8px; text-align: center; text-decoration: none;">
+                    <a href="?download_document=1&id=<?php echo $doc['id']; ?>" class="btn btn-primary" style="flex: 1; padding: 8px; text-align: center; text-decoration: none;">
                         <i class="fas fa-download"></i> Download
                     </a>
                     
