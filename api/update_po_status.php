@@ -33,7 +33,6 @@ $po_id = $data['po_id'] ?? null;
 $status = $data['status'] ?? null;
 
 if (!$po_id || !$status) {
-    // Clear buffer and send error
     ob_clean();
     echo json_encode([
         'success' => false, 
@@ -43,7 +42,7 @@ if (!$po_id || !$status) {
     exit();
 }
 
-// Validate status - matches your ENUM in purchase_orders table
+// Validate status
 $valid_statuses = ['draft', 'pending', 'approved', 'rejected', 'completed', 'cancelled'];
 
 if (!in_array($status, $valid_statuses)) {
@@ -59,7 +58,7 @@ try {
     // Begin transaction
     $pdo->beginTransaction();
     
-    // First, get the current PO details for logging and validation
+    // First, get the current PO details
     $stmt = $pdo->prepare("
         SELECT po_number, status, created_by 
         FROM purchase_orders 
@@ -75,7 +74,7 @@ try {
         exit();
     }
     
-    // Don't allow status change if already in a final state
+    // Don't allow status change if already completed or cancelled
     if (in_array($current_po['status'], ['completed', 'cancelled'])) {
         $pdo->rollBack();
         ob_clean();
@@ -86,27 +85,42 @@ try {
         exit();
     }
     
-    // Update the PO status
-    $stmt = $pdo->prepare("
-        UPDATE purchase_orders 
-        SET status = ?,
-            updated_at = NOW(),
-            approved_by = CASE WHEN ? = 'approved' THEN ? ELSE approved_by END,
-            approved_at = CASE WHEN ? = 'approved' THEN NOW() ELSE approved_at END,
-            completed_at = CASE WHEN ? = 'completed' THEN NOW() ELSE completed_at END
-        WHERE id = ?
-    ");
+    // Check if completed_at column exists
+    $column_check = $pdo->query("SHOW COLUMNS FROM purchase_orders LIKE 'completed_at'");
+    $has_completed_at = $column_check->rowCount() > 0;
     
-    $stmt->execute([
-        $status, 
-        $status, 
-        $_SESSION['user_id'],
-        $status,
-        $status,
-        $po_id
-    ]);
+    // Build the UPDATE query based on available columns
+    if ($has_completed_at) {
+        $sql = "
+            UPDATE purchase_orders 
+            SET status = ?,
+                updated_at = NOW(),
+                approved_by = CASE WHEN ? = 'approved' THEN ? ELSE approved_by END,
+                approved_at = CASE WHEN ? = 'approved' THEN NOW() ELSE approved_at END,
+                completed_at = CASE WHEN ? = 'completed' THEN NOW() ELSE completed_at END
+            WHERE id = ?
+        ";
+        $params = [
+            $status, $status, $_SESSION['user_id'], $status, $status, $po_id
+        ];
+    } else {
+        $sql = "
+            UPDATE purchase_orders 
+            SET status = ?,
+                updated_at = NOW(),
+                approved_by = CASE WHEN ? = 'approved' THEN ? ELSE approved_by END,
+                approved_at = CASE WHEN ? = 'approved' THEN NOW() ELSE approved_at END
+            WHERE id = ?
+        ";
+        $params = [
+            $status, $status, $_SESSION['user_id'], $status, $po_id
+        ];
+    }
     
-    // *** NEW CODE: If status is changing to 'completed', update inventory ***
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    
+    // Update inventory when status is 'completed'
     $inventory_updated = false;
     $updated_items = [];
     
@@ -121,12 +135,8 @@ try {
         $items_stmt->execute([$po_id]);
         $items = $items_stmt->fetchAll();
         
-        if (empty($items)) {
-            error_log('No items found for PO ID: ' . $po_id);
-        }
-        
         foreach ($items as $item) {
-            // Update inventory quantity (add the ordered quantity to current stock)
+            // Update inventory quantity
             $update_inv = $pdo->prepare("
                 UPDATE inventory_items 
                 SET quantity = quantity + :quantity,
@@ -146,8 +156,7 @@ try {
                 'new_stock' => $item['current_stock'] + $item['quantity']
             ];
             
-            // Optional: Log stock movement if you have a stock_movements table
-            // Check if table exists first
+            // Optional: Log stock movement
             $table_check = $pdo->query("SHOW TABLES LIKE 'stock_movements'");
             if ($table_check->rowCount() > 0) {
                 $log_stmt = $pdo->prepare("
@@ -171,8 +180,6 @@ try {
             
             $inventory_updated = true;
         }
-        
-        error_log('Inventory updated for PO ' . $po_id . ': ' . count($updated_items) . ' items');
     }
     
     // Log the status change in notes
@@ -190,7 +197,7 @@ try {
     ");
     $stmt->execute([$notes_update, $po_id]);
     
-    // Insert into status history (check if table exists)
+    // Insert into status history if table exists
     $history_table_check = $pdo->query("SHOW TABLES LIKE 'po_status_history'");
     if ($history_table_check->rowCount() > 0) {
         $stmt = $pdo->prepare("
@@ -209,7 +216,6 @@ try {
         $message .= ". Inventory updated for " . count($updated_items) . " item(s)";
     }
     
-    // Clear any output buffer and send success response
     ob_clean();
     echo json_encode([
         'success' => true,
@@ -223,10 +229,8 @@ try {
     
 } catch (PDOException $e) {
     $pdo->rollBack();
-    
     error_log('Error updating PO status: ' . $e->getMessage());
     
-    // Clear buffer and send error
     ob_clean();
     echo json_encode([
         'success' => false, 
@@ -235,7 +239,6 @@ try {
     exit();
 } catch (Exception $e) {
     $pdo->rollBack();
-    
     error_log('General error updating PO status: ' . $e->getMessage());
     
     ob_clean();
