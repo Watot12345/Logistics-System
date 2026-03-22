@@ -182,7 +182,7 @@ $brevo_api_key = getenv('BREVO_API_KEY') ?: $_ENV['BREVO_API_KEY'];
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'api-key: ' . $api_key,
+        'api-key: ' . $brevo_api_key,
         'Content-Type: application/json'
     ]);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
