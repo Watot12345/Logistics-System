@@ -1183,7 +1183,7 @@ $completed_maintenance = $pdo->query("
     </div>
 
     <!-- Upload Document Form (Admin only) -->
-    <?php if ($user_role === 'admin'): ?>
+    <?php if ($user_role === 'admin' || $user_role === 'employee'): ?>
     <div id="documentFormContainer" class="form-container" style="display: none; padding: 20px; background: #f9f9f9; border-bottom: 1px solid #ddd;">
         <h3>Upload New Document</h3>
         <form method="POST" action="" enctype="multipart/form-data" class="document-form">
