@@ -1,7 +1,7 @@
 <?php
 // ===== DEBUG CONFIGURATION =====
 // Set to true to bypass 2FA for testing, false for production with 2FA
-define('DEBUG_MODE', false); // Change to false for production
+define('DEBUG_MODE', true); // Change to false for production
 require_once 'session_config.php'; 
 // ===== SECURITY CONFIGURATION =====
 define('SESSION_TIMEOUT', 1800); // 30 minutes (in seconds) - change as needed
