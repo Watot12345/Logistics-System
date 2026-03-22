@@ -2,8 +2,9 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 // includes/auth_functions.php - All authentication functions
+require_once __DIR__ . '/../config/load_config.php';
 require_once __DIR__ . '/../config/db.php';
-require_once __DIR__ . '/config/load_config.php';
+
 // Site configuration
 // Auto-detect local vs production
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
