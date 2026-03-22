@@ -1452,28 +1452,7 @@ window.editPO = function(poId) {
     alert('Edit functionality coming soon!');
 };
 
-window.updatePOStatus = async function(poId, newStatus) {
-    if (!confirm(`Are you sure you want to mark this PO as ${newStatus}?`)) return;
-    
-    try {
-        const response = await fetch('../api/update_po_status.php', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({po_id: poId, status: newStatus})
-        });
-        
-        const result = await response.json();
-        if (result.success) {
-            alert(`PO ${newStatus} successfully!`);
-            window.location.reload();
-        } else {
-            alert('Error: ' + (result.error || 'Unknown error'));
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error updating PO status');
-    }
-};
+
 // ===== SAVE PO FUNCTION (COMBINED VERSION) =====
 window.savePO = async function() {
     console.log('Saving PO...');
