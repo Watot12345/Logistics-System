@@ -223,7 +223,7 @@ include '../includes/header.php';
                             
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                                 <div class="form-group">
-                                    <label class="form-label">Positions</label>
+                                    <label class="form-label">Quantity</label>
                                     <input type="number" id="reqPositions" class="form-input" value="1" min="1" required>
                                 </div>
                                 <div class="form-group">
