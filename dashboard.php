@@ -16,11 +16,18 @@ if (in_array($_SESSION['role'], ['driver', 'mechanic'])) {
 
 require 'config/db.php';
 if (isset($_GET['download_document']) && isset($_GET['id'])) {
-    $stmt = $pdo->prepare("SELECT file_name, file_content FROM documents WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, file_name, file_content FROM documents WHERE id = ?");
     $stmt->execute([$_GET['id']]);
     $doc = $stmt->fetch();
     
     if ($doc && !empty($doc['file_content'])) {
+        // ADD THIS - Log the download activity
+        $log_stmt = $pdo->prepare("
+            INSERT INTO user_activity_logs (user_id, document_id, action_type, timestamp) 
+            VALUES (?, ?, 'download', NOW())
+        ");
+        $log_stmt->execute([$_SESSION['user_id'], $doc['id']]);
+        
         header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="' . $doc['file_name'] . '"');
         header('Content-Length: ' . strlen($doc['file_content']));
