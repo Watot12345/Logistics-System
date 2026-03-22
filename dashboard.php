@@ -15,9 +15,6 @@ if (in_array($_SESSION['role'], ['driver', 'mechanic'])) {
 
 
 require 'config/db.php';
-$page_title = 'Dashboard | Logistics System';
-$page_css = 'assets/css/style.css';
-include 'includes/header.php';
 if (isset($_GET['download_document']) && isset($_GET['id'])) {
     $stmt = $pdo->prepare("SELECT file_name, file_content FROM documents WHERE id = ?");
     $stmt->execute([$_GET['id']]);
@@ -32,6 +29,10 @@ if (isset($_GET['download_document']) && isset($_GET['id'])) {
     }
     die("File not found.");
 }
+$page_title = 'Dashboard | Logistics System';
+$page_css = 'assets/css/style.css';
+include 'includes/header.php';
+
 $shipments = getActiveShipments($pdo, 10);
 
 function getShipmentProgress($shipment) {
