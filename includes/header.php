@@ -59,64 +59,74 @@ $debug_check = in_array($debug_role, ['admin', 'dispatcher', 'employee', 'fleet_
         <p class="nav-section-title">Main Menu</p>
         <ul class="nav-list">
             
-            <!-- Dashboard - visible to admin, dispatcher, employee, fleet_manager -->
-<?php 
-$show_dashboard = in_array($_SESSION['role'], ['admin', 'dispatcher', 'employee', 'fleet_manager']);
-echo "<!-- DEBUG: Show Dashboard = " . ($show_dashboard ? 'YES' : 'NO') . " -->";
-
+ <?php 
+$show_dashboard = in_array($_SESSION['role'], ['admin', 'dispatcher', 'employee', 'fleet_manager']); 
 if ($show_dashboard): 
 ?>
+<!-- FIRST: Main Dashboard -->
 <li class="nav-item">
-    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? '../dashboard.php' : 'dashboard.php'; ?>" 
-       class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'dashboard.php') ? 'active' : ''; ?>">
-        <i class="fas fa-th-large"></i>
+    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? '../Main.php' : 'Main.php'; ?>" 
+       class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'Main.php') ? 'active' : ''; ?>">
+        <i class="fas fa-tachometer-alt"></i>
         <span>Dashboard</span>
     </a>
 </li>
 <?php endif; ?>
-            
-            <!-- Smart warehousing - visible to admin, dispatcher, employee, fleet_manager -->
-            <?php if (in_array($_SESSION['role'], ['admin', 'dispatcher', 'employee', 'fleet_manager'])): ?>
-            <li class="nav-item">
-                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'inventory.php' : 'modules/inventory.php'; ?>" 
-                   class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'inventory.php') ? 'active' : ''; ?>">
-                    <i class="fas fa-boxes"></i>
-                    <span>Smart warehousing</span>
-                </a>
-            </li>
-            <?php endif; ?>
-            
-            <!-- Purchase Orders - visible to admin, employee -->
-            <?php if (in_array($_SESSION['role'], ['admin', 'employee','dispatcher', 'fleet_manager'])): ?>
-            <li class="nav-item">
-                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'orders.php' : 'modules/orders.php'; ?>" 
-                   class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'orders.php') ? 'active' : ''; ?>">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span>Purchase Orders</span>
-                </a>
-            </li>
-            <?php endif; ?>
-            
-            <!-- Fleet Management - visible to admin, fleet_manager, driver, dispatcher -->
-            <?php if (in_array($_SESSION['role'], ['admin', 'fleet_manager', 'driver', 'dispatcher', 'employee'])): ?>
-            <li class="nav-item">
-                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'fleet.php' : 'modules/fleet.php'; ?>" 
-                   class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'fleet.php') ? 'active' : ''; ?>">
-                    <i class="fas fa-truck"></i>
-                    <span>Fleet Operations</span>
-                </a>
-            </li>
-            <?php endif; ?>
 
-            <?php if (in_array($_SESSION['role'], ['admin'])): ?>
-            <li class="nav-item">
-                <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'employee.php' : 'modules/employee.php'; ?>" 
-                   class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'employee.php') ? 'active' : ''; ?>">
-                    <i class="fas fa-users"></i>
-                    <span>Employee Management</span>
-                </a>
-            </li>
-            <?php endif; ?>
+<!-- SECOND: Asset Lifecycle -->
+<?php if ($show_dashboard): ?>
+<li class="nav-item">
+    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? '../dashboard.php' : 'dashboard.php'; ?>" 
+       class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'dashboard.php') ? 'active' : ''; ?>">
+        <i class="fas fa-th-large"></i>
+        <span>Asset Lifecycle</span>
+    </a>
+</li>
+<?php endif; ?>
+
+<!-- Smart warehousing -->
+<?php if (in_array($_SESSION['role'], ['admin', 'dispatcher', 'employee', 'fleet_manager'])): ?>
+<li class="nav-item">
+    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'inventory.php' : 'modules/inventory.php'; ?>" 
+       class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'inventory.php') ? 'active' : ''; ?>">
+        <i class="fas fa-boxes"></i>
+        <span>Smart warehousing</span>
+    </a>
+</li>
+<?php endif; ?>
+
+<!-- Purchase Orders -->
+<?php if (in_array($_SESSION['role'], ['admin', 'employee','dispatcher', 'fleet_manager'])): ?>
+<li class="nav-item">
+    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'orders.php' : 'modules/orders.php'; ?>" 
+       class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'orders.php') ? 'active' : ''; ?>">
+        <i class="fas fa-shopping-cart"></i>
+        <span>Purchase Orders</span>
+    </a>
+</li>
+<?php endif; ?>
+
+<!-- Fleet Management -->
+<?php if (in_array($_SESSION['role'], ['admin', 'fleet_manager', 'driver', 'dispatcher', 'employee'])): ?>
+<li class="nav-item">
+    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'fleet.php' : 'modules/fleet.php'; ?>" 
+       class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'fleet.php') ? 'active' : ''; ?>">
+        <i class="fas fa-truck"></i>
+        <span>Fleet Operations</span>
+    </a>
+</li>
+<?php endif; ?>
+
+<!-- Employee Management -->
+<?php if (in_array($_SESSION['role'], ['admin'])): ?>
+<li class="nav-item">
+    <a href="<?php echo (strpos($_SERVER['PHP_SELF'], 'modules') !== false) ? 'employee.php' : 'modules/employee.php'; ?>" 
+       class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'employee.php') ? 'active' : ''; ?>">
+        <i class="fas fa-users"></i>
+        <span>Employee Management</span>
+    </a>
+</li>
+<?php endif; ?>
         </ul>
     </div>
 </nav>

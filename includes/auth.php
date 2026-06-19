@@ -1,7 +1,7 @@
 <?php
 // ===== DEBUG CONFIGURATION =====
 // Set to true to bypass 2FA for testing, false for production with 2FA
-define('DEBUG_MODE', false); // Change to false for production
+define('DEBUG_MODE', true); // Change to false for production
 require_once 'session_config.php'; 
 // ===== SECURITY CONFIGURATION =====
 define('SESSION_TIMEOUT', 1800); // 30 minutes (in seconds) - change as needed
@@ -377,7 +377,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 error_log("✅ User {$user['username']} logged in successfully");
                 
                 // Redirect immediately
-                header('Location: dashboard.php');
+                header('Location: Main.php');
                 exit();
             }
         } else {
@@ -437,7 +437,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $_SESSION['last_activity'] = time();
         
         // Redirect to dashboard
-        header('Location: dashboard.php');
+        header('Location: Main.php');
         exit();
     }
     
@@ -456,7 +456,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $_SESSION['last_activity'] = time();
         
         // Redirect to dashboard
-        header('Location: dashboard.php');
+        header('Location: Main.php');
         exit();
     } else {
         // PRODUCTION MODE: Normal 2FA flow
