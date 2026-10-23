@@ -3,154 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Logistics System')</title>
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Tailwind Play CDN for immediate styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                    colors: {
-                        brand: {
-                            50: '#f0f9ff',
-                            100: '#e0f2fe',
-                            500: '#0ea5e9',
-                            600: '#0284c7',
-                            700: '#0369a1',
-                            800: '#075985',
-                            900: '#0c4a6e',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+    <link rel="stylesheet" href="{{ asset('assets/css/style.css') }}">
+    @stack('styles')
+    <title>@yield('title', 'Logistics System')</title>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
-
-    <div class="flex flex-1 min-h-screen">
+<body>
+    <div class="app-container">
         <!-- Sidebar -->
-        <aside class="w-64 bg-slate-900 text-slate-200 flex flex-col flex-shrink-0">
-            <!-- Brand -->
-            <div class="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
-                <div class="w-9 h-9 rounded-lg bg-sky-500 flex items-center justify-center text-white text-lg font-bold shadow-md shadow-sky-500/30">
-                    <i class="fas fa-cubes"></i>
-                </div>
-                <div>
-                    <h1 class="font-bold text-white leading-none text-base">Logistics</h1>
-                    <span class="text-xs text-sky-400 font-medium">System v2</span>
+        <aside class="sidebar" id="sidebar">
+            <div class="logo-area">
+                <div class="logo-container">
+                    <div class="logo-icon">
+                        <i class="fas fa-cubes"></i>
+                    </div>
+                    <div class="logo-text">
+                        <h1>Logistics</h1>
+                        <p>hotel & restaurant</p>
+                    </div>
                 </div>
             </div>
+            
+            <nav class="nav-menu">
+                <div class="nav-section">
+                    <p class="nav-section-title">Main Menu</p>
+                    <ul class="nav-list">
+                        @php
+                            $userRole = auth()->user()->role ?? 'guest';
+                            $showDashboard = in_array($userRole, ['admin', 'dispatcher', 'employee', 'fleet_manager']);
+                        @endphp
 
-            <!-- Navigation Links -->
-            <nav class="flex-1 px-3 py-4 space-y-1">
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('dashboard') ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                    <i class="fas fa-chart-pie w-5 text-center"></i>
-                    <span>Dashboard</span>
-                </a>
+                        @if($showDashboard)
+                        <!-- FIRST: Main Dashboard -->
+                        <li class="nav-item">
+                            <a href="{{ route('dashboard') }}" 
+                               class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}">
+                                <i class="fas fa-tachometer-alt"></i>
+                                <span>Dashboard</span>
+                            </a>
+                        </li>
 
-                <a href="{{ route('fleet.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('fleet.*') ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                    <i class="fas fa-truck w-5 text-center"></i>
-                    <span>Fleet Management</span>
-                </a>
+                        <!-- SECOND: Asset Lifecycle -->
+                        <li class="nav-item">
+                            <a href="{{ route('lifecycle') }}" 
+                               class="nav-link {{ request()->routeIs('lifecycle') ? 'active' : '' }}">
+                                <i class="fas fa-th-large"></i>
+                                <span>Asset Lifecycle</span>
+                            </a>
+                        </li>
+                        @endif
 
-                <a href="{{ route('shipments.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('shipments.*') ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                    <i class="fas fa-boxes-packing w-5 text-center"></i>
-                    <span>Shipments & Orders</span>
-                </a>
+                        <!-- Smart warehousing -->
+                        @if(in_array($userRole, ['admin', 'dispatcher', 'employee', 'fleet_manager']))
+                        <li class="nav-item">
+                            <a href="{{ route('inventory.index') }}" 
+                               class="nav-link {{ request()->routeIs('inventory.*') ? 'active' : '' }}">
+                                <i class="fas fa-boxes"></i>
+                                <span>Smart warehousing</span>
+                            </a>
+                        </li>
+                        @endif
 
-                <a href="{{ route('inventory.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('inventory.*') ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                    <i class="fas fa-warehouse w-5 text-center"></i>
-                    <span>Warehouse Inventory</span>
-                </a>
+                        <!-- Purchase Orders -->
+                        @if(in_array($userRole, ['admin', 'employee', 'dispatcher', 'fleet_manager']))
+                        <li class="nav-item">
+                            <a href="{{ route('shipments.index') }}" 
+                               class="nav-link {{ request()->routeIs('shipments.*') ? 'active' : '' }}">
+                                <i class="fas fa-shopping-cart"></i>
+                                <span>Purchase Orders</span>
+                            </a>
+                        </li>
+                        @endif
 
-                <a href="{{ route('employees.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('employees.*') ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                    <i class="fas fa-users-gear w-5 text-center"></i>
-                    <span>Staff & Drivers</span>
-                </a>
+                        <!-- Fleet Management -->
+                        @if(in_array($userRole, ['admin', 'fleet_manager', 'driver', 'dispatcher', 'employee']))
+                        <li class="nav-item">
+                            <a href="{{ route('fleet.index') }}" 
+                               class="nav-link {{ request()->routeIs('fleet.*') ? 'active' : '' }}">
+                                <i class="fas fa-truck"></i>
+                                <span>Fleet Operations</span>
+                            </a>
+                        </li>
+                        @endif
+
+                        <!-- Employee Management -->
+                        @if(in_array($userRole, ['admin']))
+                        <li class="nav-item">
+                            <a href="{{ route('employees.index') }}" 
+                               class="nav-link {{ request()->routeIs('employees.*') ? 'active' : '' }}">
+                                <i class="fas fa-users"></i>
+                                <span>Employee Management</span>
+                            </a>
+                        </li>
+                        @endif
+                    </ul>
+                </div>
             </nav>
-
-            <!-- User Footer -->
-            <div class="p-3 border-t border-slate-800">
-                <div class="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-800/60">
-                    <div class="flex items-center gap-2.5 overflow-hidden">
-                        <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-semibold text-slate-200">
-                            {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
-                        </div>
-                        <div class="truncate">
-                            <p class="text-xs font-semibold text-white truncate">{{ auth()->user()->name ?? 'User' }}</p>
-                            <span class="text-[10px] uppercase font-bold text-sky-400">{{ auth()->user()->role ?? 'user' }}</span>
-                        </div>
+            
+            <div class="user-profile">
+                <div class="profile-container">
+                    <div class="avatar">
+                        {{ strtoupper(substr(auth()->user()->name ?? 'GU', 0, 2)) }}
                     </div>
-                    <form method="POST" action="{{ route('logout') }}">
+
+                    <div class="user-info">
+                        <p class="user-name">
+                            {{ auth()->user()->name ?? 'Guest User' }}
+                        </p>
+                        <p class="user-role">
+                            @php
+                                $role = auth()->user()->role ?? 'Guest';
+                                $displayRole = match($role) {
+                                    'fleet_manager' => 'Fleet Manager',
+                                    'admin' => 'Admin',
+                                    'dispatcher' => 'Dispatcher',
+                                    'driver' => 'Driver',
+                                    'employee' => 'Employee',
+                                    'mechanic' => 'Mechanic',
+                                    default => ucfirst($role)
+                                };
+                            @endphp
+                            {{ $displayRole }}
+                        </p>
+                    </div>
+                    <form method="POST" action="{{ route('logout') }}" style="margin: 0;">
                         @csrf
-                        <button type="submit" title="Logout" class="text-slate-400 hover:text-red-400 p-1.5 transition">
-                            <i class="fas fa-power-off"></i>
+                        <button type="submit" class="logout-btn" title="Logout" style="background: none; border: none; cursor: pointer;">
+                            <i class="fas fa-sign-out-alt"></i>
                         </button>
                     </form>
                 </div>
             </div>
         </aside>
 
-        <!-- Main Content Area -->
-        <div class="flex-1 flex flex-col overflow-y-auto">
-            <!-- Top Navbar -->
-            <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-10">
-                <div>
-                    <h2 class="text-lg font-bold text-slate-800">@yield('page-title', 'Dashboard')</h2>
-                </div>
-                <div class="flex items-center gap-4">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        System Online (Render)
-                    </span>
-                    <span class="text-xs text-slate-500">{{ date('M d, Y') }}</span>
-                </div>
-            </header>
-
-            <!-- Flash Notifications -->
-            <div class="px-6 pt-4">
-                @if(session('success'))
-                    <div class="mb-4 flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg text-sm">
-                        <i class="fas fa-circle-check text-emerald-600"></i>
-                        <span>{{ session('success') }}</span>
-                    </div>
-                @endif
-
-                @if(isset($errors) && $errors->any())
-                    <div class="mb-4 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-                        <div class="flex items-center gap-2 font-semibold mb-1">
-                            <i class="fas fa-triangle-exclamation text-red-600"></i>
-                            <span>Please correct the errors below:</span>
-                        </div>
-                        <ul class="list-disc list-inside text-xs space-y-0.5">
-                            @foreach($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-            </div>
-
-            <!-- Page Content -->
-            <main class="flex-1 px-6 pb-8">
-                @yield('content')
-            </main>
-        </div>
+        @yield('content')
     </div>
 
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar) {
+                sidebar.classList.toggle('active');
+                sidebar.classList.toggle('mobile-show');
+            }
+        }
+    </script>
     @stack('scripts')
 </body>
 </html>

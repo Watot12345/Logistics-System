@@ -1,73 +1,201 @@
 @extends('layouts.app')
 
-@section('title', 'Staff & Drivers - Logistics System')
-@section('page-title', 'Staff & Drivers Directory')
+@section('title', 'Employee Management | Logistics System')
+
+@push('styles')
+<link rel="stylesheet" href="{{ asset('assets/css/employee.css') }}">
+@endpush
 
 @section('content')
-<div class="space-y-6">
+<div class="page-content">
+    <header class="header">
+        <div class="header-container">
+            <div class="header-left">
+                <button class="menu-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <div class="header-right">
+                <div class="divider"></div>
+                <div class="user-info-header">
+                    <span class="user-name-header">{{ auth()->user()->name }}</span>
+                    <div class="avatar-small">
+                        {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 2)) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
 
-    <!-- Filter Control -->
-    <div class="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <form method="GET" action="{{ route('employees.index') }}" class="flex flex-wrap items-center gap-2 flex-1">
-            <input type="text" name="search" value="{{ request('search') }}" placeholder="Search employee name, ID..." class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs w-64 focus:ring-2 focus:ring-sky-500">
-            <select name="role" class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs capitalize">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+                <h1>Employee Management</h1>
+                <p>Manage users, organizational roles, and system permissions</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="alert('User invitation functionality active for system admins.');">
+                    <i class="fas fa-user-plus"></i> Add Employee
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if(session('success'))
+        <div style="background: #d1fae5; color: #065f46; padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 500;">
+            <i class="fas fa-check-circle" style="margin-right: 6px;"></i> {{ session('success') }}
+        </div>
+    @endif
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon blue">
+                    <i class="fas fa-users"></i>
+                </div>
+                <span class="stat-badge green">Total</span>
+            </div>
+            <p class="stat-label">Total Employees</p>
+            <p class="stat-value">{{ $stats['total'] }}</p>
+            <div class="stat-trend">
+                <i class="fas fa-id-card"></i> Registered personnel
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon emerald">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <span class="stat-badge green">Active</span>
+            </div>
+            <p class="stat-label">Active Employees</p>
+            <p class="stat-value">{{ $stats['active'] }}</p>
+            <div class="stat-trend">
+                <i class="fas fa-check"></i> {{ $stats['total'] > 0 ? round(($stats['active'] / $stats['total']) * 100) : 100 }}% of workforce
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon amber">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <span class="stat-badge blue">Drivers</span>
+            </div>
+            <p class="stat-label">Fleet Drivers</p>
+            <p class="stat-value">{{ $stats['drivers'] }}</p>
+            <div class="stat-trend">
+                <i class="fas fa-route"></i> Licensed drivers
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon purple">
+                    <i class="fas fa-headset"></i>
+                </div>
+                <span class="stat-badge amber">Dispatchers</span>
+            </div>
+            <p class="stat-label">Dispatchers</p>
+            <p class="stat-value">{{ $stats['dispatchers'] }}</p>
+            <div class="stat-trend">
+                <i class="fas fa-clock"></i> Active dispatch duty
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card" style="margin-top: 24px; padding: 16px;">
+        <form method="GET" action="{{ route('employees.index') }}" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+            <input type="text" name="search" value="{{ request('search') }}" placeholder="Search by name, email, employee ID..." style="padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; min-width: 260px;">
+            <select name="role" style="padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px;">
                 <option value="">All Roles</option>
                 @foreach($roles as $r)
-                    <option value="{{ $r }}" {{ request('role') === $r ? 'selected' : '' }}>{{ str_replace('_', ' ', $r) }}</option>
+                    <option value="{{ $r }}" {{ request('role') === $r ? 'selected' : '' }}>{{ ucfirst(str_replace('_', ' ', $r)) }}</option>
                 @endforeach
             </select>
-            <button type="submit" class="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-700">Filter</button>
+            <button type="submit" class="btn btn-primary" style="padding: 10px 18px; border-radius: 8px;">
+                <i class="fas fa-search"></i> Filter
+            </button>
             @if(request()->hasAny(['search', 'role']))
-                <a href="{{ route('employees.index') }}" class="text-xs text-slate-500 hover:text-slate-700">Clear</a>
+                <a href="{{ route('employees.index') }}" class="btn btn-outline" style="padding: 10px 18px; border-radius: 8px;">Reset</a>
             @endif
         </form>
     </div>
 
-    <!-- Staff Cards Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        @forelse($employees as $emp)
-            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4 hover:border-slate-300 transition">
-                <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold text-base">
-                        {{ strtoupper(substr($emp->name ?? 'E', 0, 1)) }}
-                    </div>
-                    <div class="overflow-hidden flex-1">
-                        <h4 class="font-bold text-slate-900 text-sm truncate">{{ $emp->name }}</h4>
-                        <span class="text-xs text-slate-400 font-mono block">{{ $emp->employee_id ?? 'ID: #'.$emp->id }}</span>
-                    </div>
-                    <span class="capitalize px-2 py-0.5 rounded-full text-[10px] font-bold {{ $emp->role === 'admin' ? 'bg-purple-50 text-purple-700 border border-purple-200' : ($emp->role === 'fleet_manager' ? 'bg-sky-50 text-sky-700 border border-sky-200' : ($emp->role === 'driver' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-700')) }}">
-                        {{ str_replace('_', ' ', $emp->role) }}
-                    </span>
-                </div>
-
-                <div class="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                    <div class="flex items-center justify-between">
-                        <span class="text-slate-400">Username:</span>
-                        <span class="font-medium text-slate-800">{{ $emp->username ?? '-' }}</span>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-slate-400">Email:</span>
-                        <span class="font-medium text-slate-800 truncate max-w-[160px]">{{ $emp->email }}</span>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-slate-400">Status:</span>
-                        <span class="capitalize font-semibold {{ $emp->status === 'active' ? 'text-emerald-600' : 'text-slate-500' }}">{{ $emp->status }}</span>
-                    </div>
-                </div>
-            </div>
-        @empty
-            <div class="col-span-full py-12 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
-                <i class="fas fa-users text-4xl text-slate-300 mb-2"></i>
-                <p>No staff or drivers found matching filters.</p>
-            </div>
-        @endforelse
-    </div>
-
-    @if($employees->hasPages())
-        <div class="bg-white p-3 rounded-xl border border-slate-200">
-            {{ $employees->links() }}
+    <!-- Employee Table Card -->
+    <div class="card" style="margin-top: 24px;">
+        <div class="card-header">
+            <h2><i class="fas fa-user-tie"></i> Employee Directory</h2>
+            <span class="card-badge">{{ $employees->total() }} Employees</span>
         </div>
-    @endif
+        <div class="card-body">
+            <table class="table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                        <th style="padding: 12px; text-align: left;">Employee</th>
+                        <th style="padding: 12px; text-align: left;">Email Address</th>
+                        <th style="padding: 12px; text-align: left;">Role</th>
+                        <th style="padding: 12px; text-align: left;">Status</th>
+                        <th style="padding: 12px; text-align: left;">Registered Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($employees as $emp)
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 12px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 36px; height: 36px; border-radius: 50%; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">
+                                    {{ strtoupper(substr($emp->name, 0, 2)) }}
+                                </div>
+                                <div>
+                                    <div style="font-weight: 600; color: #1e293b;">{{ $emp->name }}</div>
+                                    <div style="font-size: 11px; color: #64748b;">ID: {{ $emp->employee_id ?? 'EMP-'.str_pad($emp->id, 4, '0', STR_PAD_LEFT) }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="padding: 12px; color: #475569; font-size: 13px;">
+                            {{ $emp->email }}
+                        </td>
+                        <td style="padding: 12px;">
+                            @php
+                                $roleBadge = match($emp->role) {
+                                    'admin' => 'background: #ede9fe; color: #6d28d9;',
+                                    'fleet_manager' => 'background: #e0f2fe; color: #0369a1;',
+                                    'driver' => 'background: #fef3c7; color: #b45309;',
+                                    'mechanic' => 'background: #fee2e2; color: #b91c1c;',
+                                    'dispatcher' => 'background: #ccfbf1; color: #0f766e;',
+                                    default => 'background: #f1f5f9; color: #475569;'
+                                };
+                            @endphp
+                            <span style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; {{ $roleBadge }}">
+                                {{ ucfirst(str_replace('_', ' ', $emp->role)) }}
+                            </span>
+                        </td>
+                        <td style="padding: 12px;">
+                            <span style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; {{ $emp->status === 'active' ? 'background: #d1fae5; color: #047857;' : 'background: #f1f5f9; color: #64748b;' }}">
+                                {{ ucfirst($emp->status ?? 'active') }}
+                            </span>
+                        </td>
+                        <td style="padding: 12px; color: #64748b; font-size: 13px;">
+                            {{ $emp->created_at ? $emp->created_at->format('M d, Y') : 'N/A' }}
+                        </td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td colspan="5" style="padding: 30px; text-align: center; color: #94a3b8;">No employees matching criteria.</td>
+                    </tr>
+                    @endforelse
+                </tbody>
+            </table>
 
+            <div style="margin-top: 20px;">
+                {{ $employees->links() }}
+            </div>
+        </div>
+    </div>
 </div>
 @endsection

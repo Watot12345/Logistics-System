@@ -70,4 +70,65 @@ class DashboardController extends Controller
             'availableDrivers'
         ));
     }
+
+    public function lifecycle(Request $request)
+    {
+        $user = Auth::user();
+        $userRole = $user->role ?? 'employee';
+
+        $assets = Asset::orderBy('created_at', 'desc')->get();
+        $alerts = MaintenanceAlert::whereIn('status', ['pending', 'in_progress'])
+            ->orderBy('due_date', 'asc')
+            ->get();
+
+        $lifecycleCounts = [
+            'Operational (70-100%)' => 0,
+            'Maintenance Needed (40-69%)' => 0,
+            'Critical (10-39%)' => 0,
+            'End-of-Life (0-9%)' => 0,
+            'Retired' => 0
+        ];
+
+        foreach ($assets as $asset) {
+            $condition = intval($asset->asset_condition ?? 0);
+            if ($condition >= 70) {
+                $lifecycleCounts['Operational (70-100%)']++;
+            } elseif ($condition >= 40) {
+                $lifecycleCounts['Maintenance Needed (40-69%)']++;
+            } elseif ($condition >= 10) {
+                $lifecycleCounts['Critical (10-39%)']++;
+            } elseif ($condition > 0) {
+                $lifecycleCounts['End-of-Life (0-9%)']++;
+            } else {
+                $lifecycleCounts['Retired']++;
+            }
+        }
+
+        $lifecycleData = [];
+        $totalItems = $assets->count();
+        foreach ($lifecycleCounts as $stage => $count) {
+            $percentage = ($totalItems > 0) ? round(($count / $totalItems) * 100) : 0;
+            $lifecycleData[] = [
+                'stage' => $stage,
+                'count' => $count,
+                'percentage' => $percentage
+            ];
+        }
+
+        $activeShipments = DispatchSchedule::with(['driver', 'vehicle', 'reservation'])
+            ->whereIn('status', ['scheduled', 'in-progress', 'delivered', 'pending'])
+            ->orderBy('scheduled_date', 'asc')
+            ->take(10)
+            ->get();
+
+        return view('dashboard.lifecycle', compact(
+            'user',
+            'userRole',
+            'assets',
+            'alerts',
+            'lifecycleData',
+            'activeShipments'
+        ));
+    }
 }
+

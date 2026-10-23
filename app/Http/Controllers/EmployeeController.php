@@ -28,7 +28,14 @@ class EmployeeController extends Controller
         $employees = $query->paginate(15);
         $roles = ['admin', 'fleet_manager', 'dispatcher', 'driver', 'mechanic', 'employee'];
 
-        return view('employees.index', compact('employees', 'roles'));
+        $stats = [
+            'total' => User::count(),
+            'active' => User::where('status', 'active')->count(),
+            'drivers' => User::where('role', 'driver')->count(),
+            'dispatchers' => User::where('role', 'dispatcher')->count(),
+        ];
+
+        return view('employees.index', compact('employees', 'roles', 'stats'));
     }
 
     public function profile()

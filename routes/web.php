@@ -23,6 +23,7 @@ Route::get('/logout', [AuthController::class, 'logout']); // Fallback GET logout
 Route::middleware('auth')->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/lifecycle', [DashboardController::class, 'lifecycle'])->name('lifecycle');
 
     // Fleet Management
     Route::get('/fleet', [FleetController::class, 'index'])->name('fleet.index');

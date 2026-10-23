@@ -3,123 +3,217 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Logistics System</title>
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome -->
+    <title>Logistics System | Login & Signup</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Tailwind Play CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>body { font-family: 'Inter', sans-serif; }</style>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+    <link rel="stylesheet" href="{{ asset('assets/css/output.css') }}">
+    <style>
+        .form-transition {
+            transition: all 0.3s ease;
+        }
+    </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4">
-
-    <div class="max-w-md w-full">
-        <!-- Logo Header -->
-        <div class="text-center mb-8">
-            <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-sky-500 shadow-lg shadow-sky-500/30 text-white text-2xl font-bold mb-3">
-                <i class="fas fa-cubes"></i>
+<body class="bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center min-h-screen p-4">
+    
+    <div class="bg-white shadow-2xl rounded-2xl overflow-hidden w-full max-w-4xl flex flex-col md:flex-row">
+        <!-- Left side - Branding/Info -->
+        <div class="md:w-1/2 bg-gradient-to-br from-blue-600 to-purple-700 p-8 text-white flex flex-col justify-between">
+            <div>
+                <h2 class="text-3xl font-bold mb-4">Logistics System</h2>
+                <p class="text-blue-100 mb-6">Hotel & Restaurant Logistics Management</p>
+                
+                <div class="space-y-4 mb-8">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle w-6 h-6 mr-3"></i>
+                        <span>Real-time shipment tracking</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle w-6 h-6 mr-3"></i>
+                        <span>Inventory & smart warehousing</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle w-6 h-6 mr-3"></i>
+                        <span>Fleet & vehicle management</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle w-6 h-6 mr-3"></i>
+                        <span>Driver assignment & dispatch</span>
+                    </div>
+                    <div class="flex items-center text-yellow-300">
+                        <i class="fas fa-shield-alt w-6 h-6 mr-3"></i>
+                        <span>Role-based access enabled</span>
+                    </div>
+                </div>
             </div>
-            <h1 class="text-2xl font-bold tracking-tight text-white">Logistics System</h1>
-            <p class="text-sm text-slate-400 mt-1">Sign in with your organizational account</p>
+            
+            <div class="text-sm text-blue-200">
+                <p>© {{ date('Y') }} Logistics System. All rights reserved.</p>
+            </div>
         </div>
-
-        <!-- Login Card -->
-        <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-6 sm:p-8 shadow-xl backdrop-blur-sm">
-            @if(session('success'))
-                <div class="mb-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2.5 rounded-lg text-sm flex items-center gap-2">
-                    <i class="fas fa-circle-check"></i>
-                    <span>{{ session('success') }}</span>
+        
+        <!-- Right side - Forms -->
+        <div class="md:w-1/2 p-8 flex flex-col justify-between">
+            <div>
+                <!-- Tabs -->
+                <div class="flex mb-6 bg-gray-100 rounded-lg p-1">
+                    <button type="button" onclick="switchForm('login')" 
+                        class="flex-1 py-2 text-center rounded-md transition-all duration-300 bg-white shadow-md text-blue-600 font-medium"
+                        id="loginTab">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Login
+                    </button>
+                    <button type="button" onclick="switchForm('demo')" 
+                        class="flex-1 py-2 text-center rounded-md transition-all duration-300 text-gray-600 hover:text-blue-600 font-medium"
+                        id="demoTab">
+                        <i class="fas fa-key mr-2"></i>Demo Accounts
+                    </button>
                 </div>
-            @endif
-
-            @if(isset($errors) && $errors->any())
-                <div class="mb-4 bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2.5 rounded-lg text-sm flex items-center gap-2">
-                    <i class="fas fa-circle-exclamation"></i>
-                    <span>{{ $errors->first() }}</span>
-                </div>
-            @endif
-
-            <form method="POST" action="{{ route('login') }}" class="space-y-4">
-                @csrf
-                <div>
-                    <label for="login" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                        Username, Email, or Employee ID
-                    </label>
-                    <div class="relative">
-                        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                            <i class="fas fa-user text-sm"></i>
-                        </span>
-                        <input type="text" name="login" id="login" required autofocus
-                            value="{{ old('login', 'joshua') }}"
-                            placeholder="e.g. joshua or asierr389@gmail.com"
-                            class="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition">
+                
+                <!-- Messages -->
+                @if(session('success'))
+                    <div class="mb-4 p-3 rounded-lg bg-green-100 text-green-700 border-l-4 border-green-500 text-sm">
+                        {{ session('success') }}
                     </div>
-                </div>
-
-                <div>
-                    <label for="password" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                        Password
-                    </label>
-                    <div class="relative">
-                        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                            <i class="fas fa-lock text-sm"></i>
-                        </span>
-                        <input type="password" name="password" id="password" required
-                            value="joshua"
-                            placeholder="Enter your password"
-                            class="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition">
+                @endif
+                
+                @if(isset($errors) && $errors->any())
+                    <div class="mb-4 p-3 rounded-lg bg-red-100 text-red-700 border-l-4 border-red-500 text-sm">
+                        {{ $errors->first() }}
                     </div>
+                @endif
+                
+                <!-- Login Form -->
+                <div id="loginForm" class="form-transition block">
+                    <div class="text-center mb-6">
+                        <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                            <i class="fas fa-user-circle text-3xl text-white"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800">Sign in to your account</h3>
+                    </div>
+                    
+                    <form method="POST" action="{{ route('login') }}" class="space-y-4">
+                        @csrf
+                        
+                        <div>
+                            <label class="block text-gray-700 font-medium mb-1 text-sm">
+                                <i class="fas fa-user mr-2 text-blue-500"></i>Username or Email
+                            </label>
+                            <input type="text" name="login" required id="loginInput"
+                                   value="{{ old('login', 'joshua') }}"
+                                   class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                   placeholder="Enter your username or email">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-gray-700 font-medium mb-1 text-sm">
+                                <i class="fas fa-lock mr-2 text-blue-500"></i>Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" name="password" required id="passwordInput"
+                                       value="joshua"
+                                       class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                       placeholder="Enter your password">
+                                <button type="button" onclick="togglePassword()" class="absolute right-3 top-2.5 text-gray-500">
+                                    <i class="fas fa-eye" id="toggleEye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between text-xs">
+                            <label class="flex items-center gap-1.5 text-gray-600 cursor-pointer">
+                                <input type="checkbox" name="remember" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span>Remember me</span>
+                            </label>
+                            <span class="text-blue-600 hover:text-blue-800 cursor-pointer">Logistics Operations</span>
+                        </div>
+                        
+                        <button type="submit" 
+                                class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-2.5 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition duration-300 shadow-md">
+                            <i class="fas fa-sign-in-alt mr-2"></i>Login
+                        </button>
+                    </form>
                 </div>
 
-                <div class="flex items-center justify-between text-xs pt-1">
-                    <label class="flex items-center gap-2 text-slate-400 cursor-pointer">
-                        <input type="checkbox" name="remember" class="rounded bg-slate-900 border-slate-700 text-sky-500 focus:ring-sky-500">
-                        <span>Remember me</span>
-                    </label>
-                    <span class="text-sky-400 hover:text-sky-300 cursor-pointer">Self-service active</span>
+                <!-- Demo Accounts Panel -->
+                <div id="demoForm" class="form-transition hidden space-y-2 text-xs">
+                    <p class="text-gray-500 mb-2">Click any role to auto-fill the login form:</p>
+                    <button type="button" onclick="fillAndLogin('joshua', 'joshua')" class="w-full p-2.5 border rounded-lg text-left hover:bg-blue-50 flex items-center justify-between transition">
+                        <div>
+                            <strong class="text-blue-700 block">Administrator</strong>
+                            <span class="text-gray-500">joshua / joshua</span>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </button>
+                    <button type="button" onclick="fillAndLogin('jay jay', 'jayjay123')" class="w-full p-2.5 border rounded-lg text-left hover:bg-blue-50 flex items-center justify-between transition">
+                        <div>
+                            <strong class="text-blue-700 block">Fleet Manager</strong>
+                            <span class="text-gray-500">jay jay / jayjay123</span>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </button>
+                    <button type="button" onclick="fillAndLogin('john john', 'johnjohn123')" class="w-full p-2.5 border rounded-lg text-left hover:bg-blue-50 flex items-center justify-between transition">
+                        <div>
+                            <strong class="text-blue-700 block">Driver</strong>
+                            <span class="text-gray-500">john john / johnjohn123</span>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </button>
+                    <button type="button" onclick="fillAndLogin('john doe', 'johndoe123')" class="w-full p-2.5 border rounded-lg text-left hover:bg-blue-50 flex items-center justify-between transition">
+                        <div>
+                            <strong class="text-blue-700 block">Mechanic</strong>
+                            <span class="text-gray-500">john doe / johndoe123</span>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </button>
+                    <button type="button" onclick="fillAndLogin('jon jon', 'jonjon123')" class="w-full p-2.5 border rounded-lg text-left hover:bg-blue-50 flex items-center justify-between transition">
+                        <div>
+                            <strong class="text-blue-700 block">Dispatcher</strong>
+                            <span class="text-gray-500">jon jon / jonjon123</span>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </button>
                 </div>
-
-                <button type="submit" class="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white font-semibold text-sm rounded-lg shadow-md shadow-sky-500/25 transition duration-150 flex items-center justify-center gap-2">
-                    <span>Sign In</span>
-                    <i class="fas fa-arrow-right text-xs"></i>
-                </button>
-            </form>
-        </div>
-
-        <!-- Quick Demo Credentials Selector -->
-        <div class="mt-6 bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-            <p class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <i class="fas fa-key text-sky-400"></i>
-                <span>Quick Fill Demo Accounts</span>
-            </p>
-            <div class="grid grid-cols-2 gap-2 text-xs">
-                <button type="button" onclick="fillCreds('joshua', 'joshua')" class="px-2.5 py-1.5 bg-slate-700/60 hover:bg-slate-700 text-slate-200 rounded text-left transition">
-                    <span class="font-bold text-sky-400 block">Admin</span>
-                    <span class="text-[11px] text-slate-400">joshua / joshua</span>
-                </button>
-                <button type="button" onclick="fillCreds('jay jay', 'jayjay123')" class="px-2.5 py-1.5 bg-slate-700/60 hover:bg-slate-700 text-slate-200 rounded text-left transition">
-                    <span class="font-bold text-sky-400 block">Fleet Manager</span>
-                    <span class="text-[11px] text-slate-400">jay jay / jayjay123</span>
-                </button>
-                <button type="button" onclick="fillCreds('john john', 'johnjohn123')" class="px-2.5 py-1.5 bg-slate-700/60 hover:bg-slate-700 text-slate-200 rounded text-left transition">
-                    <span class="font-bold text-sky-400 block">Driver</span>
-                    <span class="text-[11px] text-slate-400">john john / johnjohn123</span>
-                </button>
-                <button type="button" onclick="fillCreds('john doe', 'johndoe123')" class="px-2.5 py-1.5 bg-slate-700/60 hover:bg-slate-700 text-slate-200 rounded text-left transition">
-                    <span class="font-bold text-sky-400 block">Mechanic</span>
-                    <span class="text-[11px] text-slate-400">john doe / johndoe123</span>
-                </button>
             </div>
         </div>
     </div>
 
     <script>
-        function fillCreds(login, pass) {
-            document.getElementById('login').value = login;
-            document.getElementById('password').value = pass;
+        function switchForm(form) {
+            const loginForm = document.getElementById('loginForm');
+            const demoForm = document.getElementById('demoForm');
+            const loginTab = document.getElementById('loginTab');
+            const demoTab = document.getElementById('demoTab');
+
+            if (form === 'login') {
+                loginForm.classList.remove('hidden');
+                demoForm.classList.add('hidden');
+                loginTab.className = 'flex-1 py-2 text-center rounded-md transition-all duration-300 bg-white shadow-md text-blue-600 font-medium';
+                demoTab.className = 'flex-1 py-2 text-center rounded-md transition-all duration-300 text-gray-600 hover:text-blue-600 font-medium';
+            } else {
+                loginForm.classList.add('hidden');
+                demoForm.classList.remove('hidden');
+                demoTab.className = 'flex-1 py-2 text-center rounded-md transition-all duration-300 bg-white shadow-md text-blue-600 font-medium';
+                loginTab.className = 'flex-1 py-2 text-center rounded-md transition-all duration-300 text-gray-600 hover:text-blue-600 font-medium';
+            }
+        }
+
+        function togglePassword() {
+            const input = document.getElementById('passwordInput');
+            const eye = document.getElementById('toggleEye');
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.classList.remove('fa-eye');
+                eye.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                eye.classList.remove('fa-eye-slash');
+                eye.classList.add('fa-eye');
+            }
+        }
+
+        function fillAndLogin(user, pass) {
+            document.getElementById('loginInput').value = user;
+            document.getElementById('passwordInput').value = pass;
+            switchForm('login');
         }
     </script>
 </body>
