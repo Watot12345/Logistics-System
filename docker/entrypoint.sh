@@ -9,19 +9,19 @@ if [ -z "$APP_KEY" ]; then
     export APP_KEY="base64:7BsmF+t9D4gq0Zk7oA7+2t8rP1K0f/K4n9Jm9+rX2Ys="
 fi
 
-# 2. Default SQLite database setup
+# 2. Database setup
 export DB_CONNECTION="${DB_CONNECTION:-sqlite}"
-export DB_DATABASE="${DB_DATABASE:-/var/www/html/database/database.sqlite}"
+
+if [ "$DB_CONNECTION" = "sqlite" ]; then
+    # Force SQLite path to always use container path, ignoring any local host machine paths
+    export DB_DATABASE="/var/www/html/database/database.sqlite"
+    mkdir -p /var/www/html/database
+    touch "$DB_DATABASE"
+fi
+
 export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
 export SESSION_DRIVER="${SESSION_DRIVER:-file}"
 export CACHE_STORE="${CACHE_STORE:-file}"
-
-if [ "$DB_CONNECTION" = "sqlite" ]; then
-    mkdir -p /var/www/html/database
-    if [ ! -f "$DB_DATABASE" ]; then
-        touch "$DB_DATABASE"
-    fi
-fi
 
 # 3. Run database migrations & seeders
 echo "==> Running database migrations..."
