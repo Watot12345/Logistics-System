@@ -37,8 +37,10 @@ php artisan view:clear || true
 
 # 5. Ensure full read/write permissions for web server (www-data)
 echo "==> Setting directory permissions..."
+mkdir -p /var/www/html/storage/framework/sessions /var/www/html/storage/framework/views /var/www/html/storage/framework/cache
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database /var/www/html/public/uploads
 chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/database /var/www/html/public/uploads
+chmod -R 777 /var/www/html/storage/framework
 if [ -f "$DB_DATABASE" ]; then
     chmod 666 "$DB_DATABASE"
 fi

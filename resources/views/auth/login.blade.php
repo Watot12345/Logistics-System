@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logistics System | Login & Signup</title>
+    <title>Logistics System | Login & Sign in</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
-    <link rel="stylesheet" href="{{ asset('assets/css/output.css') }}">
+    <!-- Static compiled Tailwind CSS (Pure CSS, 0% JS, 0% eval, CSP safe) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <link rel="stylesheet" href="/assets/css/output.css">
     <style>
         .form-transition {
             transition: all 0.3s ease;
@@ -64,7 +66,7 @@
                     <button type="button" onclick="switchForm('demo')" 
                         class="flex-1 py-2 text-center rounded-md transition-all duration-300 text-gray-600 hover:text-blue-600 font-medium"
                         id="demoTab">
-                        <i class="fas fa-key mr-2"></i>Demo Accounts
+                        <i class="fas fa-users-cog mr-2"></i>Demo Accounts
                     </button>
                 </div>
                 
@@ -90,7 +92,7 @@
                         <h3 class="text-2xl font-bold text-gray-800">Sign in to your account</h3>
                     </div>
                     
-                    <form method="POST" action="{{ route('login') }}" class="space-y-4">
+                    <form method="POST" action="/login" class="space-y-4">
                         @csrf
                         
                         <div>
