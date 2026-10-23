@@ -5,16 +5,19 @@ ini_set('display_errors', 1);
 require_once __DIR__ . '/../config/load_config.php';
 require_once __DIR__ . '/../config/db.php';
 
-// Site configuration
-// Auto-detect local vs production
-$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
-$host = $_SERVER['HTTP_HOST'];
-
-// If running locally, use localhost
-if ($host === 'localhost' || strpos($host, '127.0.0.1') !== false || strpos($host, '::1') !== false) {
-    define('SITE_URL', $protocol . $host);
-} else {
-    define('SITE_URL', 'https://logistics-system-production-ae8a.up.railway.app');
+// Site configuration - Auto-detect local vs Render vs production
+if (!defined('SITE_URL')) {
+    if (getenv('APP_URL')) {
+        define('SITE_URL', rtrim(getenv('APP_URL'), '/'));
+    } elseif (getenv('RENDER_EXTERNAL_URL')) {
+        define('SITE_URL', rtrim(getenv('RENDER_EXTERNAL_URL'), '/'));
+    } else {
+        $is_https = (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] == 1)) ||
+                    (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+        $protocol = $is_https ? 'https://' : 'http://';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        define('SITE_URL', $protocol . $host);
+    }
 }
 define('SMTP_FROM_NAME', 'Logistics System');
 
@@ -221,7 +224,7 @@ function maskEmail($email) {
 function sendPasswordResetEmailViaResend($to_email, $raw_token) {
     $reset_link = SITE_URL . "/reset_password.php?token=" . urlencode($raw_token);
     
-    $api_key = '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';
+    $api_key = getenv('BREVO_API_KEY') ?: 'YOUR_BREVO_API_KEY';
     
     error_log("📧 Sending password reset email to: $to_email");
     
@@ -297,7 +300,7 @@ function sendPasswordResetEmailViaResend($to_email, $raw_token) {
  * Send login notification email using Resend
  */
 function sendLoginNotificationEmailViaResend($to_email, $full_name, $user_agent, $ip_address) {
-    $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW';
+    $api_key = getenv('RESEND_API_KEY') ?: 'YOUR_RESEND_API_KEY';
     
     $data = [
         'from' => 'onboarding@resend.dev',
@@ -430,7 +433,7 @@ function sendVerificationEmailViaResend($to_email, $full_name, $code) {
     
     // Fallback to hardcoded key if env not set (for testing)
     if (!$api_key) {
-        $api_key = 're_BvGKfNqY_QB1b894VrYEGkfkJwXKqpFtW';
+        $api_key = getenv('RESEND_API_KEY') ?: 'YOUR_RESEND_API_KEY';
     }
     
     error_log("📧 Attempting to send email to: $to_email");

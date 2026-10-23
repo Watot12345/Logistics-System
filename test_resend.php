@@ -4,7 +4,7 @@ $to = 'asierra389@gmail.com';
 $name = 'Test User';
 $code = '123456';
 
-$api_key = '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';
+$api_key = getenv('BREVO_API_KEY') ?: 'YOUR_BREVO_API_KEY';
 
 $data = [
     'sender' => ['name' => 'Logistics System', 'email' => 'asierra389@gmail.com'],
