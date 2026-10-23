@@ -1,6 +1,7 @@
 .git
 .gitignore
 node_modules/
+legacy_vanilla/
 .env
 Dockerfile
 .dockerignore

@@ -433,7 +433,7 @@ function sendVerificationEmailViaResend($to_email, $full_name, $code) {
     
     // Fallback to hardcoded key if env not set (for testing)
     if (!$api_key) {
-        $api_key = getenv('RESEND_API_KEY') ?: 'YOUR_RESEND_API_KEY';
+        $api_key = 'YOUR_RESEND_API_KEY';
     }
     
     error_log("📧 Attempting to send email to: $to_email");

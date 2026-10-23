@@ -1,8 +1,16 @@
-# Environment variables
+/vendor
+/node_modules
+/public/storage
+/public/hot
+/public/build
+/storage/*.key
+/storage/pail
 .env
-config/api_keys.php
-
-# Never commit API keys
-*.key
-*.pem
-secrets.php
+.env.backup
+.env.production
+database/*.sqlite
+database/*.sqlite-journal
+*.log
+.phpunit.result.cache
+.DS_Store
+Thumbs.db

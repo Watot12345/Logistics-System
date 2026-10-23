@@ -1,63 +1,45 @@
-# Base image with PHP 8.2 and Apache
-FROM php:8.2-apache
+FROM php:8.4-apache
 
-# Install required system packages
-RUN apt-get update && apt-get install -y \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    libzip-dev \
-    zip \
+# Install system dependencies & PHP extensions for Laravel
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     unzip \
-    curl \
-    default-mysql-client \
-    && rm -rf /var/lib/apt/lists/*
+    libzip-dev \
+    libsqlite3-dev \
+    sqlite3 \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    && docker-php-ext-install pdo pdo_sqlite pdo_mysql bcmath mbstring opcache pcntl zip gd \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Configure and install PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
-    pdo \
-    pdo_mysql \
-    mysqli \
-    gd \
-    zip \
-    bcmath
+# Enable Apache mod_rewrite
+RUN a2enmod rewrite
 
-# Enable Apache modules
-RUN a2enmod rewrite headers
+# Point Apache DocumentRoot to Laravel's public directory
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-# PHP runtime configurations
-RUN { \
-    echo 'upload_max_filesize = 64M'; \
-    echo 'post_max_size = 64M'; \
-    echo 'memory_limit = 256M'; \
-    echo 'max_execution_time = 300'; \
-    echo 'date.timezone = UTC'; \
-    echo 'display_errors = Off'; \
-    echo 'log_errors = On'; \
-    echo 'error_log = /dev/stderr'; \
-} > /usr/local/etc/php/conf.d/custom.ini
+# Copy Composer binary
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Set working directory
 WORKDIR /var/www/html
 
 # Copy project files
-COPY . /var/www/html/
+COPY . .
 
-# Copy custom Apache virtual host
-COPY ./docker/apache.conf /etc/apache2/sites-available/000-default.conf
+# Install production dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Setup permissions for uploads and web directory
-RUN mkdir -p /var/www/html/uploads/documents \
-    && chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 /var/www/html/uploads
+# Pre-create directories, sqlite file, and grant permissions
+RUN mkdir -p database storage bootstrap/cache public/assets public/uploads \
+    && touch database/database.sqlite \
+    && chown -R www-data:www-data storage bootstrap/cache database public/assets public/uploads \
+    && chmod -R 775 storage bootstrap/cache database public/assets public/uploads \
+    && chmod 666 database/database.sqlite \
+    && chmod +x docker/entrypoint.sh
 
-# Setup entrypoint
-COPY ./docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+EXPOSE 8000
 
-# Default port for Render
-ENV PORT=10000
-EXPOSE 10000
-
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["docker/entrypoint.sh"]

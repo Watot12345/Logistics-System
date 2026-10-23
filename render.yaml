@@ -3,15 +3,26 @@ services:
     name: logistics-system
     runtime: docker
     plan: free
+    region: singapore
     dockerfilePath: ./Dockerfile
-    dockerContext: .
-    healthCheckPath: /health.php
     envVars:
-      - key: PORT
-        value: 10000
-      - key: DATABASE_URL
-        sync: false
+      - key: APP_NAME
+        value: "Logistics System"
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        generateValue: true
+      - key: DB_CONNECTION
+        value: sqlite
+      - key: SESSION_DRIVER
+        value: file
+      - key: CACHE_STORE
+        value: file
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: LOG_CHANNEL
+        value: stderr
       - key: BREVO_API_KEY
         sync: false
-      - key: AUTO_INIT_DB
-        value: "false"
